@@ -1,0 +1,14 @@
+{
+  "name": "widget-data",
+  "version": "1.0.0",
+  "description": "Writes prayer widget data to App Group UserDefaults",
+  "main": "index.ts",
+  "files": [
+    "ios/**",
+    "index.ts",
+    "WidgetData.podspec"
+  ],
+  "ios": {
+    "modules": ["WidgetDataModule"]
+  }
+}

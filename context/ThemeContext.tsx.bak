@@ -1,0 +1,46 @@
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { useColorScheme } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { dark, light, Theme } from '../theme/colors';
+
+const THEME_KEY = 'andalus_theme_mode';
+type Mode = 'system' | 'light' | 'dark';
+
+type ThemeContextType = {
+  theme: Theme;
+  isDark: boolean;
+  mode: Mode;
+  toggleTheme: () => void;
+};
+
+const ThemeContext = createContext<ThemeContextType>({
+  theme: dark, isDark: true, mode: 'system', toggleTheme: () => {},
+});
+
+export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  const systemScheme = useColorScheme();
+  const [mode, setMode] = useState<Mode>('system');
+
+  useEffect(() => {
+    AsyncStorage.getItem(THEME_KEY).then(v => {
+      if (v === 'light' || v === 'dark' || v === 'system') setMode(v);
+    });
+  }, []);
+
+  const isDark = mode === 'system' ? systemScheme === 'dark' : mode === 'dark';
+  const theme = isDark ? dark : light;
+
+  const toggleTheme = async () => {
+    const next: Mode = isDark ? 'light' : 'dark';
+    setMode(next);
+    await AsyncStorage.setItem(THEME_KEY, next);
+  };
+
+  return (
+    <ThemeContext.Provider value={{ theme, isDark, mode, toggleTheme }}>
+      {children}
+    </ThemeContext.Provider>
+  );
+}
+
+export const useTheme = () => useContext(ThemeContext);

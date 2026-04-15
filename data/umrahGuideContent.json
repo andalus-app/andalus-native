@@ -1,0 +1,629 @@
+{
+  "version": "1.0.0",
+  "locale": "sv-SE",
+  "namespace": "umrahGuide",
+  "lastUpdated": "2026-04-10",
+  "mediaUploadOrder": {
+    "instruction": "Ladda upp dessa bildfiler med exakt samma filnamn innan eller tillsammans med innehållet.",
+    "heroFilenames": [
+      "umrah_welcome_hero.jpg",
+      "umrah_before_you_begin_hero.jpg",
+      "umrah_ihram_hero.jpg",
+      "umrah_miqat_hero.jpg",
+      "umrah_tawaf_hero.jpg",
+      "umrah_after_tawaf_hero.jpg",
+      "umrah_sai_hero.jpg",
+      "umrah_halq_taqsir_hero.jpg",
+      "umrah_complete_hero.jpg",
+      "umrah_faq_header.jpg"
+    ]
+  },
+  "placement": {
+    "tab": "Visa mer",
+    "insertAfterKey": "allahs_namn",
+    "displayOrderHint": 3
+  },
+  "themeBehavior": {
+    "forceLightModeByDefault": true,
+    "allowManualDarkModeToggle": true,
+    "persistUserThemeChoice": true,
+    "firstOpenMessage": "För bättre läsbarhet i starkt ljus visas guiden i ljust läge.",
+    "allowSimplifiedView": true
+  },
+  "uiLabels": {
+    "startGuide": "Starta guide",
+    "continueGuide": "Fortsätt",
+    "resumeGuide": "Fortsätt där du slutade",
+    "nextStep": "Nästa steg",
+    "previousStep": "Tillbaka",
+    "markComplete": "Markera som klar",
+    "showDua": "Visa dua",
+    "hideDua": "Dölj dua",
+    "enableDarkMode": "Mörkt läge",
+    "enableSimplifiedView": "Förenklad vy",
+    "stepLabel": "Steg",
+    "ofLabel": "av",
+    "recommendedLabel": "Rekommenderat",
+    "requiredLabel": "Obligatoriskt",
+    "importantLabel": "Viktigt",
+    "warningLabel": "Undvik detta",
+    "counterNextRound": "Nästa varv",
+    "counterNextLeg": "Nästa etapp",
+    "completedUmrah": "Min Umrah är klar",
+    "restartGuide": "Läs guiden igen",
+    "saveFavorite": "Spara som favorit",
+    "shareGuide": "Dela guide"
+  },
+  "heroImageMap": {
+    "welcome": "umrah_welcome_hero.jpg",
+    "before_you_begin": "umrah_before_you_begin_hero.jpg",
+    "ihram": "umrah_ihram_hero.jpg",
+    "miqat": "umrah_miqat_hero.jpg",
+    "tawaf": "umrah_tawaf_hero.jpg",
+    "after_tawaf": "umrah_after_tawaf_hero.jpg",
+    "sai": "umrah_sai_hero.jpg",
+    "halq_taqsir": "umrah_halq_taqsir_hero.jpg",
+    "complete": "umrah_complete_hero.jpg",
+    "faq": "umrah_faq_header.jpg"
+  },
+  "steps": [
+    {
+      "id": "welcome",
+      "title": "Umrah guide",
+      "subtitle": "Steg för steg genom din Umrah",
+      "heroImageKey": "welcome",
+      "stepNumber": 1,
+      "totalSteps": 10,
+      "showProgress": true,
+      "sections": [
+        {
+          "type": "summary",
+          "title": "Välkommen",
+          "items": [
+            "Denna guide hjälper dig steg för steg genom din Umrah.",
+            "Fokusera på ett steg i taget.",
+            "Du kan alltid fortsätta där du slutade."
+          ]
+        },
+        {
+          "type": "spiritual_intro",
+          "title": "Påminnelse",
+          "body": "När Ibrahim och hans son Ismael byggt klart Allahs hus, Ka'bah, sade Allah till Ibrahim att kalla människorna till Hajj. Ibrahim frågade: \"O Allah, hur ska jag kalla människor när jag är mitt i öknen, och ingen är här?\" Allah svarade: \"Din uppgift är att kalla, och Min uppgift är att se till att budskapet når dem.\"\n\nIbrahim steg upp på berget Safa och ropade: \"Allah har gjort det obligatoriskt för er att utföra Hajj, så gör Hajj\".\n\nAlla som kommer att utföra Hajj eller 'Umrah fram till Domedagen svarade på Ibrahims rop. Allah har utvalt var och en av oss – och just dig, du som läser – för att svara på detta kall.\n\nProfeten Muhammad ﷺ sade:\n\"Den som utför Hajj och 'Umrah är Allahs delegation. Han kallade dem, och de svarade Honom. De bad Honom, och Han gav dem.\"\n\nAllah har kallat människor från alla världens hörn till denna plats, och du är bland de utvalda.\n\nKom ihåg att förnya och rena din avsikt.\n\nO Adams barn, du svarar nu på kallelsen!"
+        },
+        {
+          "type": "overview",
+          "title": "Detta kommer du gå igenom",
+          "items": [
+            "Innan du börjar",
+            "Ihram",
+            "Miqat",
+            "Tawaf",
+            "Efter Tawaf",
+            "Sa'i",
+            "Halq eller Taqsir",
+            "Umrah klar",
+            "Vanliga frågor"
+          ]
+        }
+      ],
+      "primaryAction": {
+        "label": "Starta guide",
+        "action": "go_to_step",
+        "targetStepId": "before_you_begin"
+      }
+    },
+    {
+      "id": "before_you_begin",
+      "title": "Innan du börjar",
+      "subtitle": "Förbered dig lugnt innan du går in i Umrah",
+      "heroImageKey": "before_you_begin",
+      "stepNumber": 2,
+      "totalSteps": 10,
+      "showProgress": true,
+      "sections": [
+        {
+          "type": "summary",
+          "title": "Det viktigaste innan du börjar",
+          "items": [
+            "Förnya din avsikt för Allahs skull.",
+            "Lär dig huvudstegen i förväg.",
+            "Kontrollera vilken Miqat som gäller för din resa."
+          ]
+        },
+        {
+          "type": "tips",
+          "title": "Praktiska förberedelser",
+          "items": [
+            "Ha bekväma sandaler eller tofflor.",
+            "Se till att du enkelt kan komma åt guiden i telefonen.",
+            "Om ni reser i grupp, bestäm hur ni håller kontakt."
+          ]
+        },
+        {
+          "type": "note",
+          "title": "Läs i lugn takt",
+          "body": "Du behöver inte memorera allt på en gång. Målet är att snabbt förstå vad du ska göra just nu."
+        }
+      ],
+      "checklist": [
+        "Jag har förstått huvudstegen",
+        "Jag vet vilken Miqat som gäller"
+      ]
+    },
+    {
+      "id": "ihram",
+      "title": "Ihram",
+      "subtitle": "Du går nu in i tillståndet för Umrah",
+      "heroImageKey": "ihram",
+      "stepNumber": 3,
+      "totalSteps": 10,
+      "showProgress": true,
+      "sections": [
+        {
+          "type": "summary",
+          "title": "Vad är Ihram?",
+          "body": "Ihram är det tillstånd du går in i för att påbörja Umrah. Det sker vid Miqat, där du också gör din intention."
+        },
+        {
+          "type": "summary",
+          "title": "Gör detta före Ihram",
+          "items": [
+            "Utföra ghusl (helkroppstvagning) som en rening och vördnad inför Allah och Hans heliga hus, Ka'bah.",
+            "Parfymera kroppen, men inte Ihram-kläderna.",
+            "Klipp naglarna och ta bort kroppshår från armhålor och intimområde."
+          ]
+        },
+        {
+          "type": "split_info",
+          "title": "Klädsel",
+          "columns": [
+            {
+              "label": "Män",
+              "items": [
+                "Två tygstycken: ett runt midjan och ett över axlarna.",
+                "Vita kläder är rekommenderade.",
+                "Endast dessa två tygstycken används under Ihram."
+              ]
+            },
+            {
+              "label": "Kvinnor",
+              "items": [
+                "Vanliga lösa och täckande kläder som uppfyller hijab-kraven.",
+                "Ingen niqab.",
+                "Inga handskar."
+              ]
+            }
+          ]
+        },
+        {
+          "type": "dua",
+          "title": "När du gör Umrah för dig själv",
+          "arabic": "لَبَّيْكَ اللَّهُمَّ عُمْرَةً",
+          "transliteration": "Labbayka Allahumma 'Umrah",
+          "translation": "O Allah, jag besvarar Din kallelse för Umrah."
+        },
+        {
+          "type": "accordion",
+          "title": "Om du gör Umrah för någon annan",
+          "items": [
+            {
+              "title": "Villkor",
+              "body": "Du måste själv ha utfört Umrah tidigare. Personen måste vara muslim. Om personen är avliden ska personen ha varit muslim. Om personen lever ska det finnas ett giltigt hinder, som kronisk sjukdom."
+            },
+            {
+              "title": "Vad du säger",
+              "arabic": "لَبَّيْكَ اللَّهُمَّ عُمْرَةً عَنْ",
+              "body": "Labbayka Allahumma 'Umratan 'an [personens namn]",
+              "extra": "Här är jag för att utföra 'Umrah på uppdrag av [Personens namn]."
+            }
+          ]
+        },
+        {
+          "type": "dua",
+          "title": "Talbiyah",
+          "arabic": "لَبَّيْكَ ٱللَّٰهُمَّ لَبَّيْكَ، لَبَّيْكَ لَا شَرِيكَ لَكَ لَبَّيْكَ، إِنَّ ٱلْحَمْدَ وَٱلنِّعْمَةَ لَكَ وَٱلْمُلْكَ لَا شَرِيكَ لَكَ",
+          "audioFile": "talbiyah",
+          "transliteration": "Labbayk Allahumma labbayk, labbayka la sharika laka labbayk, innal-hamda, wan-ni'mata, laka wal-mulk, la sharika lak.",
+          "translation": "Jag besvarar Ditt kall, O Allah, jag besvarar Ditt kall. Jag besvarar Ditt kall, Du har ingen partner. Jag besvarar Ditt kall. Allt lov, alla gåvor och all makt tillhör Dig. Du har ingen partner."
+        },
+        {
+          "type": "hadith",
+          "body": "Profeten Muhammad ﷺ sade: \"Jibril kom och befallde mig: 'O Muhammad! Säg till dina följeslagare att höja sina röster när de reciterar Talbiyah.'\""
+        },
+        {
+          "type": "important",
+          "title": "Viktigt i Ihram",
+          "items": [
+            "Recitera Talbiyah ofta tills du ser Ka'bah.",
+            "Kvinnor reciterar Talbiyah utan att höja rösten."
+          ]
+        },
+        {
+          "type": "accordion",
+          "title": "Om du fruktar att du inte kan fullborda din Umrah",
+          "items": [
+            {
+              "title": "Att sätta ett villkor vid Ihram",
+              "arabic": "اللَّهُمَّ مَحِلِّي حَيْثُ حَبَسْتَنِي",
+              "body": "Allahumma mahalli haythu habastani.",
+              "extra": "\"O Allah, om jag hindras, låt min plats för att avsluta Ihram vara där jag blir hindrad.\"\n\nDetta innebär att du kan lämna Ihram utan att behöva offra ett djur eller fullfölja vallfärden senare om du hindras. Om du inte ställer detta villkor måste du, om möjligt, fullfölja vallfärden."
+            }
+          ]
+        },
+        {
+          "type": "note",
+          "title": "Mens vid vallfärd",
+          "body": "Om en kvinna får menstruation innan Ihram går hon ändå in i Ihram vid Miqat och fortsätter resan. Hon väntar sedan tills menstruationen är över, gör ghusl och utför sin Umrah."
+        },
+        {
+          "type": "warning",
+          "title": "Förbjudna handlingar i Ihram",
+          "items": [
+            "Klippa hår eller naglar.",
+            "Använda parfym eller parfymerade produkter.",
+            "Jaga och döda djur eller hugga ner träd.",
+            "Ingå giftermål eller äktenskapsavtal.",
+            "Samlag eller intima handlingar.",
+            "Kvinnor får inte bära handskar eller niqab som fästs runt ansiktet."
+          ]
+        }
+      ],
+      "checklist": [
+        "Ghusl är gjort",
+        "Klädseln är klar",
+        "Intention är gjord vid Miqat",
+        "Talbiyah är påbörjad"
+      ]
+    },
+    {
+      "id": "miqat",
+      "title": "Miqat",
+      "subtitle": "Platsen där du går in i Ihram",
+      "heroImageKey": "miqat",
+      "stepNumber": 4,
+      "totalSteps": 10,
+      "showProgress": true,
+      "sections": [
+        {
+          "type": "summary",
+          "title": "Vad är Miqat?",
+          "body": "Miqat är den bestämda plats där pilgrimer går in i Ihram. Kontrollera vilken Miqat som gäller för din resa innan du börjar."
+        },
+        {
+          "type": "list",
+          "title": "De fem Miqat-platserna",
+          "items": [
+            "Dhul al-Hulayfa: för invånarna i al-Madina och de som passerar deras väg.",
+            "Al-Juhfa: för invånarna i Sham och de som passerar deras väg.",
+            "Qarn al-Manazil: för invånarna i Najd och de som passerar deras väg.",
+            "Yalamlam: för invånarna i Jemen och de som passerar deras väg.",
+            "Dhat 'Irq: för invånarna i Irak och de som passerar deras väg."
+          ]
+        },
+        {
+          "type": "important",
+          "title": "Kom ihåg",
+          "items": [
+            "Du ska inte passera din Miqat utan att gå in i Ihram.",
+            "Om du reser med flyg behöver du vara uppmärksam innan flyget passerar Miqat."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tawaf",
+      "title": "Tawaf",
+      "subtitle": "Gå sju varv runt Ka'bah",
+      "heroImageKey": "tawaf",
+      "stepNumber": 5,
+      "totalSteps": 10,
+      "showProgress": true,
+      "counter": {
+        "type": "roundCounter",
+        "title": "Tawaf-räknare",
+        "currentLabelTemplate": "Varv {current} av 7",
+        "startValue": 1,
+        "minValue": 1,
+        "maxValue": 7,
+        "incrementButtonLabel": "Nästa varv",
+        "completionMessage": "Du har slutfört 7 varv."
+      },
+      "sections": [
+        {
+          "type": "summary",
+          "title": "Vad är Tawaf?",
+          "body": "Tawaf är att gå sju varv runt Ka'bah. Eftersom Tawaf räknas som en form av bön behöver du vara i ett tillstånd av tvagning innan du börjar."
+        },
+        {
+          "type": "important",
+          "title": "Förberedelse för män",
+          "items": [
+            "Under Tawaf rekommenderas män att blotta högra axeln genom att lägga det övre Ihram-tyget över vänstra axeln."
+          ]
+        },
+        {
+          "type": "summary",
+          "title": "Så börjar du",
+          "body": "Starta din Tawaf vid den Svarta Stenen (al-Hajar al-Aswad). Höj handflatan mot stenen och säg:",
+          "arabic": "بِسْمِ اللَّهِ، اللَّهُ أَكْبَرُ",
+          "items": [
+            "\"Bismillah, Allahu Akbar\" (I Allahs namn, Allah är störst).",
+            "För de resterande varven: säg endast \"Allahu Akbar\" varje gång du passerar stenen."
+          ]
+        },
+        {
+          "type": "summary",
+          "title": "Under Tawaf",
+          "items": [
+            "Håll Ka'bah på din vänstra sida under hela din Tawaf.",
+            "Män bör gå i rask takt under de tre första varven.",
+            "Kvinnor går i normal takt under alla varv."
+          ]
+        },
+        {
+          "type": "dua",
+          "title": "Rekommenderad åkallan mellan det jemenitiska hörnet (Rukn al-Yamani) och den Svarta Stenen",
+          "arabic": "رَبَّنَا آتِنَا فِي الدُّنْيَا حَسَنَةً وَفِي الْآخِرَةِ حَسَنَةً وَقِنَا عَذَابَ النَّارِ",
+          "transliteration": "Rabbana atina fid-dunya hasanatan wa fil-akhirati hasanatan wa qina 'adhaban-nar",
+          "translation": "Och det finns de som ber: \"Herre! Ge oss det goda i detta liv och det eviga livets goda och förskona oss från Eldens plåga!\"",
+          "reference": "Koranen 2:201"
+        },
+        {
+          "type": "note",
+          "title": "Vad du kan göra under Tawaf",
+          "body": "Det är inte obligatoriskt att recitera något särskilt genom hela Tawaf, men det är starkt rekommenderat att göra dua, dhikr eller recitera något ur Koranen."
+        }
+      ]
+    },
+    {
+      "id": "after_tawaf",
+      "title": "Efter Tawaf",
+      "subtitle": "Rekommenderade handlingar efter cirkulationen",
+      "heroImageKey": "after_tawaf",
+      "stepNumber": 6,
+      "totalSteps": 10,
+      "showProgress": true,
+      "sections": [
+        {
+          "type": "important",
+          "title": "För män",
+          "items": [
+            "Täck högra axeln igen efter Tawaf."
+          ]
+        },
+        {
+          "type": "summary",
+          "title": "Två raka'ah",
+          "items": [
+            "Gå till Maqam Ibrahim om möjligt och be två frivilliga raka'ah.",
+            "Första raka'ah: Al-Fatiha och Al-Kafirun.",
+            "Andra raka'ah: Al-Fatiha och Al-Ikhlas.",
+            "Om du inte kan dessa suror, läs det du har memorerat."
+          ]
+        },
+        {
+          "type": "note",
+          "title": "Om det är fullt",
+          "body": "Om det inte finns plats bakom Maqam Ibrahim kan du be var som helst i moskén."
+        },
+        {
+          "type": "summary",
+          "title": "Zamzam",
+          "items": [
+            "Drick Zamzam-vatten efter bönen om du vill.",
+            "Be Allah om det du önskar.",
+            "Du kan även hälla lite vatten över huvudet om du vill."
+          ]
+        },
+        {
+          "type": "important",
+          "title": "Kom ihåg",
+          "items": [
+            "Detta steg är rekommenderat, inte obligatoriskt."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sai",
+      "title": "Sa'i",
+      "subtitle": "Gå mellan Safa och Marwa",
+      "heroImageKey": "sai",
+      "stepNumber": 7,
+      "totalSteps": 10,
+      "showProgress": true,
+      "counter": {
+        "type": "legCounter",
+        "title": "Sa'i-räknare",
+        "currentLabelTemplate": "Etapp {current} av 7",
+        "startValue": 1,
+        "minValue": 1,
+        "maxValue": 7,
+        "incrementButtonLabel": "Nästa etapp",
+        "completionMessage": "Du har slutfört 7 etapper och avslutar på Marwa."
+      },
+      "sections": [
+        {
+          "type": "summary",
+          "title": "Vad är Sa'i?",
+          "body": "Sa'i (att gå mellan Safa och Marwa) är den tredje pelaren i Umrah och innebär att man går sju gånger mellan Safa och Marwa. Tvagning (wudu) är inget krav för denna handling.\n\nSteg för Sa'i:"
+        },
+        {
+          "type": "summary",
+          "title": "1. Börja vid Safa",
+          "body": "Gå upp på Safa och recitera:"
+        },
+        {
+          "type": "quran_reference",
+          "title": "Versen om Safa och Marwa",
+          "reference": "Koranen 2:158",
+          "arabic": "۞ إِنَّ ٱلصَّفَا وَٱلْمَرْوَةَ مِن شَعَآئِرِ ٱللَّهِ ۖ فَمَنْ حَجَّ ٱلْبَيْتَ أَوِ ٱعْتَمَرَ فَلَا جُنَاحَ عَلَيْهِ أَن يَطَّوَّفَ بِهِمَا ۚ وَمَن تَطَوَّعَ خَيْرًا فَإِنَّ ٱللَّهَ شَاكِرٌ عَلِيمٌ",
+          "transliteration": "Innas-Safa wal-Marwata min sha'a'irillahi faman hajjal-bayta awi'tamara fala junaha 'alayhi an yattawwafa bihima wa man tatawwa'a khayran fa innallaha shakirun 'alim.",
+          "translation": "As-Safa och Al-Marwah hör till Guds symboler. Den som beger sig till Helgedomen för den större eller den mindre vallfärden och då vill vandra fram och tillbaka mellan dem gör därför ingenting klandervärt. Och den som av fri vilja gör en god handling utöver vad plikten bjuder [skall finna att] Gud, som har kunskap om allt, erkänner [Sina tjänares] förtjänster."
+        },
+        {
+          "type": "dua",
+          "title": "Säg sedan",
+          "arabic": "نَبْدَأُ بِمَا بَدَأَ اللَّهُ بِهِ",
+          "transliteration": "Nabda'u bima bada'allahu bih",
+          "translation": "Vi börjar med det som Allah började med (vilket innebär att man alltid börjar vid Safa)."
+        },
+        {
+          "type": "note",
+          "title": "Endast en gång",
+          "body": "Du reciterar denna vers och bön endast en gång [vid start]."
+        },
+        {
+          "type": "dua",
+          "title": "Åminnelse på Safa och Marwa",
+          "arabic": "اللَّهُ أَكْبَرُ، اللَّهُ أَكْبَرُ، اللَّهُ أَكْبَرُ\nلَا إِلٰهَ إِلَّا اللَّهُ وَحْدَهُ لَا شَرِيكَ لَهُ،\nلَهُ الْمُلْكُ وَلَهُ الْحَمْدُ، وَهُوَ عَلَىٰ كُلِّ شَيْءٍ قَدِيرٌ\nلَا إِلٰهَ إِلَّا اللَّهُ وَحْدَهُ،\nأَنْجَزَ وَعْدَهُ، وَنَصَرَ عَبْدَهُ، وَهَزَمَ الْأَحْزَابَ وَحْدَهُ",
+          "transliteration": "Allahu Akbar, Allahu Akbar, Allahu Akbar. La ilaha illa-llahu wahdahu la sharika lah, lahul-mulku wa lahul-hamdu wa huwa 'ala kulli shay'in qadir. La ilaha illa-llahu wahdah, anjaza wa'dah, wa nasara 'abdah, wa hazamal-ahzaba wahdah.",
+          "translation": "Allah är störst, Allah är störst, Allah är störst. Ingen har rätt att dyrkas förutom Allah. Han är en och Han har ingen vid Sin sida. Till Honom hör Herraväldet och all pris och Han är kapabel till allting. Ingen har rätt att dyrkas förutom Allah, Han är en. Han uppfyllde Sitt löfte[1], hjälpte Sin tjänare, och Han ensam besegrade al-Ahzâb.",
+          "reference": "Muslim 2/888 nr 1218"
+        },
+        {
+          "type": "summary",
+          "title": "På toppen av Safa och Marwa",
+          "items": [
+            "Vänd dig mot Ka'bah.",
+            "Lyft händerna.",
+            "Recitera åminnelsen, följt av en personlig åkallelse.",
+            "Avsluta med åminnelsen och påbörja därefter vandringen mot Marwa."
+          ]
+        },
+        {
+          "type": "important",
+          "title": "Mellan de gröna markeringarna",
+          "items": [
+            "Män joggar mellan de gröna markeringarna.",
+            "Kvinnor går i normal takt."
+          ]
+        },
+        {
+          "type": "summary",
+          "title": "Så räknar du etapperna",
+          "items": [
+            "Safa till Marwa räknas som 1.",
+            "Marwa till Safa räknas som 2.",
+            "Fortsätt tills du når 7 etapper totalt.",
+            "Du avslutar alltid på Marwa."
+          ]
+        },
+        {
+          "type": "note",
+          "title": "Under Sa'i",
+          "body": "Det är inte obligatoriskt, men starkt rekommenderat att recitera ur Koranen samt att göra åkallan eller åminnelse under Sa'i."
+        }
+      ]
+    },
+    {
+      "id": "halq_taqsir",
+      "title": "Halq eller Taqsir",
+      "subtitle": "Det sista steget i din Umrah",
+      "heroImageKey": "halq_taqsir",
+      "stepNumber": 8,
+      "totalSteps": 10,
+      "showProgress": true,
+      "sections": [
+        {
+          "type": "summary",
+          "title": "För män",
+          "items": [
+            "Du kan raka av hela håret, vilket är mer belönande.",
+            "Eller klippa av en liten del jämnt från hela huvudet."
+          ]
+        },
+        {
+          "type": "summary",
+          "title": "För kvinnor",
+          "items": [
+            "Klipp en liten del av håret, ungefär en centimeter från en fläta eller hårlängd."
+          ]
+        },
+        {
+          "type": "important",
+          "title": "När detta är gjort",
+          "items": [
+            "Din Umrah är fullbordad.",
+            "Du lämnar Ihram och sådant som tidigare var förbjudet blir tillåtet igen."
+          ]
+        }
+      ],
+      "primaryAction": {
+        "label": "Min Umrah är klar",
+        "action": "go_to_step",
+        "targetStepId": "complete"
+      }
+    },
+    {
+      "id": "complete",
+      "title": "Umrah klar",
+      "subtitle": "Må Allah acceptera din Umrah",
+      "heroImageKey": "complete",
+      "stepNumber": 9,
+      "totalSteps": 10,
+      "showProgress": true,
+      "sections": [
+        {
+          "type": "celebration",
+          "title": "Alhamdulillah – Din Umrah är nu slutförd",
+          "body": "Be Allah att acceptera denna dyrkanshandling från dig och låta den väga tungt på vågskålen av goda gärningar."
+        },
+        {
+          "type": "reflection",
+          "title": "Glöm inte",
+          "items": [
+            "Tacka Allah för gåvan att ha fått utföra Umrah.",
+            "Gör en personlig Dua för acceptans, förlåtelse och fortsatt vägledning.",
+            "Kom ihåg att även om de rituella stegen är slut, fortsätter din resa med Allah varje dag."
+          ]
+        }
+      ],
+      "primaryAction": {
+        "label": "Vanliga frågor ›",
+        "action": "go_to_step",
+        "targetStepId": "faq"
+      }
+    },
+    {
+      "id": "faq",
+      "title": "Vanliga frågor",
+      "subtitle": "Korta svar när du snabbt behöver hjälp",
+      "heroImageKey": "faq",
+      "stepNumber": 10,
+      "totalSteps": 10,
+      "showProgress": true,
+      "sections": [
+        {
+          "type": "faq",
+          "items": [
+            {
+              "question": "Måste jag ha tvagning för Tawaf?",
+              "answer": "Ja. Tawaf betraktas som en form av bön, därför behöver du vara i ett tillstånd av tvagning innan du börjar."
+            },
+            {
+              "question": "Måste jag ha tvagning för Sa'i?",
+              "answer": "Nej. Tvagning krävs inte för Sa'i."
+            },
+            {
+              "question": "Vad får jag inte göra i Ihram?",
+              "answer": "Bland annat får du inte klippa hår eller naglar, använda parfym, ingå äktenskap eller ägna dig åt intima handlingar. För kvinnor gäller också att niqab och handskar inte används på vanligt sätt i Ihram."
+            },
+            {
+              "question": "Vad säger jag vid Miqat?",
+              "answer": "När du gör Umrah för dig själv säger du: Labbayka Allahumma 'Umrah."
+            },
+            {
+              "question": "Hur räknar jag Sa'i?",
+              "answer": "Safa till Marwa är 1. Marwa till Safa är 2. Du fortsätter tills du har gjort 7 etapper och avslutar på Marwa."
+            },
+            {
+              "question": "Vad gör jag om jag inte kan alla duor?",
+              "answer": "Gör den dhikr och dua du kan. Målet är att vara närvarande inför Allah och utföra stegen korrekt."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "name": "airplay-route-picker",
+  "version": "1.0.0",
+  "description": "Native Expo module for iOS AirPlay audio route picker",
+  "main": "index.ts"
+}

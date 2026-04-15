@@ -1,0 +1,323 @@
+import {
+  View, Text, ScrollView, TouchableOpacity, Switch,
+  StyleSheet, Modal, Alert, ActivityIndicator, Dimensions,
+} from 'react-native';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Location from 'expo-location';
+import SvgIcon from '../components/SvgIcon';
+import { useTheme } from '../context/ThemeContext';
+
+const SCREEN_W = Dimensions.get('window').width;
+
+// Beräkningsmetoder (samma som PWA CALC_METHODS)
+const CALC_METHODS: Record<number, string> = {
+  1:  'Muslim World League',
+  2:  'Islamic Society of North America (ISNA)',
+  3:  'Egyptian General Authority of Survey',
+  4:  'Umm Al-Qura University, Makkah',
+  5:  'University of Islamic Sciences, Karachi',
+  7:  'Institute of Geophysics, University of Tehran',
+  8:  'Gulf Region',
+  9:  'Kuwait',
+  10: 'Qatar',
+  11: 'Majlis Ugama Islam Singapura, Singapore',
+  12: 'Union Organization islamic de France',
+  13: 'Diyanet İşleri Başkanlığı, Turkey',
+  14: 'Spiritual Administration of Muslims of Russia',
+  15: 'Moonsighting Committee Worldwide',
+  16: 'Dubai (unofficial)',
+};
+
+const SCHOOLS: Record<number, { label: string; sub: string }> = {
+  0: { label: 'Standard', sub: "Shafi'i, Maliki, Hanbali" },
+  1: { label: 'Hanafi',   sub: 'Asr när skuggan är dubbelt så lång' },
+};
+
+const SETTINGS_KEY = 'andalus_settings';
+const LOCATION_KEY = 'andalus_location';
+
+type Settings = {
+  autoLocation: boolean;
+  calculationMethod: number;
+  school: number;
+  notifications: boolean;
+};
+
+const DEFAULT_SETTINGS: Settings = {
+  autoLocation: true,
+  calculationMethod: 3,
+  school: 0,
+  notifications: true,
+};
+
+// ── Section label ──
+function SectionLabel({ label }: { label: string }) {
+  const { theme: T } = useTheme();
+  return (
+    <Text style={{ fontSize: 11, fontWeight: '700', color: T.textMuted,
+      letterSpacing: 1.2, marginBottom: 8, marginTop: 20, paddingHorizontal: 4 }}>
+      {label.toUpperCase()}
+    </Text>
+  );
+}
+
+// ── Row ──
+function Row({ iconName, label, value, onPress, right, T }: any) {
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={onPress ? 0.7 : 1}
+      style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: T.card,
+        borderRadius: 14, borderWidth: 0.5, borderColor: T.border,
+        padding: 14, marginBottom: 8, gap: 12 }}
+    >
+      <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: T.accentGlow,
+        alignItems: 'center', justifyContent: 'center' }}>
+        <SvgIcon name={iconName} size={18} color={T.accent} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontSize: 15, fontWeight: '600', color: T.text }}>{label}</Text>
+        {value ? <Text style={{ fontSize: 12, color: T.textMuted, marginTop: 1 }}>{value}</Text> : null}
+      </View>
+      {right ?? (onPress ? <Text style={{ fontSize: 18, color: T.textMuted }}>›</Text> : null)}
+    </TouchableOpacity>
+  );
+}
+
+// ── Bottom sheet modal ──
+function Sheet({ visible, title, subtitle, onClose, children, T }: any) {
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' }}
+        activeOpacity={1} onPress={onClose} />
+      <View style={{ backgroundColor: T.card, borderTopLeftRadius: 22, borderTopRightRadius: 22,
+        maxHeight: '80%', paddingBottom: 34 }}>
+        {/* Handle */}
+        <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: T.border,
+          alignSelf: 'center', marginTop: 12, marginBottom: 16 }} />
+        <View style={{ paddingHorizontal: 18, marginBottom: 8 }}>
+          <Text style={{ fontSize: 19, fontWeight: '700', color: T.text }}>{title}</Text>
+          {subtitle ? <Text style={{ fontSize: 12, color: T.textMuted, marginTop: 4 }}>{subtitle}</Text> : null}
+        </View>
+        <ScrollView style={{ paddingHorizontal: 18 }}>{children}</ScrollView>
+        <View style={{ paddingHorizontal: 18, paddingTop: 10 }}>
+          <TouchableOpacity onPress={onClose} style={{ padding: 14, borderRadius: 12,
+            borderWidth: 1, borderColor: T.border, alignItems: 'center' }}>
+            <Text style={{ fontSize: 15, fontWeight: '600', color: T.textMuted }}>Avbryt</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+export default function SettingsScreen() {
+  const { theme: T, isDark, setMode, mode } = useTheme();
+  const router = useRouter();
+  const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+  const [locationLabel, setLocationLabel] = useState('Hämtar...');
+  const [detecting, setDetecting] = useState(false);
+  const [methodModal, setMethodModal] = useState(false);
+  const [schoolModal, setSchoolModal] = useState(false);
+
+  useEffect(() => { loadAll(); }, []);
+
+  async function loadAll() {
+    try {
+      const s = await AsyncStorage.getItem(SETTINGS_KEY);
+      if (s) setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(s) });
+      const l = await AsyncStorage.getItem(LOCATION_KEY);
+      if (l) {
+        const loc = JSON.parse(l);
+        const parts = [loc.suburb, loc.city].filter(Boolean);
+        setLocationLabel(parts.join(', ') || loc.city || 'Okänd');
+      } else { setLocationLabel('Ej angiven'); }
+    } catch {}
+  }
+
+  async function saveSettings(partial: Partial<Settings>) {
+    const next = { ...settings, ...partial };
+    setSettings(next);
+    await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
+  }
+
+  async function detectLocation() {
+    setDetecting(true);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') { Alert.alert('Plats', 'Platsåtkomst nekad'); setDetecting(false); return; }
+      const loc = await Location.getCurrentPositionAsync({});
+      const { latitude: lat, longitude: lng } = loc.coords;
+      const r = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&zoom=12`, { headers: { Accept: 'application/json' } });
+      const j = await r.json();
+      const city    = j.address?.city || j.address?.town || 'Stockholm';
+      const suburb  = j.address?.suburb || j.address?.neighbourhood || '';
+      const country = j.address?.country || '';
+      const locData = { lat, lng, city, suburb, country };
+      await AsyncStorage.setItem(LOCATION_KEY, JSON.stringify(locData));
+      setLocationLabel([suburb, city].filter(Boolean).join(', '));
+    } catch { Alert.alert('Fel', 'Kunde inte hämta plats'); }
+    setDetecting(false);
+  }
+
+  const themeOptions = [
+    { label: 'Mörkt',  icon: 'moon'        as const, value: 'dark'   },
+    { label: 'Ljust',  icon: 'sun'         as const, value: 'light'  },
+    { label: 'System', icon: 'smartphone'  as const, value: 'system' },
+  ];
+
+  return (
+    <View style={{ flex: 1, backgroundColor: T.bg }}>
+      {/* Header */}
+      <View style={{ paddingTop: 56, paddingHorizontal: 16, paddingBottom: 8,
+        flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <TouchableOpacity onPress={() => router.back()} style={{ padding: 4 }}>
+          <Text style={{ fontSize: 30, color: T.text, lineHeight: 34 }}>‹</Text>
+        </TouchableOpacity>
+        <Text style={{ flex: 1, fontSize: 26, fontWeight: '700', color: T.text }}>
+          Inställningar
+        </Text>
+      </View>
+
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 120 }}>
+
+        {/* PLATS */}
+        <SectionLabel label="Plats" />
+        <Row T={T} iconName="map-arrow" label="Automatisk plats"
+          value={settings.autoLocation ? 'Uppdateras automatiskt via GPS' : 'Manuell'}
+          right={
+            <Switch value={settings.autoLocation}
+              onValueChange={v => { saveSettings({ autoLocation: v }); if (v) detectLocation(); }}
+              trackColor={{ false: T.border, true: T.accent }}
+              thumbColor="#fff" ios_backgroundColor={T.border} />
+          }
+        />
+        <Row T={T} iconName="map-point" label="Nuvarande stad" value={locationLabel}
+          onPress={detecting ? undefined : detectLocation}
+          right={detecting
+            ? <ActivityIndicator size="small" color={T.accent} />
+            : <Text style={{ fontSize: 18, color: T.textMuted }}>›</Text>
+          }
+        />
+
+        {/* BÖNETIDER */}
+        <SectionLabel label="Bönetider" />
+        <Row T={T} iconName="ruler" label="Beräkningsmetod"
+          value={CALC_METHODS[settings.calculationMethod] || 'Okänd'}
+          onPress={() => setMethodModal(true)} />
+        <Row T={T} iconName="book" label="Rättsskola"
+          value={settings.school === 0 ? "Standard (Shafi'i, Maliki, Hanbali)" : 'Hanafi'}
+          onPress={() => setSchoolModal(true)} />
+
+        {/* AVISERINGAR */}
+        <SectionLabel label="Aviseringar" />
+        <Row T={T} iconName="bell" label="Böne-påminnelser"
+          value="Avisering vid varje bönetid"
+          right={
+            <Switch value={settings.notifications}
+              onValueChange={v => saveSettings({ notifications: v })}
+              trackColor={{ false: T.border, true: T.accent }}
+              thumbColor="#fff" ios_backgroundColor={T.border} />
+          }
+        />
+
+        {/* UTSEENDE */}
+        <SectionLabel label="Utseende" />
+        <View style={{ backgroundColor: T.card, borderRadius: 14, borderWidth: 0.5,
+          borderColor: T.border, padding: 14, marginBottom: 8 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+            <SvgIcon name="theme" size={18} color={T.textMuted} />
+            <Text style={{ fontSize: 15, fontWeight: '600', color: T.text }}>Tema</Text>
+          </View>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            {themeOptions.map(({ label, icon, value }) => {
+              const active = mode === value;
+              return (
+                <TouchableOpacity key={value} onPress={() => setMode(value as any)}
+                  activeOpacity={0.8}
+                  style={{ flex: 1, paddingVertical: 12, borderRadius: 10,
+                    backgroundColor: active ? T.accent : T.bg,
+                    borderWidth: 1, borderColor: active ? T.accent : T.border,
+                    alignItems: 'center', gap: 6 }}>
+                  <SvgIcon name={icon} size={18} color={active ? '#fff' : T.text} />
+                  <Text style={{ fontSize: 12, fontWeight: '600',
+                    color: active ? '#fff' : T.text }}>{label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* OM APPEN */}
+        <SectionLabel label="Om appen" />
+        <View style={{ backgroundColor: T.card, borderRadius: 14, borderWidth: 0.5,
+          borderColor: T.border, padding: 16 }}>
+          <Text style={{ fontSize: 15, fontWeight: '700', color: T.text }}>
+            Andalus
+          </Text>
+          <Text style={{ fontSize: 13, color: T.textMuted, marginTop: 2 }}>
+            Bönetider & Qibla-kompass
+          </Text>
+          <Text style={{ fontSize: 12, color: T.textMuted, marginTop: 6, opacity: 0.7 }}>
+            Version 1.0.0
+          </Text>
+          <Text style={{ fontSize: 11, color: T.textMuted, marginTop: 2, opacity: 0.55 }}>
+            © {new Date().getFullYear()} Fatih Köker. Alla rättigheter förbehållna.
+          </Text>
+        </View>
+      </ScrollView>
+
+      {/* Beräkningsmetod modal */}
+      <Sheet visible={methodModal} T={T} title="Beräkningsmetod"
+        subtitle={`Nuvarande: ${CALC_METHODS[settings.calculationMethod]}`}
+        onClose={() => setMethodModal(false)}>
+        {Object.entries(CALC_METHODS).map(([key, name]) => {
+          const active = settings.calculationMethod === parseInt(key);
+          return (
+            <TouchableOpacity key={key}
+              onPress={() => { saveSettings({ calculationMethod: parseInt(key) }); setMethodModal(false); }}
+              style={{ paddingVertical: 13, paddingHorizontal: 12,
+                borderBottomWidth: 0.5, borderBottomColor: T.separator,
+                flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+                backgroundColor: active ? `${T.accent}18` : 'transparent',
+                borderRadius: active ? 10 : 0 }}>
+              <Text style={{ fontSize: 14, fontWeight: active ? '700' : '400', color: T.text, flex: 1 }}>
+                {name}
+              </Text>
+              {active && <Text style={{ color: T.accent, fontSize: 18, fontWeight: '700' }}>✓</Text>}
+            </TouchableOpacity>
+          );
+        })}
+      </Sheet>
+
+      {/* Rättsskola modal */}
+      <Sheet visible={schoolModal} T={T} title="Rättsskola"
+        subtitle={`Nuvarande: ${SCHOOLS[settings.school]?.label}`}
+        onClose={() => setSchoolModal(false)}>
+        <Text style={{ fontSize: 13, color: T.textMuted, marginBottom: 14, lineHeight: 20 }}>
+          Påverkar beräkningen av Asr-bönen. Välj enligt din madhab.
+        </Text>
+        {Object.entries(SCHOOLS).map(([key, { label, sub }]) => {
+          const active = settings.school === parseInt(key);
+          return (
+            <TouchableOpacity key={key}
+              onPress={() => { saveSettings({ school: parseInt(key) }); setSchoolModal(false); }}
+              style={{ paddingVertical: 14, paddingHorizontal: 12,
+                borderBottomWidth: 0.5, borderBottomColor: T.separator,
+                flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+                backgroundColor: active ? `${T.accent}18` : 'transparent',
+                borderRadius: active ? 10 : 0 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 15, fontWeight: '600', color: T.text }}>{label}</Text>
+                <Text style={{ fontSize: 12, color: T.textMuted, marginTop: 2 }}>{sub}</Text>
+              </View>
+              {active && <Text style={{ color: T.accent, fontSize: 20, fontWeight: '700' }}>✓</Text>}
+            </TouchableOpacity>
+          );
+        })}
+      </Sheet>
+    </View>
+  );
+}
