@@ -1,0 +1,780 @@
+{
+  "version": "1.1.0",
+  "language": "sv",
+  "app": "Hidayah",
+  "categories": [
+    {
+      "id": "latt",
+      "title": "Lätt",
+      "questions": [
+        {
+          "id": "latt_forsta_kapitlet_koranen",
+          "question": "Vad heter det första kapitlet i Koranen?",
+          "options": [
+            "An Nas",
+            "Al Fatihah",
+            "Al Baqarah"
+          ],
+          "correctAnswer": "Al Fatihah"
+        },
+        {
+          "id": "latt_kvinna_namnts_flest_koranen",
+          "question": "Vilken kvinna har nämnts flest gånger i Koranen?",
+          "options": [
+            "Maryam",
+            "Aishah",
+            "Khadijah"
+          ],
+          "correctAnswer": "Maryam"
+        },
+        {
+          "id": "latt_stad_foddes_profeten",
+          "question": "I vilken stad föddes Profeten Muhammeds (sallallahu alayhi wa sallam)?",
+          "options": [
+            "Jerusalem",
+            "Mecka",
+            "Medinah"
+          ],
+          "correctAnswer": "Mecka"
+        },
+        {
+          "id": "latt_andra_pelaren_islam",
+          "question": "Vilken är den andra pelaren i islam?",
+          "options": [
+            "Vittnesmålet att ingen har rätt att dyrkas förutom Allah och att Muhammed är Hans sändebud",
+            "Bönen",
+            "Zakat (Allmosan)"
+          ],
+          "correctAnswer": "Bönen"
+        },
+        {
+          "id": "latt_obligatoriska_boner",
+          "question": "Hur många är de obligatoriska bönerna?",
+          "options": [
+            "5",
+            "3",
+            "1"
+          ],
+          "correctAnswer": "5"
+        },
+        {
+          "id": "latt_antal_kapitel_koranen",
+          "question": "Hur många kapitel finns det i Koranen?",
+          "options": [
+            "99",
+            "114",
+            "125"
+          ],
+          "correctAnswer": "114"
+        },
+        {
+          "id": "latt_forsta_pelaren_islam",
+          "question": "Vilken är den första pelaren i islam?",
+          "options": [
+            "Vittnesmålet att ingen har rätt att dyrkas förutom Allah och att Muhammed är Hans sändebud",
+            "Bönen",
+            "Pilgrimsfärden"
+          ],
+          "correctAnswer": "Vittnesmålet att ingen har rätt att dyrkas förutom Allah och att Muhammed är Hans sändebud"
+        }
+      ]
+    },
+    {
+      "id": "medel",
+      "title": "Medel",
+      "questions": [
+        {
+          "id": "medel_handlingar_allah_alskar_mest",
+          "question": "Vilka handlingar älskar Allah mest?",
+          "options": [
+            "De som görs snabbast",
+            "De som man gör regelbundet - även om de är få",
+            "De som är svårast och jobbigast"
+          ],
+          "correctAnswer": "De som man gör regelbundet - även om de är få"
+        },
+        {
+          "id": "medel_forsta_uppenbarelsen_kapitel",
+          "question": "Från vilket kapitel kom den första uppenbarelsen till Profeten Muhammad (sallallahu alayhi wa sallam)?",
+          "options": [
+            "Al Fatihah",
+            "Al Alaq",
+            "Al Baqarah"
+          ],
+          "correctAnswer": "Al Alaq"
+        },
+        {
+          "id": "medel_stad_dog_profeten",
+          "question": "I vilken stad dog Profeten Muhammad (sallallahu alayhi wa sallam)?",
+          "options": [
+            "Medinah",
+            "Jerusalem",
+            "Yanbu"
+          ],
+          "correctAnswer": "Medinah"
+        },
+        {
+          "id": "medel_egenskaper_leder_till_paradiset",
+          "question": "Vilka egenskaper leder till paradiset?",
+          "options": [
+            "Mycket pengar och status",
+            "Gudsfruktan och god karaktär",
+            "Mycket vänner och följare"
+          ],
+          "correctAnswer": "Gudsfruktan och god karaktär"
+        },
+        {
+          "id": "medel_varsta_synden",
+          "question": "Vilken är den värsta synden?",
+          "options": [
+            "Att ljuga",
+            "Att dyrka någon annan vid sidan av Allah (shirk)",
+            "Att stjäla något"
+          ],
+          "correctAnswer": "Att dyrka någon annan vid sidan av Allah (shirk)"
+        },
+        {
+          "id": "medel_huvudmalet_fasta",
+          "question": "Vad är huvudmålet med att fasta i fastemånaden?",
+          "options": [
+            "Att gå ner i vikt",
+            "Att bli mer gudsfruktiga och stärka vår tro",
+            "Att känna hur de fattiga har det"
+          ],
+          "correctAnswer": "Att bli mer gudsfruktiga och stärka vår tro"
+        },
+        {
+          "id": "medel_manad_fastar_hela_manaden",
+          "question": "I vilken månad fastar muslimerna hela månaden?",
+          "options": [
+            "Rajab",
+            "Ramadan",
+            "Dhul Hijjah"
+          ],
+          "correctAnswer": "Ramadan"
+        }
+      ]
+    },
+    {
+      "id": "svar",
+      "title": "Svår",
+      "questions": [
+        {
+          "id": "svar_viktigast_i_bonen",
+          "question": "Vad är viktigast i bönen?",
+          "options": [
+            "Att man har finast kläder",
+            "Att man ber med ett närvarande hjärta och ödmjukhet",
+            "Att man ber snabbt"
+          ],
+          "correctAnswer": "Att man ber med ett närvarande hjärta och ödmjukhet"
+        },
+        {
+          "id": "svar_rekommenderat_innan_ramadan",
+          "question": "Vad är det rekommenderat att göra månaden innan Ramadan?",
+          "options": [
+            "Förbereda sig inför Ramadan - genom att fasta frivilligt exempelvis",
+            "Handla mycket mat",
+            "Vila och ta det lugnt"
+          ],
+          "correctAnswer": "Förbereda sig inför Ramadan - genom att fasta frivilligt exempelvis"
+        },
+        {
+          "id": "svar_ar_profeten_gjorde_hajj",
+          "question": "Vilket år enligt den islamiska kalendern gjorde Profeten Muhammad (sallallahu alayhi wa sallam) hajj?",
+          "options": [
+            "År 20",
+            "År 1",
+            "År 10"
+          ],
+          "correctAnswer": "År 10"
+        },
+        {
+          "id": "svar_varfor_tiden_ar_vardefull",
+          "question": "Varför är tiden så värdefull?",
+          "options": [
+            "Man ska passa på att ha mycket kul",
+            "Man ska tjäna så mycket pengar som möjligt och inte slösa tid",
+            "Om vi slösar den hinner vi inte göra goda gärningar och förbereda oss inför Domedagen"
+          ],
+          "correctAnswer": "Om vi slösar den hinner vi inte göra goda gärningar och förbereda oss inför Domedagen"
+        },
+        {
+          "id": "svar_rad_om_att_prata",
+          "question": "Vilket råd gav Profeten Muhammad (sallallahu alayhi wa sallam) gällande att prata?",
+          "options": [
+            "Den bästa av er är den som pratar mest",
+            "Prata på - även om du inte har någon kunskap",
+            "Säg något gott eller var tyst"
+          ],
+          "correctAnswer": "Säg något gott eller var tyst"
+        },
+        {
+          "id": "svar_forlater_allah_alla_synder",
+          "question": "Förlåter Allah alla synder?",
+          "options": [
+            "Ja, om personen verkligen ångrar sig och slutar med synden",
+            "Bara på natten",
+            "Bara i Ramadan"
+          ],
+          "correctAnswer": "Ja, om personen verkligen ångrar sig och slutar med synden"
+        },
+        {
+          "id": "svar_manad_innan_ramadan",
+          "question": "Vilken månad kommer innan Ramadan?",
+          "options": [
+            "Sha'ban",
+            "Rajab",
+            "Shawwal",
+            "Dhul Hijjah"
+          ],
+          "correctAnswer": "Sha'ban"
+        }
+      ]
+    },
+    {
+      "id": "generella",
+      "title": "Generella",
+      "questions": [
+        {
+          "id": "generella_fjarde_pelaren_islam",
+          "question": "Vad är den fjärde pelaren i islam?",
+          "options": [
+            "Allmosan",
+            "Bönen",
+            "Fastan"
+          ],
+          "correctAnswer": "Fastan"
+        },
+        {
+          "id": "generella_femte_pelaren_islam",
+          "question": "Vad är den femte pelaren i islam?",
+          "options": [
+            "Allmosan",
+            "Fastan i Ramadan",
+            "Pilgrimsfärden",
+            "Bönen"
+          ],
+          "correctAnswer": "Pilgrimsfärden"
+        },
+        {
+          "id": "generella_vad_forsvagar_iman",
+          "question": "Vad försvagar vår tro (iman) och får den att sjunka?",
+          "options": [
+            "Att man är generös och givmild",
+            "Synder och olydnad till Allah",
+            "Att man tränar mycket"
+          ],
+          "correctAnswer": "Synder och olydnad till Allah"
+        },
+        {
+          "id": "generella_mest_autentiska_hadithboken",
+          "question": "Vad heter den mest autentiska hadithboken?",
+          "options": [
+            "Sahih Muslim",
+            "Sahih Bukhari",
+            "Sahih Ibn Khuzaymah",
+            "Musnad Imam Ahmad"
+          ],
+          "correctAnswer": "Sahih Bukhari"
+        },
+        {
+          "id": "generella_vad_starker_iman",
+          "question": "Vad stärker vår tro (iman) och får den att stiga?",
+          "options": [
+            "Ett bra jobb",
+            "Goda handlingar och att lyda Allah",
+            "Mycket pengar"
+          ],
+          "correctAnswer": "Goda handlingar och att lyda Allah"
+        }
+      ]
+    },
+    {
+      "id": "troslara",
+      "title": "Troslära",
+      "questions": [
+        {
+          "id": "troslara_monoteism_pa_arabiska",
+          "question": "Vad kallas monoteism på arabiska?",
+          "options": [
+            "Iman",
+            "Tawhid",
+            "Ihsan"
+          ],
+          "correctAnswer": "Tawhid"
+        },
+        {
+          "id": "troslara_hur_manga_anglar_skriver_ned_handlingar",
+          "question": "Hur många änglar skriver ned varje människas handlingar?",
+          "options": [
+            "7",
+            "1",
+            "2",
+            "4"
+          ],
+          "correctAnswer": "2"
+        },
+        {
+          "id": "troslara_angeln_med_uppenbarelsen",
+          "question": "Vad hette ängeln som kom med uppenbarelsen?",
+          "options": [
+            "Malik",
+            "Jibril",
+            "Mikail"
+          ],
+          "correctAnswer": "Jibril"
+        },
+        {
+          "id": "troslara_tredje_av_trons_pelare",
+          "question": "Vad är den tredje av trons pelare?",
+          "options": [
+            "Att tro på livet efter detta",
+            "Att tro på sändebuden",
+            "Att tro på de uppenbarade böckerna"
+          ],
+          "correctAnswer": "Att tro på de uppenbarade böckerna"
+        },
+        {
+          "id": "troslara_aqidah_pa_arabiska",
+          "question": "Vad kallas troslära på arabiska?",
+          "options": [
+            "Islam",
+            "Tawhid",
+            "Aqidah"
+          ],
+          "correctAnswer": "Aqidah"
+        },
+        {
+          "id": "troslara_varfor_allah_skapade_manniskor_och_jinner",
+          "question": "Varför skapade Allah människorna och jinnerna?",
+          "options": [
+            "För att dyrka Honom",
+            "För att skaffa sig mycket pengar",
+            "För att leva ett långt och lyckligt liv"
+          ],
+          "correctAnswer": "För att dyrka Honom"
+        },
+        {
+          "id": "troslara_andra_av_trons_pelare",
+          "question": "Vad är den andra av trons pelare?",
+          "options": [
+            "Att tro på Änglarna",
+            "Att tro på de uppenbarade böckerna",
+            "Att tro på Ödet"
+          ],
+          "correctAnswer": "Att tro på Änglarna"
+        }
+      ]
+    },
+    {
+      "id": "bestammelser",
+      "title": "Bestämmelser",
+      "questions": [
+        {
+          "id": "bestammelser_menstruerande_kvinna_fastar",
+          "question": "Vad är bestämmelsen för att en menstruerande kvinna fastar?",
+          "options": [
+            "Förbjudet",
+            "Tillåtet",
+            "Förhatligt"
+          ],
+          "correctAnswer": "Förbjudet"
+        },
+        {
+          "id": "bestammelser_bryter_fasta_av_glomska",
+          "question": "Bryter det fastan om man av glömska råkar äta?",
+          "options": [
+            "Nej, det bryts bara om du dricker vatten också",
+            "Nej, men sluta äta då du kommer ihåg att du fastar",
+            "Ja, det bryter fastan, även om du åt av glömska"
+          ],
+          "correctAnswer": "Nej, men sluta äta då du kommer ihåg att du fastar"
+        },
+        {
+          "id": "bestammelser_wudhu_efter_toalettbesok",
+          "question": "Vad måste man göra innan bönen efter ett toalettbesök?",
+          "options": [
+            "Ghusl och wudhu",
+            "Ghusl",
+            "Wudhu"
+          ],
+          "correctAnswer": "Wudhu"
+        },
+        {
+          "id": "bestammelser_lilla_formen_rening",
+          "question": "Vad kallas den lilla formen av rening i islam?",
+          "options": [
+            "Ghusl",
+            "Adhaan",
+            "Wudhu"
+          ],
+          "correctAnswer": "Wudhu"
+        }
+      ]
+    },
+    {
+      "id": "koranen",
+      "title": "Koranen",
+      "questions": [
+        {
+          "id": "koranen_kapitel_en_tredjedel",
+          "question": "Vilket kapitel sa Profeten (sallallahu alayhi wa sallam) att det motsvarar en tredjedel av Koranen?",
+          "options": [
+            "Al Ikhlas",
+            "Al Fatihah",
+            "Al Baqarah"
+          ],
+          "correctAnswer": "Al Ikhlas"
+        },
+        {
+          "id": "koranen_maktigaste_versen",
+          "question": "Vilken vers sa Profeten (sallallahu alayhi wa sallam) att det är den mäktigaste i Koranen?",
+          "options": [
+            "Ayat ul Ikhlas",
+            "Ayat ul Kursi",
+            "Ayat ul Baqarah"
+          ],
+          "correctAnswer": "Ayat ul Kursi"
+        },
+        {
+          "id": "koranen_viktigast_att_lasa",
+          "question": "Vad är det viktigaste när det kommer till att läsa Koranen?",
+          "options": [
+            "Att läsa snabbt",
+            "Att läsa med fin röst",
+            "Att läsa, förstå och praktisera budskapet"
+          ],
+          "correctAnswer": "Att läsa, förstå och praktisera budskapet"
+        },
+        {
+          "id": "koranen_profet_namnts_flest",
+          "question": "Vilken profet har nämnts flest gånger i Koranen?",
+          "options": [
+            "Isa",
+            "Muhammad",
+            "Adam",
+            "Musa"
+          ],
+          "correctAnswer": "Musa"
+        },
+        {
+          "id": "koranen_sista_kapitlet",
+          "question": "Vad heter det sista kapitlet i Koranen?",
+          "options": [
+            "Al Falaq",
+            "Al Ikhlas",
+            "An Nas"
+          ],
+          "correctAnswer": "An Nas"
+        },
+        {
+          "id": "koranen_kapitel_pa_fredagar",
+          "question": "Vilket kapitel av Koranen är vi uppmanade att läsa på fredagar?",
+          "options": [
+            "Qaf",
+            "Al Kahf",
+            "Al Ahqaf",
+            "Al Hijr"
+          ],
+          "correctAnswer": "Al Kahf"
+        },
+        {
+          "id": "koranen_langsta_kapitlet",
+          "question": "Vad heter det längsta kapitlet i Koranen?",
+          "options": [
+            "Al Baqarah",
+            "Al Maidah",
+            "An Nisa"
+          ],
+          "correctAnswer": "Al Baqarah"
+        }
+      ]
+    },
+    {
+      "id": "biografi",
+      "title": "Biografi",
+      "questions": [
+        {
+          "id": "biografi_profetens_pappa",
+          "question": "Vad hette Profeten Muhammads (sallallahu alayhi wa sallam) pappa?",
+          "options": [
+            "Abdullah",
+            "Abdulmuttali",
+            "Ibrahim"
+          ],
+          "correctAnswer": "Abdullah"
+        },
+        {
+          "id": "biografi_profetens_mamma",
+          "question": "Vad hette Profeten Muhammads (sallallahu alayhi wa sallam) mamma?",
+          "options": [
+            "Khadijah",
+            "Aminah",
+            "Aishah"
+          ],
+          "correctAnswer": "Aminah"
+        },
+        {
+          "id": "biografi_profetens_forsta_fru",
+          "question": "Vad hette Profeten Muhammads (sallallahu alayhi wa sallam) första fru?",
+          "options": [
+            "Fatimah",
+            "Sofia",
+            "Khadijah"
+          ],
+          "correctAnswer": "Khadijah"
+        },
+        {
+          "id": "biografi_grottan_forsta_uppenbarelsen",
+          "question": "Vad hette grottan som Profeten Muhammad (sallallahu alayhi wa sallam) fick den första uppenbarelsen i?",
+          "options": [
+            "Hira",
+            "Uhud",
+            "Sina"
+          ],
+          "correctAnswer": "Hira"
+        },
+        {
+          "id": "biografi_forsta_barnet_som_trodde",
+          "question": "Vem var det första barnet som trodde på Profeten Muhammad (sallallahu alayhi wa sallam)?",
+          "options": [
+            "Anas bin Malik",
+            "Ali ibn Abi Talib",
+            "Uthman bin Affan"
+          ],
+          "correctAnswer": "Ali ibn Abi Talib"
+        },
+        {
+          "id": "biografi_andra_kalifen",
+          "question": "Vad hette den andra kalifen?",
+          "options": [
+            "Uthman bin Affan",
+            "Abdurrahman bin Awf",
+            "Umar ibn ul Khattab"
+          ],
+          "correctAnswer": "Umar ibn ul Khattab"
+        },
+        {
+          "id": "biografi_profetens_farfar",
+          "question": "Vad hette Profeten Muhammads (sallallahu alayhi wa sallam) farfar?",
+          "options": [
+            "Musa",
+            "Ahmed",
+            "Hashim",
+            "Abdulmuttalib"
+          ],
+          "correctAnswer": "Abdulmuttalib"
+        },
+        {
+          "id": "biografi_foljeslagare",
+          "question": "Vad kallas Profeten Muhammads (sallallahu alayhi wa sallam) följeslagare?",
+          "options": [
+            "Quds",
+            "Sahabah",
+            "Hadith"
+          ],
+          "correctAnswer": "Sahabah"
+        }
+      ]
+    },
+    {
+      "id": "profeter_i_islam",
+      "title": "Profeter i islam",
+      "questions": [
+        {
+          "id": "profeter_i_islam_latt_forsta_profeten",
+          "difficulty": "Lätt",
+          "question": "Vem var den första profeten i islam?",
+          "options": [
+            "Profeten Musa",
+            "Profeten Isa",
+            "Profeten Adam",
+            "Profeten Ibrahim"
+          ],
+          "correctAnswer": "Profeten Adam"
+        },
+        {
+          "id": "profeter_i_islam_latt_byggde_arken",
+          "difficulty": "Lätt",
+          "question": "Vilken profet byggde en stor ark (båt)?",
+          "options": [
+            "Profeten Sulaiman",
+            "Profeten Nuh",
+            "Profeten Harun",
+            "Profeten Dawud"
+          ],
+          "correctAnswer": "Profeten Nuh"
+        },
+        {
+          "id": "profeter_i_islam_latt_svaldes_av_stor_fisk",
+          "difficulty": "Lätt",
+          "question": "Vilken profet svaldes av en stor fisk?",
+          "options": [
+            "Profeten Isa",
+            "Profeten Musa",
+            "Profeten Yunus",
+            "Profeten Yusuf"
+          ],
+          "correctAnswer": "Profeten Yunus"
+        },
+        {
+          "id": "profeter_i_islam_latt_sista_profeten",
+          "difficulty": "Lätt",
+          "question": "Vem är den sista profeten i islam?",
+          "options": [
+            "Profeten Isa",
+            "Profeten Muhammad ﷺ",
+            "Profeten Musa",
+            "Profeten Ayyub"
+          ],
+          "correctAnswer": "Profeten Muhammad ﷺ"
+        },
+        {
+          "id": "profeter_i_islam_latt_far_till_ismail_och_ishaq",
+          "difficulty": "Lätt",
+          "question": "Vem var far till Ismail och Ishaq?",
+          "options": [
+            "Profeten Yusuf",
+            "Profeten Ibrahim",
+            "Profeten Harun",
+            "Profeten Nuh"
+          ],
+          "correctAnswer": "Profeten Ibrahim"
+        },
+        {
+          "id": "profeter_i_islam_medel_kand_for_talamod",
+          "difficulty": "Medel",
+          "question": "Vilken profet var känd för sitt tålamod?",
+          "options": [
+            "Profeten Idris",
+            "Profeten Ayyub",
+            "Profeten Isa",
+            "Profeten Shuayb"
+          ],
+          "correctAnswer": "Profeten Ayyub"
+        },
+        {
+          "id": "profeter_i_islam_medel_fick_tawrah",
+          "difficulty": "Medel",
+          "question": "Vilken profet fick Tawrah (Torah)?",
+          "options": [
+            "Profeten Isa",
+            "Profeten Musa",
+            "Profeten Muhammad ﷺ",
+            "Profeten Dawud"
+          ],
+          "correctAnswer": "Profeten Musa"
+        },
+        {
+          "id": "profeter_i_islam_medel_mor_till_isa",
+          "difficulty": "Medel",
+          "question": "Vem var mor till profeten Isa?",
+          "options": [
+            "Khadijah",
+            "Maryam",
+            "Fatimah",
+            "Asiya"
+          ],
+          "correctAnswer": "Maryam"
+        },
+        {
+          "id": "profeter_i_islam_medel_foddes_utan_far",
+          "difficulty": "Medel",
+          "question": "Vilken profet föddes utan en far?",
+          "options": [
+            "Profeten Isa",
+            "Profeten Adam",
+            "Profeten Ibrahim",
+            "Profeten Muhammad ﷺ"
+          ],
+          "correctAnswer": "Profeten Isa"
+        },
+        {
+          "id": "profeter_i_islam_medel_tydde_kungens_drom",
+          "difficulty": "Medel",
+          "question": "Vilken profet tydde kungens dröm i Egypten?",
+          "options": [
+            "Profeten Musa",
+            "Profeten Isa",
+            "Profeten Yusuf",
+            "Profeten Harun"
+          ],
+          "correctAnswer": "Profeten Yusuf"
+        },
+        {
+          "id": "profeter_i_islam_svar_talade_med_djur_och_styrde_vinden",
+          "difficulty": "Svår",
+          "question": "Vilken profet kunde tala med djur och kontrollera vinden?",
+          "options": [
+            "Profeten Sulaiman",
+            "Profeten Nuh",
+            "Profeten Isa",
+            "Profeten Idris"
+          ],
+          "correctAnswer": "Profeten Sulaiman"
+        },
+        {
+          "id": "profeter_i_islam_svar_kastades_i_elden",
+          "difficulty": "Svår",
+          "question": "Vilken profet kastades i elden men förblev oskadd?",
+          "options": [
+            "Profeten Ibrahim",
+            "Profeten Musa",
+            "Profeten Yunus",
+            "Profeten Isa"
+          ],
+          "correctAnswer": "Profeten Ibrahim"
+        },
+        {
+          "id": "profeter_i_islam_svar_delade_havet",
+          "difficulty": "Svår",
+          "question": "Vilken profet delade havet på Allahs befallning?",
+          "options": [
+            "Profeten Isa",
+            "Profeten Musa",
+            "Profeten Sulaiman",
+            "Profeten Dawud"
+          ],
+          "correctAnswer": "Profeten Musa"
+        },
+        {
+          "id": "profeter_i_islam_svar_sandes_till_madyan",
+          "difficulty": "Svår",
+          "question": "Vilken profet sändes till folket i Madyan?",
+          "options": [
+            "Profeten Yusuf",
+            "Profeten Shuayb",
+            "Profeten Isa",
+            "Profeten Nuh"
+          ],
+          "correctAnswer": "Profeten Shuayb"
+        },
+        {
+          "id": "profeter_i_islam_svar_broder_till_farao",
+          "difficulty": "Svår",
+          "question": "Vilka två profeter var bröder och sändes till Farao?",
+          "options": [
+            "Isa och Yahya",
+            "Nuh och Idris",
+            "Musa och Harun",
+            "Ibrahim och Ismail"
+          ],
+          "correctAnswer": "Musa och Harun"
+        }
+      ]
+    }
+  ],
+  "deduplication": {
+    "removedDuplicates": [
+      {
+        "question": "Med vilken fot bör man gå in i toaletten först?",
+        "keptCategory": "Bestämmelser",
+        "removedFrom": [
+          "Lätt"
+        ]
+      }
+    ]
+  },
+  "totalQuestions": 67
+}

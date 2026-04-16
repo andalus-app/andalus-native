@@ -8,7 +8,7 @@ import { useTheme } from '../../context/ThemeContext';
 
 // ── Data ──────────────────────────────────────────────────────────────────────
 
-type IconName = 'allahs-namn' | 'ruqyah' | 'zakat' | 'calendar' | 'book' | 'heart' | 'info' | 'umrah';
+type IconName = 'allahs-namn' | 'ruqyah' | 'zakat' | 'calendar' | 'book' | 'heart' | 'info' | 'umrah' | 'quiz';
 
 type Row = {
   key:   string;
@@ -41,7 +41,8 @@ const SECTIONS: Section[] = [
   {
     title: 'Innehåll',
     data: [
-      { key: 'ebooks',  title: 'E-böcker',          icon: 'book',        route: '/ebooks'  },
+      { key: 'ebooks',  title: 'E-böcker',           icon: 'book',        route: '/ebooks'  },
+      { key: 'quiz',    title: 'Testa din kunskap',  icon: 'quiz',        route: '/quiz'    },
     ],
   },
   {
