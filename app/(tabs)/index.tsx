@@ -95,7 +95,6 @@ export default function PrayerTimesScreen() {
   const [countdown,       setCountdown]       = useState('');
   const [loading,              setLoading]              = useState(false);
   const [refreshing,           setRefreshing]           = useState(false);
-  const [error,                setError]                = useState('');
   const [showNoLocation,       setShowNoLocation]       = useState(false);
   const [noLocationGpsLoading, setNoLocationGpsLoading] = useState(false);
 
@@ -105,6 +104,7 @@ export default function PrayerTimesScreen() {
   // Used to detect civil-day crossover while the interval is running.
   const loadedDateRef  = useRef<string>('');
   const reloadingRef   = useRef(false);
+  const lastFetchRef   = useRef<number>(0); // timestamp of last completed fetch attempt
   // Always points to the latest loadPrayerTimes closure — safe to call from interval.
   const doReloadRef    = useRef<() => void>(() => {});
   const intervalRef    = useRef<any>(null);
@@ -217,13 +217,15 @@ export default function PrayerTimesScreen() {
     }, 1000);
   }
 
-  // Restore cached prayer times instantly (returns true if cache was valid)
+  // Restore cached prayer times instantly (returns true if any cache was loaded).
+  // Accepts stale cache (from a previous day) — prayer times shift by only
+  // seconds per day, so stale data is far better than a blank/error screen.
   async function restoreCache(): Promise<boolean> {
     try {
       const raw = await AsyncStorage.getItem(PRAYER_CACHE_KEY);
       if (!raw) return false;
       const c = JSON.parse(raw);
-      if (c.date !== new Date().toDateString()) return false;
+      if (!c.timings) return false;
       timingsRef.current         = c.timings;
       tomorrowTimingsRef.current = c.tomorrowTimings ?? null;
       loadedDateRef.current      = c.date;
@@ -248,7 +250,13 @@ export default function PrayerTimesScreen() {
     } catch { return false; }
   }
 
+  const FETCH_COOLDOWN_MS = 60_000; // minimum 60 s between API attempts
+
   async function loadPrayerTimes() {
+    // Guard 1: skip if a fetch is already in flight
+    if (reloadingRef.current) return;
+    // Guard 2: skip if last fetch attempt was less than 60 seconds ago
+    if (Date.now() - lastFetchRef.current < FETCH_COOLDOWN_MS) return;
     reloadingRef.current = true;
 
     const [settingsRaw, locationRaw] = await Promise.all([
@@ -310,7 +318,8 @@ export default function PrayerTimesScreen() {
       }
 
       await fetchAndSetTimes(lat, lng, method, school, resolvedCity, resolvedCountry, resolvedSuburb);
-    } catch { if (!hasCached) setError('Kunde inte hämta bönetider'); }
+    } catch { /* Network or GPS failure — silently keep whatever cache was loaded */ }
+    lastFetchRef.current = Date.now();
     reloadingRef.current = false;
     setLoading(false);
   }
@@ -478,6 +487,7 @@ export default function PrayerTimesScreen() {
   async function handleRefresh() {
     if (autoLocationRef.current) {
       setRefreshing(true);
+      lastFetchRef.current = 0; // bypass cooldown for explicit pull-to-refresh
       await loadPrayerTimes();
       setRefreshing(false);
     } else {
@@ -519,11 +529,6 @@ export default function PrayerTimesScreen() {
     </View>
   );
 
-  if (error) return (
-    <View style={{ flex:1, alignItems:'center', justifyContent:'center', backgroundColor: T.bg }}>
-      <Text style={{ color: T.error }}>{error}</Text>
-    </View>
-  );
 
   const dateStr   = new Date().toLocaleDateString('sv-SE', { weekday:'long', day:'numeric', month:'long' });
   const hijriStr  = hijri ? `${hijri.day} ${hijri.month.en} ${hijri.year} AH` : '';
