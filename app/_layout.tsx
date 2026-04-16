@@ -98,6 +98,9 @@ function AppContent({ onFontsReady }: { onFontsReady: () => void }) {
           // Fallback: ingen khatmah-data — öppna senast lästa sidan
           router.push('/quran' as any);
         })();
+      } else if (data?.screen === 'dhikr') {
+        // Dhikr-påminnelse — öppna Dhikr-sidan direkt.
+        router.push('/(tabs)/dhikr' as any);
       } else if (data?.screen === 'youtube_live') {
         // YouTube live notification — navigate to home tab where the stream is shown.
         router.push('/(tabs)/' as any);

@@ -323,14 +323,6 @@ function DhikrCard({ d, T, isDark, favorites, onToggleFav }: {
           </View>
         ))}
 
-        {/* Audio player */}
-        {!!d.mp3_url && (
-          <View style={{ paddingHorizontal: 16, paddingBottom: 14, paddingTop: rows.length > 0 ? 0 : 14 }}>
-            {rows.length > 0 && <View style={{ height: 1, backgroundColor: dividerCol, marginBottom: 12 }} />}
-            <AudioPlayer url={d.mp3_url} T={T} isDark={isDark} />
-          </View>
-        )}
-
         {/* Source */}
         {!!d.kallhanvisning && (
           <>
@@ -339,6 +331,14 @@ function DhikrCard({ d, T, isDark, favorites, onToggleFav }: {
               <Text style={{ fontSize: 12, color: isDark ? 'rgba(255,255,255,0.75)' : 'rgba(0,0,0,0.6)', lineHeight: 18 }}>{d.kallhanvisning}</Text>
             </ContentRow>
           </>
+        )}
+
+        {/* Audio player */}
+        {!!d.mp3_url && (
+          <View style={{ paddingHorizontal: 16, paddingBottom: 14, paddingTop: 14 }}>
+            <View style={{ height: 1, backgroundColor: dividerCol, marginBottom: 12 }} />
+            <AudioPlayer url={d.mp3_url} T={T} isDark={isDark} />
+          </View>
         )}
       </View>
     </View>
@@ -917,7 +917,10 @@ export default function DhikrScreen() {
       <View style={{ paddingTop: insets.top, borderBottomWidth: 1, borderBottomColor: T.border, backgroundColor: T.bg }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 10 }}>
           <BackButton onPress={() => router.back()} />
-          <Text style={{ fontSize: 19, fontWeight: '800', color: T.text, letterSpacing: -0.3 }}>Dhikr & Du'a</Text>
+          <View>
+            <Text style={{ fontSize: 19, fontWeight: '800', color: T.text, letterSpacing: -0.3 }}>Dhikr & Du'a</Text>
+            <Text style={{ fontSize: 11, fontWeight: '500', color: T.textMuted, letterSpacing: 0.1, marginTop: 1 }}>Hisnul Muslim – Muslimens Fästning</Text>
+          </View>
         </View>
 
         {/* Tab pills */}

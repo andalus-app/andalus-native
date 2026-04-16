@@ -83,7 +83,7 @@ const STEPS: StepDef[] = [
     image:         require('../assets/onboarding/permission_location.png'),
     title:         'Din böneplats',
     body:          'Hidayah använder din plats för att beräkna korrekta bönetider för just din stad.',
-    primaryLabel:  'Tillåt GPS',
+    primaryLabel:  'Fortsätt',
     secondaryLabel:'Välj stad manuellt',
     skipLabel:     'Hoppa över',
   },

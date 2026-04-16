@@ -155,6 +155,7 @@ export async function scheduleDhikrReminder(
           title: 'Tid för dhikr',
           body,
           sound: true,
+          data: { screen: 'dhikr' },
         },
         trigger: {
           type: N!.SchedulableTriggerInputTypes.DATE,
