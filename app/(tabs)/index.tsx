@@ -191,10 +191,13 @@ export default function PrayerTimesScreen() {
     intervalRef.current = setInterval(() => {
       if (!timingsRef.current) return;
 
-      // Case 2: civil day changed — reload for the new day
+      // Case 2: civil day changed — reload for the new day.
+      // Do NOT set reloadingRef here — loadPrayerTimes manages its own in-flight
+      // guard and will return immediately if reloadingRef is already true.
+      // Reset lastFetchRef so the 60 s cooldown doesn't block a day-change reload.
       if (loadedDateRef.current && loadedDateRef.current !== new Date().toDateString()) {
         if (!reloadingRef.current) {
-          reloadingRef.current = true;
+          lastFetchRef.current = 0;
           doReloadRef.current();
         }
         return;
