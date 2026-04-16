@@ -75,7 +75,7 @@ const STEPS: StepDef[] = [
     image:        require('../assets/onboarding/permission_notifications.png'),
     title:        'Böne-påminnelser',
     body:         'Få en notis när det är dags för bön. Vi skickar aldrig onödiga meddelanden.',
-    primaryLabel: 'Tillåt notiser',
+    primaryLabel: 'Fortsätt',
     skipLabel:    'Hoppa över',
   },
   {
@@ -92,7 +92,7 @@ const STEPS: StepDef[] = [
     image:        require('../assets/onboarding/permission_widgets_background_location.png'),
     title:        'Widget-uppdateringar',
     body:         'Tillåt bakgrundsplats så att din widget alltid visar rätt bönetider, även när appen är stängd.',
-    primaryLabel: 'Kom igång',
+    primaryLabel: 'Fortsätt',
     skipLabel:    'Hoppa över',
   },
 ];
