@@ -86,7 +86,7 @@ import {
  * Switch between bundled and download-on-demand modes.
  * Set to 'bundled' once all 606 font files are in assets/fonts/qcf/.
  */
-const OFFLINE_MODE: 'bundled' | 'download' = 'bundled';
+const OFFLINE_MODE: 'bundled' | 'download' = 'download';
 
 // ── Page font CDN (download mode) ─────────────────────────────────────────────
 
