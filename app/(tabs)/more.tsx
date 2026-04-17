@@ -42,7 +42,7 @@ const SECTIONS: Section[] = [
     title: 'Innehåll',
     data: [
       { key: 'ebooks',  title: 'E-böcker',           icon: 'book',        route: '/ebooks'  },
-      { key: 'quiz',    title: 'Testa din kunskap',  icon: 'quiz',        route: '/quiz'    },
+      { key: 'quiz',    title: 'Frågesport',          icon: 'quiz',        route: '/quiz'    },
     ],
   },
   {
