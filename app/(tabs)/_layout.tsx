@@ -2,6 +2,7 @@ import { Tabs, usePathname, useRouter } from 'expo-router';
 import { Animated, StyleSheet, View, ScrollView, TouchableOpacity, Text } from 'react-native';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { BlurView } from 'expo-blur';
+import * as Haptics from 'expo-haptics';
 import SvgIcon from '../../components/SvgIcon';
 import { useTheme } from '../../context/ThemeContext';
 import { useYoutubeLive } from '../../hooks/useYoutubeLive';
@@ -103,6 +104,7 @@ function CustomTabBar() {
                 const now = Date.now();
                 if (now - lastNavTime.current < 600) return;
                 lastNavTime.current = now;
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 router.push(tab.route as any);
               }}
               style={{

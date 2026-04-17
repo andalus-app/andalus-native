@@ -108,7 +108,6 @@ function ListRow({
   const opacity = useRef(new Animated.Value(1)).current;
 
   const handlePressIn = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     Animated.parallel([
       Animated.timing(scale,   { toValue: 0.97, duration: 120, useNativeDriver: true }),
       Animated.timing(opacity, { toValue: 0.60, duration: 120, useNativeDriver: true }),
@@ -132,7 +131,10 @@ function ListRow({
   return (
     <Animated.View style={{ transform: [{ scale }], opacity }}>
       <TouchableOpacity
-        onPress={() => onPress(item.route)}
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          onPress(item.route);
+        }}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
         activeOpacity={1}

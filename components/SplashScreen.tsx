@@ -2,18 +2,15 @@
  * SplashScreen.tsx — Post-launch animated splash
  *
  * Renders as an absoluteFill overlay above the entire app.
- * Remains invisible (covered by native iOS splash) until isReady=true,
- * at which point it hides the native splash and plays a 500ms animation.
+ * Remains invisible (covered by native iOS splash — plain background color only,
+ * no image) until isReady=true, at which point it hides the native splash and
+ * animates the logo + text into view.
  *
- * First frame is visually identical to the native LaunchScreen:
- *   - Same background color (scheme-aware: #000 dark / #F2F2F7 light)
- *   - Logo centered at exactly the same position
- *   - Text at opacity 0 (invisible, matching the native splash with no text)
- *
- * Animation (total ≤ 500ms):
- *   0–360ms  Logo scales 1.0→1.05, rises 10px, glow fades in, text fades in
- *   360–400ms Hold
- *   400–500ms Entire overlay fades to 0, onDone() called
+ * Animation (total ≤ 700ms):
+ *   0–400ms  Logo fades in (0→1) and scales up (0.85→1.0), glow fades in
+ *   200–500ms Text fades in
+ *   500–550ms Hold
+ *   550–700ms Entire overlay fades to 0, onDone() called
  */
 
 import React, { useEffect, useRef } from 'react';
@@ -56,7 +53,8 @@ export default function SplashScreen({ isReady, onDone }: Props) {
   const textColor = isDark ? '#FFFFFF' : '#000000';
 
   // Animation state
-  const scale       = useSharedValue(1);
+  const scale       = useSharedValue(0.85);
+  const logoOp      = useSharedValue(0);
   const groupTransY = useSharedValue(0);
   const glowOp      = useSharedValue(0);
   const textOp      = useSharedValue(0);
@@ -72,16 +70,18 @@ export default function SplashScreen({ isReady, onDone }: Props) {
     // Hide native iOS splash (instant — our overlay is already covering the screen)
     NativeSplash.hideAsync();
 
-    // Phase 1 — logo breathes to life (0–360ms)
-    scale.value       = withTiming(1.05, { duration: 360, easing: Easing.out(Easing.cubic) });
-    groupTransY.value = withTiming(-10,  { duration: 360, easing: Easing.out(Easing.cubic) });
-    glowOp.value      = withTiming(1,    { duration: 280 });
-    textOp.value      = withTiming(1,    { duration: 300, easing: Easing.out(Easing.quad) });
+    // Phase 1 — logo animates in (0–400ms)
+    scale.value       = withTiming(1.0,  { duration: 400, easing: Easing.out(Easing.cubic) });
+    logoOp.value      = withTiming(1,    { duration: 400, easing: Easing.out(Easing.quad) });
+    glowOp.value      = withTiming(1,    { duration: 400 });
 
-    // Phase 2 — hold 40ms, then fade out (400–500ms)
+    // Phase 2 — text fades in (200–500ms)
+    textOp.value = withDelay(200, withTiming(1, { duration: 300, easing: Easing.out(Easing.quad) }));
+
+    // Phase 3 — hold 50ms, then fade out (550–700ms)
     overlayOp.value = withDelay(
-      400,
-      withTiming(0, { duration: 100, easing: Easing.in(Easing.quad) }, (finished) => {
+      550,
+      withTiming(0, { duration: 150, easing: Easing.in(Easing.quad) }, (finished) => {
         if (finished) runOnJS(onDone)();
       }),
     );
@@ -95,8 +95,9 @@ export default function SplashScreen({ isReady, onDone }: Props) {
     transform: [{ translateY: groupTransY.value }],
   }));
 
-  // scale on logo only — text should not scale
+  // scale + opacity on logo
   const logoScaleStyle = useAnimatedStyle(() => ({
+    opacity: logoOp.value,
     transform: [{ scale: scale.value }],
   }));
 

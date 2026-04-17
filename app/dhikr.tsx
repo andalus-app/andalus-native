@@ -254,14 +254,14 @@ function DhikrCard({ d, T, isDark, favorites, onToggleFav }: {
     Share.share({ title: d.titel, message: text });
   };
 
-  // Each content row: text on left, chip on right
+  // Chip above, text below — full width for content
   function ContentRow({ chip, chipAccent, children }: { chip: string; chipAccent?: boolean; children: React.ReactNode }) {
     return (
-      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 14, paddingHorizontal: 16 }}>
-        <View style={{ flex: 1 }}>{children}</View>
-        <View style={{ paddingHorizontal: 9, paddingVertical: 3, borderRadius: 20, backgroundColor: chipAccent ? T.accentGlow : chipBg, alignSelf: 'flex-start', marginTop: 2 }}>
+      <View style={{ paddingVertical: 12, paddingHorizontal: 16 }}>
+        <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20, backgroundColor: chipAccent ? T.accentGlow : chipBg, alignSelf: 'flex-start', marginBottom: 8 }}>
           <Text style={{ fontSize: 10, fontWeight: '600', color: chipAccent ? T.accent : (isDark ? 'rgba(255,255,255,0.75)' : 'rgba(0,0,0,0.6)') }}>{chip}</Text>
         </View>
+        <View>{children}</View>
       </View>
     );
   }

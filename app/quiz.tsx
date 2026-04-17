@@ -11,7 +11,7 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
-  View, Text, TouchableOpacity, ScrollView, StyleSheet, Animated,
+  View, Text, TouchableOpacity, ScrollView, StyleSheet, Animated, Easing,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -41,7 +41,6 @@ import {
 
 const PLAYABLE_CATEGORIES: QuizPlayableCategory[] = getPlayableCategories();
 
-const COUNT_OPTIONS  = [5, 10, 15] as const;
 const TIME_OPTIONS: { label: string; value: number }[] = [
   { label: '10s', value: 10 },
   { label: '20s', value: 20 },
@@ -251,15 +250,11 @@ function ConfigView({
     );
   }, [config.categoryId, config.difficulty, selectedCat.hasDifficultyLevels]);
 
-  // Clamp limit when switching to a category with fewer questions
+  // Always play all available questions — keep limit in sync
   useEffect(() => {
-    if (config.limit > available) {
-      setConfig(c => ({ ...c, limit: Math.max(5, Math.min(available, 5)) }));
-    }
+    setConfig(c => ({ ...c, limit: available }));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [available]);
-
-  const validCounts = COUNT_OPTIONS.filter(n => n <= available);
 
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
@@ -340,41 +335,6 @@ function ConfigView({
           </>
         )}
 
-        {/* Question count */}
-        <SectionLabel label="Antal frågor" T={T} />
-        <View style={{ flexDirection: 'row', gap: 10, marginBottom: 24 }}>
-          {validCounts.length > 0 ? validCounts.map(n => (
-            <TouchableOpacity
-              key={n}
-              onPress={() => setConfig(c => ({ ...c, limit: n }))}
-              style={{
-                flex: 1, paddingVertical: 12, borderRadius: 12, alignItems: 'center',
-                backgroundColor: config.limit === n
-                  ? T.accent
-                  : (isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)'),
-                borderWidth: 0.5,
-                borderColor: config.limit === n ? 'transparent' : T.border,
-              }}
-              activeOpacity={0.75}
-            >
-              <Text style={{
-                fontSize: 14, fontWeight: '700',
-                color: config.limit === n ? '#fff' : T.textMuted,
-              }}>{n}</Text>
-            </TouchableOpacity>
-          )) : (
-            // Edge case: fewer than 5 questions — show exact count
-            <View style={{
-              flex: 1, paddingVertical: 12, borderRadius: 12, alignItems: 'center',
-              backgroundColor: T.accent, borderWidth: 0.5, borderColor: 'transparent',
-            }}>
-              <Text style={{ fontSize: 14, fontWeight: '700', color: '#fff' }}>
-                {available} (alla)
-              </Text>
-            </View>
-          )}
-        </View>
-
         {/* Time per question */}
         <SectionLabel label="Tid per fråga" T={T} />
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 32 }}>
@@ -401,6 +361,94 @@ function ConfigView({
   );
 }
 
+// ── AnswerOption ──────────────────────────────────────────────────────────────
+
+function AnswerOption({
+  opt, bg, bc, tc, revealed, isCorrect, isSelected, onPress,
+}: {
+  opt:        string;
+  bg:         string;
+  bc:         string;
+  tc:         string;
+  revealed:   boolean;
+  isCorrect:  boolean;
+  isSelected: boolean;
+  onPress:    () => void;
+}) {
+  const scale   = useRef(new Animated.Value(1)).current;
+  const iconOp  = useRef(new Animated.Value(0)).current;
+  const iconScl = useRef(new Animated.Value(0.4)).current;
+
+  // Icon + wrong-answer shake when revealed
+  useEffect(() => {
+    if (revealed && (isCorrect || isSelected)) {
+      // Pop in icon
+      Animated.parallel([
+        Animated.timing(iconOp,  { toValue: 1, duration: 180, useNativeDriver: true }),
+        Animated.spring(iconScl, { toValue: 1, bounciness: 8, useNativeDriver: true }),
+      ]).start();
+
+      // Wrong answer: squeeze harder then spring back
+      if (isSelected && !isCorrect) {
+        Animated.sequence([
+          Animated.timing(scale, { toValue: 0.93, duration: 80,  useNativeDriver: true }),
+          Animated.spring(scale, { toValue: 1, bounciness: 10,   useNativeDriver: true }),
+        ]).start();
+      }
+    } else {
+      iconOp.setValue(0);
+      iconScl.setValue(0.4);
+    }
+  }, [revealed]);
+
+  const handlePressIn = useCallback(() => {
+    try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+    Animated.timing(scale, { toValue: 0.97, duration: 80, useNativeDriver: true }).start();
+  }, []);
+
+  const handlePressOut = useCallback(() => {
+    Animated.timing(scale, { toValue: 1, duration: 120, useNativeDriver: true }).start();
+  }, []);
+
+  const showIcon  = revealed && (isCorrect || isSelected);
+  const iconText  = isCorrect ? '✓' : '✕';
+  const iconColor = isCorrect ? '#34C759' : '#FF3B30';
+
+  return (
+    <Animated.View style={{ transform: [{ scale }], marginBottom: 10 }}>
+      <TouchableOpacity
+        onPress={onPress}
+        onPressIn={revealed ? undefined : handlePressIn}
+        onPressOut={revealed ? undefined : handlePressOut}
+        activeOpacity={1}
+        style={{
+          backgroundColor: bg,
+          borderWidth: isSelected && !revealed ? 1.5 : 1,
+          borderColor: bc,
+          borderRadius: 14, paddingVertical: 16, paddingHorizontal: 16,
+          flexDirection: 'row', alignItems: 'center',
+        }}
+      >
+        <Text style={{ flex: 1, fontSize: 15, fontWeight: '600', color: tc, lineHeight: 20 }}>
+          {opt}
+        </Text>
+        {showIcon && (
+          <Animated.View style={{
+            opacity: iconOp,
+            transform: [{ scale: iconScl }],
+            width: 26, height: 26, borderRadius: 13,
+            backgroundColor: iconColor + '25',
+            alignItems: 'center', justifyContent: 'center',
+            marginLeft: 10,
+          }}>
+            <Text style={{ fontSize: 14, fontWeight: '800', color: iconColor }}>{iconText}</Text>
+          </Animated.View>
+        )}
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
+
 // ── PlayView ──────────────────────────────────────────────────────────────────
 
 function PlayView({
@@ -416,7 +464,9 @@ function PlayView({
 }) {
   const q            = play.questions[currentIndex];
   const total        = play.questions.length;
-  const progressAnim = useRef(new Animated.Value(currentIndex / total)).current;
+  const progressAnim  = useRef(new Animated.Value(currentIndex / total)).current;
+  const timerBarAnim  = useRef(new Animated.Value(1)).current;
+  const timerAnimRef  = useRef<Animated.CompositeAnimation | null>(null);
 
   const [selected, setSelected] = useState<string | null>(null);
   const [revealed, setRevealed] = useState(false);
@@ -428,15 +478,37 @@ function PlayView({
     setSelected(null);
     setRevealed(false);
     setTimeLeft(config.timeLimitSec);
+
+    // Progress bar — smooth fill to next step
     Animated.timing(progressAnim, {
       toValue: (currentIndex + 1) / total,
-      duration: 350,
+      duration: 500,
+      easing: Easing.out(Easing.cubic),
       useNativeDriver: false,
     }).start();
+
+    // Timer bar — smooth continuous countdown from full to empty
+    timerBarAnim.setValue(1);
+    if (config.timeLimitSec > 0) {
+      timerAnimRef.current = Animated.timing(timerBarAnim, {
+        toValue: 0,
+        duration: config.timeLimitSec * 1000,
+        easing: Easing.linear,
+        useNativeDriver: false,
+      });
+      timerAnimRef.current.start();
+    }
+
+    return () => { timerAnimRef.current?.stop(); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentIndex]);
 
-  // Timer
+  // Stop timer bar smoothly when answer is revealed
+  useEffect(() => {
+    if (revealed) timerAnimRef.current?.stop();
+  }, [revealed]);
+
+  // Integer countdown for the number display only
   useEffect(() => {
     if (config.timeLimitSec === 0 || revealed) return;
     timerRef.current = setInterval(() => {
@@ -456,17 +528,21 @@ function PlayView({
     setRevealed(true);
     const correct = answer === q.correctAnswer;
     try {
-      Haptics.notificationAsync(
-        correct
-          ? Haptics.NotificationFeedbackType.Success
-          : Haptics.NotificationFeedbackType.Error,
-      );
+      if (correct) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else {
+        // Fel svar: Error-notification + tung impact för extra kraftfull feedback
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        setTimeout(() => {
+          try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); } catch {}
+        }, 80);
+      }
     } catch {}
     setTimeout(() => onAnswer(answer), 1100);
   }, [revealed, q.correctAnswer, onAnswer]);
 
   const timerPct   = config.timeLimitSec > 0 ? timeLeft / config.timeLimitSec : 1;
-  const timerColor = timerPct > 0.4 ? T.accent : timerPct > 0.2 ? '#FF9F0A' : '#FF3B30';
+  const timerColor = timeLeft > 10 ? T.accent : timeLeft > 5 ? '#FF9F0A' : '#FF3B30';
 
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
@@ -486,8 +562,8 @@ function PlayView({
             {currentIndex + 1} / {total}
           </Text>
           {config.timeLimitSec > 0
-            ? <Text style={{ fontSize: 15, fontWeight: '700', color: timerColor, minWidth: 30, textAlign: 'right' }}>{timeLeft}</Text>
-            : <View style={{ width: 30 }} />}
+            ? <Text style={{ fontSize: 22, fontWeight: '800', color: timerColor, minWidth: 36, textAlign: 'right' }}>{timeLeft}</Text>
+            : <View style={{ width: 36 }} />}
         </View>
 
         {/* Progress bar */}
@@ -501,18 +577,6 @@ function PlayView({
           }} />
         </View>
 
-        {/* Timer bar */}
-        {config.timeLimitSec > 0 && (
-          <View style={{
-            height: 2, borderRadius: 1, overflow: 'hidden', marginTop: 4,
-            backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
-          }}>
-            <View style={{
-              height: '100%', borderRadius: 1, backgroundColor: timerColor,
-              width: `${timerPct * 100}%`,
-            }} />
-          </View>
-        )}
       </View>
 
       <ScrollView
@@ -575,35 +639,20 @@ function PlayView({
           let tc = T.text;
 
           if (revealed) {
-            if (isCorrect)              { bg = isDark ? 'rgba(52,199,89,0.15)' : 'rgba(52,199,89,0.1)'; bc = 'rgba(52,199,89,0.4)'; tc = '#34C759'; }
-            else if (isSelected)        { bg = isDark ? 'rgba(255,59,48,0.15)' : 'rgba(255,59,48,0.1)'; bc = 'rgba(255,59,48,0.4)'; tc = '#FF3B30'; }
-          } else if (isSelected)        { bg = isDark ? 'rgba(36,100,93,0.2)' : 'rgba(36,100,93,0.1)'; bc = T.accent; }
+            if (isCorrect)        { bg = isDark ? 'rgba(52,199,89,0.15)' : 'rgba(52,199,89,0.1)'; bc = 'rgba(52,199,89,0.4)'; tc = '#34C759'; }
+            else if (isSelected)  { bg = isDark ? 'rgba(255,59,48,0.15)' : 'rgba(255,59,48,0.1)'; bc = 'rgba(255,59,48,0.4)'; tc = '#FF3B30'; }
+          } else if (isSelected)  { bg = isDark ? 'rgba(36,100,93,0.2)' : 'rgba(36,100,93,0.1)'; bc = T.accent; }
 
           return (
-            <TouchableOpacity
+            <AnswerOption
               key={opt}
+              opt={opt}
+              bg={bg} bc={bc} tc={tc}
+              revealed={revealed}
+              isCorrect={isCorrect}
+              isSelected={isSelected}
               onPress={() => !revealed && handleAnswer(opt)}
-              activeOpacity={revealed ? 1 : 0.75}
-              style={{
-                backgroundColor: bg, borderWidth: 1, borderColor: bc,
-                borderRadius: 14, padding: 16, marginBottom: 10,
-                flexDirection: 'row', alignItems: 'center', gap: 12,
-              }}
-            >
-              <View style={{
-                width: 22, height: 22, borderRadius: 11,
-                borderWidth: 1.5,
-                borderColor: revealed && isCorrect ? '#34C759' : revealed && isSelected && !isCorrect ? '#FF3B30' : bc,
-                backgroundColor: revealed && isCorrect ? '#34C759' : revealed && isSelected && !isCorrect ? '#FF3B30' : 'transparent',
-                alignItems: 'center', justifyContent: 'center',
-              }}>
-                {revealed && isCorrect  && <Text style={{ fontSize: 11, color: '#fff', fontWeight: '800' }}>✓</Text>}
-                {revealed && isSelected && !isCorrect && <Text style={{ fontSize: 11, color: '#fff', fontWeight: '800' }}>✕</Text>}
-              </View>
-              <Text style={{ flex: 1, fontSize: 14, fontWeight: '600', color: tc, lineHeight: 20 }}>
-                {opt}
-              </Text>
-            </TouchableOpacity>
+            />
           );
         })}
       </ScrollView>
@@ -631,8 +680,11 @@ function ResultsView({
   const scoreColor = percentage >= 80 ? '#34C759' : percentage >= 50 ? '#FF9F0A' : '#FF3B30';
   const scoreMsg   = percentage >= 80 ? 'Utmärkt!' : percentage >= 60 ? 'Bra jobbat!' : percentage >= 40 ? 'Fortsätt öva!' : 'Försök igen!';
 
-  const wrongAnswers = play.answers.filter(a => !a.isCorrect);
-  const [showWrong, setShowWrong] = useState(false);
+  const actualWrong = play.answers.filter(a => !a.isCorrect && a.selectedAnswer !== null);
+  const missed      = play.answers.filter(a => !a.isCorrect && a.selectedAnswer === null);
+  const allWrong    = play.answers.filter(a => !a.isCorrect);
+  const [showWrong,  setShowWrong]  = useState(false);
+  const [showMissed, setShowMissed] = useState(false);
 
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
@@ -674,15 +726,17 @@ function ResultsView({
           backgroundColor: T.card, borderColor: T.border,
           flexDirection: 'row', marginBottom: 20,
         }]}>
-          <StatCell label="Rätt"        value={String(correctAnswers)}              T={T} />
+          <StatCell label="Rätt"         value={String(correctAnswers)}       T={T} />
           <View style={{ width: 0.5, backgroundColor: T.border }} />
-          <StatCell label="Fel"         value={String(totalQuestions - correctAnswers)} T={T} />
+          <StatCell label="Fel"          value={String(actualWrong.length)}   T={T} />
           <View style={{ width: 0.5, backgroundColor: T.border }} />
-          <StatCell label="Bästa streak" value={String(bestStreak)}                T={T} />
+          <StatCell label="Missade"      value={String(missed.length)}        T={T} />
+          <View style={{ width: 0.5, backgroundColor: T.border }} />
+          <StatCell label="Bästa streak" value={String(bestStreak)}           T={T} />
         </View>
 
-        {/* Wrong answers */}
-        {wrongAnswers.length > 0 && (
+        {/* Felaktiga svar */}
+        {actualWrong.length > 0 && (
           <TouchableOpacity
             onPress={() => setShowWrong(v => !v)}
             style={[styles.card, {
@@ -693,13 +747,13 @@ function ResultsView({
             activeOpacity={0.75}
           >
             <Text style={{ fontSize: 14, fontWeight: '600', color: T.text }}>
-              Felaktiga svar ({wrongAnswers.length})
+              Felaktiga svar ({actualWrong.length})
             </Text>
             <Text style={{ fontSize: 16, color: T.textMuted }}>{showWrong ? '∧' : '∨'}</Text>
           </TouchableOpacity>
         )}
 
-        {showWrong && wrongAnswers.map(a => (
+        {showWrong && actualWrong.map(a => (
           <View key={a.questionId} style={[styles.card, {
             backgroundColor: T.card, borderColor: T.border, marginBottom: 8, gap: 8,
           }]}>
@@ -707,18 +761,66 @@ function ResultsView({
               {a.question}
             </Text>
             <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
-              {a.selectedAnswer && (
-                <View style={{
-                  flexDirection: 'row', gap: 4, alignItems: 'center',
-                  backgroundColor: 'rgba(255,59,48,0.1)', borderRadius: 6,
-                  paddingHorizontal: 8, paddingVertical: 4,
-                }}>
-                  <Text style={{ fontSize: 11, color: '#FF3B30' }}>✕</Text>
-                  <Text style={{ fontSize: 11, color: '#FF3B30', fontWeight: '500', flexShrink: 1 }}>
-                    {a.selectedAnswer}
-                  </Text>
-                </View>
-              )}
+              <View style={{
+                flexDirection: 'row', gap: 4, alignItems: 'center',
+                backgroundColor: 'rgba(255,59,48,0.1)', borderRadius: 6,
+                paddingHorizontal: 8, paddingVertical: 4,
+              }}>
+                <Text style={{ fontSize: 11, color: '#FF3B30' }}>✕</Text>
+                <Text style={{ fontSize: 11, color: '#FF3B30', fontWeight: '500', flexShrink: 1 }}>
+                  {a.selectedAnswer}
+                </Text>
+              </View>
+              <View style={{
+                flexDirection: 'row', gap: 4, alignItems: 'center',
+                backgroundColor: 'rgba(52,199,89,0.1)', borderRadius: 6,
+                paddingHorizontal: 8, paddingVertical: 4,
+              }}>
+                <Text style={{ fontSize: 11, color: '#34C759' }}>✓</Text>
+                <Text style={{ fontSize: 11, color: '#34C759', fontWeight: '500', flexShrink: 1 }}>
+                  {a.correctAnswer}
+                </Text>
+              </View>
+            </View>
+          </View>
+        ))}
+
+        {/* Missade svar (timeout) */}
+        {missed.length > 0 && (
+          <TouchableOpacity
+            onPress={() => setShowMissed(v => !v)}
+            style={[styles.card, {
+              backgroundColor: T.card, borderColor: T.border,
+              flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+              marginBottom: 8, marginTop: actualWrong.length > 0 ? 4 : 0,
+            }]}
+            activeOpacity={0.75}
+          >
+            <Text style={{ fontSize: 14, fontWeight: '600', color: T.text }}>
+              Missade svar ({missed.length})
+            </Text>
+            <Text style={{ fontSize: 16, color: T.textMuted }}>{showMissed ? '∧' : '∨'}</Text>
+          </TouchableOpacity>
+        )}
+
+        {showMissed && missed.map(a => (
+          <View key={a.questionId} style={[styles.card, {
+            backgroundColor: T.card, borderColor: T.border, marginBottom: 8, gap: 8,
+          }]}>
+            <Text style={{ fontSize: 13, fontWeight: '600', color: T.text, lineHeight: 19 }}>
+              {a.question}
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
+              <View style={{
+                flexDirection: 'row', gap: 4, alignItems: 'center',
+                backgroundColor: 'rgba(255,159,10,0.1)', borderRadius: 6,
+                paddingHorizontal: 8, paddingVertical: 4,
+              }}>
+                <Text style={{ fontSize: 11, color: '#FF9F0A' }}>⏱</Text>
+                <Text style={{ fontSize: 11, color: '#FF9F0A', fontWeight: '500' }}>
+                  Hann inte svara
+                </Text>
+              </View>
               <View style={{
                 flexDirection: 'row', gap: 4, alignItems: 'center',
                 backgroundColor: 'rgba(52,199,89,0.1)', borderRadius: 6,
@@ -734,7 +836,7 @@ function ResultsView({
         ))}
 
         <View style={{ gap: 10, marginTop: 12 }}>
-          {wrongAnswers.length > 0 && (
+          {allWrong.length > 0 && (
             <TouchableOpacity
               style={[styles.primaryBtn, {
                 backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.07)',
@@ -743,7 +845,7 @@ function ResultsView({
               onPress={onRetryWrong} activeOpacity={0.8}
             >
               <Text style={{ color: T.text, fontSize: 15, fontWeight: '700' }}>
-                Träna fel svar ({wrongAnswers.length})
+                Träna fel svar ({allWrong.length})
               </Text>
             </TouchableOpacity>
           )}
@@ -772,13 +874,17 @@ export default function QuizScreen() {
   const insets               = useSafeAreaInsets();
 
   const [view, setView]     = useState<QuizView>('start');
-  const [config, setConfig] = useState<QuizConfig>({
-    categoryId:   PLAYABLE_CATEGORIES[0].id,
-    difficulty:   PLAYABLE_CATEGORIES[0].hasDifficultyLevels
-      ? PLAYABLE_CATEGORIES[0].availableDifficulties[0]
-      : undefined,
-    limit:        10,
-    timeLimitSec: 20,
+  const [config, setConfig] = useState<QuizConfig>(() => {
+    const firstCat  = PLAYABLE_CATEGORIES[0];
+    const firstDiff = firstCat.hasDifficultyLevels
+      ? firstCat.availableDifficulties[0]
+      : undefined;
+    return {
+      categoryId:   firstCat.id,
+      difficulty:   firstDiff,
+      limit:        getAvailableCount(firstCat.id, firstDiff),
+      timeLimitSec: 20,
+    };
   });
 
   const [play, setPlay]           = useState<PlayState | null>(null);

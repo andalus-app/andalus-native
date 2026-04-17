@@ -410,6 +410,16 @@
             "Wudhu"
           ],
           "correctAnswer": "Wudhu"
+        },
+        {
+          "id": "bestammelser_fot_in_i_toaletten",
+          "question": "Med vilken fot bör man gå in i toaletten först?",
+          "options": [
+            "Spelar ingen roll",
+            "Vänster",
+            "Höger"
+          ],
+          "correctAnswer": "Vänster"
         }
       ]
     },
@@ -609,7 +619,7 @@
         {
           "id": "profeter_i_islam_latt_svaldes_av_stor_fisk",
           "difficulty": "Lätt",
-          "question": "Vilken profet svaldes av en stor fisk?",
+          "question": "Vilken profet blev uppslukad av en val?",
           "options": [
             "Profeten Isa",
             "Profeten Musa",
@@ -776,5 +786,5 @@
       }
     ]
   },
-  "totalQuestions": 67
+  "totalQuestions": 68
 }
