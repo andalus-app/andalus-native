@@ -15,7 +15,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import { useRouter } from 'expo-router';
+import { useRouter, Stack } from 'expo-router';
+import QuizCategoryGrid from '../components/QuizCategoryGrid';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { useTheme } from '../context/ThemeContext';
 import BackButton from '../components/BackButton';
@@ -283,27 +284,25 @@ function ConfigView({
 
         {/* Category */}
         <SectionLabel label="Kategori" T={T} />
-        <ScrollView
-          horizontal showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ gap: 8, paddingBottom: 4 }}
-          style={{ marginBottom: 24 }}
-        >
-          {PLAYABLE_CATEGORIES.map(cat => (
-            <PillButton
-              key={cat.id}
-              label={`${cat.title} (${cat.totalQuestions})`}
-              active={config.categoryId === cat.id}
-              onPress={() => {
-                // Reset difficulty when switching to a category without difficulty levels
-                const newDiff = cat.hasDifficultyLevels
-                  ? (cat.availableDifficulties[0])
-                  : undefined;
-                setConfig(c => ({ ...c, categoryId: cat.id, difficulty: newDiff }));
-              }}
-              T={T} isDark={isDark}
-            />
-          ))}
-        </ScrollView>
+        <View style={{ marginBottom: 24 }}>
+          <QuizCategoryGrid
+            items={PLAYABLE_CATEGORIES.map(cat => ({
+              id:    cat.id,
+              title: cat.title,
+              count: cat.totalQuestions,
+            }))}
+            selectedId={config.categoryId}
+            onSelect={(id) => {
+              const cat = PLAYABLE_CATEGORIES.find(c => c.id === id)!;
+              const newDiff = cat.hasDifficultyLevels
+                ? cat.availableDifficulties[0]
+                : undefined;
+              setConfig(c => ({ ...c, categoryId: id, difficulty: newDiff }));
+            }}
+            T={T}
+            isDark={isDark}
+          />
+        </View>
 
         {/* Difficulty — only for categories that have it */}
         {selectedCat.hasDifficultyLevels && (
@@ -395,7 +394,7 @@ function ConfigView({
           onPress={onStart}
           activeOpacity={0.82}
         >
-          <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>Börja</Text>
+          <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>Starta quiz</Text>
         </TouchableOpacity>
       </ScrollView>
     </View>
@@ -879,13 +878,17 @@ export default function QuizScreen() {
 
   if (view === 'start') {
     return (
-      <StartView onStart={() => setView('config')} stats={stats} T={T} isDark={isDark} insets={insets} />
+      <>
+        <Stack.Screen options={{ gestureEnabled: true, fullScreenGestureEnabled: false }} />
+        <StartView onStart={() => setView('config')} stats={stats} T={T} isDark={isDark} insets={insets} />
+      </>
     );
   }
 
   if (view === 'config') {
     return (
       <View style={{ flex: 1, backgroundColor: T.bg, paddingTop: insets.top }}>
+        <Stack.Screen options={{ gestureEnabled: false, fullScreenGestureEnabled: false }} />
         <ConfigView
           config={config} setConfig={setConfig}
           onStart={() => startQuiz()} onBack={() => setView('start')}
@@ -898,6 +901,7 @@ export default function QuizScreen() {
   if (view === 'playing' && play) {
     return (
       <View style={{ flex: 1, backgroundColor: T.bg, paddingTop: insets.top }}>
+        <Stack.Screen options={{ gestureEnabled: false, fullScreenGestureEnabled: false }} />
         <PlayView
           play={play} config={config} currentIndex={currentIndex}
           onAnswer={handleAnswer} onQuit={() => setView('start')}
@@ -909,13 +913,16 @@ export default function QuizScreen() {
 
   if (view === 'results' && play && summary) {
     return (
-      <ResultsView
-        play={play} summary={summary} isNewHighScore={isNewHS}
-        onRetryWrong={handleRetryWrong}
-        onNewQuiz={() => setView('config')}
-        onHome={() => setView('start')}
-        T={T} isDark={isDark} insets={insets}
-      />
+      <>
+        <Stack.Screen options={{ gestureEnabled: false, fullScreenGestureEnabled: false }} />
+        <ResultsView
+          play={play} summary={summary} isNewHighScore={isNewHS}
+          onRetryWrong={handleRetryWrong}
+          onNewQuiz={() => setView('config')}
+          onHome={() => setView('start')}
+          T={T} isDark={isDark} insets={insets}
+        />
+      </>
     );
   }
 
