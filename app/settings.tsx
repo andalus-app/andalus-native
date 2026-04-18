@@ -19,6 +19,11 @@ import {
   enableKahfReminder,
   disableKahfReminder,
 } from '../services/notifications';
+import {
+  loadZakatReminderSettings,
+  enableZakatReminder,
+  disableZakatReminder,
+} from '../services/zakatReminderService';
 import { supabase } from '../lib/supabase';
 import { Storage } from '../services/storage';
 
@@ -110,7 +115,8 @@ export default function SettingsScreen() {
   const [methodModal,   setMethodModal]   = useState(false);
   const [schoolModal,   setSchoolModal]   = useState(false);
   const [cityModal,     setCityModal]     = useState(false);
-  const [kahfEnabled,   setKahfEnabled]   = useState(true);
+  const [kahfEnabled,    setKahfEnabled]    = useState(true);
+  const [zakatEnabled,   setZakatEnabled]   = useState(false);
 
   useFocusEffect(useCallback(() => { loadAll(); }, []));
 
@@ -129,6 +135,8 @@ export default function SettingsScreen() {
       else setLocationLabel('Ej angiven');
       const kahf = await AsyncStorage.getItem('kahfReminderEnabled');
       setKahfEnabled(kahf !== 'false'); // null (never set) = default on
+      const zakat = await loadZakatReminderSettings();
+      setZakatEnabled(zakat?.enabled ?? false);
     } catch {}
   }
 
@@ -255,6 +263,37 @@ export default function SettingsScreen() {
                 }
               }
               saveSettings({ dhikrReminder: v });
+            }}
+            trackColor={{false:T.border,true:T.accent}} thumbColor="#fff" ios_backgroundColor={T.border}/>}/>
+
+        <Row T={T} iconName="bell" label="Zakat-påminnelse" value="Årlig Hijri-baserad påminnelse"
+          right={<Switch value={zakatEnabled}
+            onValueChange={async (v) => {
+              if (v) {
+                const granted = await requestNotificationPermission();
+                if (!granted) {
+                  Alert.alert(
+                    'Notiser nekade',
+                    'Aktivera notiser för Hidayah i iOS-inställningar.',
+                    [{ text: 'OK' }],
+                  );
+                  return;
+                }
+                // Check if a Hijri date config already exists
+                const existing = await loadZakatReminderSettings();
+                if (existing?.hijriDay && existing?.hijriMonth) {
+                  // Re-enable existing config directly
+                  await enableZakatReminder({ ...existing, enabled: true });
+                  setZakatEnabled(true);
+                } else {
+                  // No config yet — navigate to Zakat calculator result step for setup
+                  router.push('/zakat?step=result' as any);
+                  // Don't set enabled=true yet; useFocusEffect will re-read state on return
+                }
+              } else {
+                await disableZakatReminder();
+                setZakatEnabled(false);
+              }
             }}
             trackColor={{false:T.border,true:T.accent}} thumbColor="#fff" ios_backgroundColor={T.border}/>}/>
 

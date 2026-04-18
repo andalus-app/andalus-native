@@ -378,6 +378,67 @@ export async function savePushToken(attempt = 1): Promise<void> {
   }
 }
 
+// ── Zakat reminder notifications ─────────────────────────────────────────────
+// Two notifications per year:
+//   1. Advance: N days before the Hijri date.
+//   2. Exact:   On the Hijri date itself.
+// Both carry data.screen = 'zakatResult' for deep-link navigation.
+
+const ZAKAT_ADVANCE_ID = 'andalus-zakat-advance';
+const ZAKAT_EXACT_ID   = 'andalus-zakat-exact';
+
+export async function scheduleZakatAdvanceNotification(date: Date): Promise<void> {
+  if (!N) return;
+  try {
+    const { status } = await N.getPermissionsAsync();
+    if (status !== 'granted') return;
+    await N.scheduleNotificationAsync({
+      identifier: ZAKAT_ADVANCE_ID,
+      content: {
+        title: 'Zakat-påminnelse',
+        body:  'Din årliga zakat närmar sig',
+        sound: true,
+        data:  { type: 'zakatReminder', screen: 'zakatResult' },
+      },
+      trigger: {
+        type: N.SchedulableTriggerInputTypes.DATE,
+        date,
+      },
+    });
+  } catch {}
+}
+
+export async function scheduleZakatExactNotification(date: Date): Promise<void> {
+  if (!N) return;
+  try {
+    const { status } = await N.getPermissionsAsync();
+    if (status !== 'granted') return;
+    await N.scheduleNotificationAsync({
+      identifier: ZAKAT_EXACT_ID,
+      content: {
+        title: 'Zakat idag',
+        body:  'Det är dags för din årliga zakat',
+        sound: true,
+        data:  { type: 'zakatReminder', screen: 'zakatResult' },
+      },
+      trigger: {
+        type: N.SchedulableTriggerInputTypes.DATE,
+        date,
+      },
+    });
+  } catch {}
+}
+
+export async function cancelZakatNotifications(): Promise<void> {
+  if (!N) return;
+  try {
+    await Promise.all([
+      N.cancelScheduledNotificationAsync(ZAKAT_ADVANCE_ID).catch(() => {}),
+      N.cancelScheduledNotificationAsync(ZAKAT_EXACT_ID).catch(() => {}),
+    ]);
+  } catch {}
+}
+
 export async function dismissBannerNotification(id: string): Promise<void> {
   if (!N) return;
   try { await N.dismissNotificationAsync(BANNER_PREFIX + id); } catch {}

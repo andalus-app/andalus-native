@@ -21,8 +21,9 @@ import {
   View, Text, ScrollView, TouchableOpacity, TextInput,
   StyleSheet, KeyboardAvoidingView, Platform, Alert, ActivityIndicator,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import BackButton from '../components/BackButton';
+import ZakatReminderCard from '../components/ZakatReminderCard';
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../context/ThemeContext';
@@ -104,39 +105,35 @@ const defaultAnnual: AnnualState = {
 const defaultFitr: FitrState = { adults: '1', children: '0', foodPricePerKg: '' };
 
 function useZakatStorage() {
-  const [annual, setAnnualRaw] = useState<AnnualState>(defaultAnnual);
-  const [fitr,   setFitrRaw]   = useState<FitrState>(defaultFitr);
+  const [annual, setAnnual] = useState<AnnualState>(defaultAnnual);
+  const [fitr,   setFitr]   = useState<FitrState>(defaultFitr);
+  // Tracks whether the initial AsyncStorage load has completed.
+  // Using a ref (not state) so the persistence effect can read it without
+  // being listed as a dependency — avoids an extra render cycle.
+  const loadedRef = useRef(false);
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY).then(raw => {
-      if (!raw) return;
-      try {
-        const { annual: a, fitr: f } = JSON.parse(raw);
-        if (a) setAnnualRaw({ ...defaultAnnual, ...a });
-        if (f) setFitrRaw({ ...defaultFitr, ...f });
-      } catch {}
+      if (raw) {
+        try {
+          const { annual: a, fitr: f } = JSON.parse(raw);
+          if (a) setAnnual(prev => ({ ...defaultAnnual, ...a }));
+          if (f) setFitr(prev =>   ({ ...defaultFitr,   ...f }));
+        } catch {}
+      }
+      // Mark loaded AFTER scheduling the state updates so the persistence
+      // effect sees the flag as true on the next render (after the updates
+      // have been applied), not before.
+      loadedRef.current = true;
     });
   }, []);
 
-  const persist = useCallback((a: AnnualState, f: FitrState) => {
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ annual: a, fitr: f })).catch(() => {});
-  }, []);
-
-  const setAnnual = useCallback((updater: (prev: AnnualState) => AnnualState) => {
-    setAnnualRaw(prev => {
-      const next = updater(prev);
-      setFitrRaw(f => { persist(next, f); return f; });
-      return next;
-    });
-  }, [persist]);
-
-  const setFitr = useCallback((updater: (prev: FitrState) => FitrState) => {
-    setFitrRaw(prev => {
-      const next = updater(prev);
-      setAnnualRaw(a => { persist(a, next); return a; });
-      return next;
-    });
-  }, [persist]);
+  // Persist whenever either slice changes — but only after the initial load
+  // so we never overwrite stored data with empty defaults on mount.
+  useEffect(() => {
+    if (!loadedRef.current) return;
+    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ annual, fitr })).catch(() => {});
+  }, [annual, fitr]);
 
   return { annual, setAnnual, fitr, setFitr };
 }
@@ -590,10 +587,14 @@ function ResultRow({
 // ─── Annual Zakat Wizard ──────────────────────────────────────────────────────
 
 function AnnualZakatWizard({
-  state, setState,
-}: { state: AnnualState; setState: (f: (p: AnnualState) => AnnualState) => void }) {
+  state, setState, initialStep = 1,
+}: {
+  state: AnnualState;
+  setState: (f: (p: AnnualState) => AnnualState) => void;
+  initialStep?: number;
+}) {
   const { theme: T } = useTheme();
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(initialStep);
   const TOTAL_STEPS = 6;
 
   const result = useMemo(() => calcAnnual(state), [state]);
@@ -1006,7 +1007,25 @@ function AnnualZakatWizard({
 
   // ── Step 6: Result ────────────────────────────────────────────────────────
   const renderStep6 = () => {
-    if (!result) return null;
+    // If state hasn't been filled in yet (e.g. navigated here via deep link
+    // without completing the wizard), show a placeholder + reminder card.
+    if (!result) {
+      return (
+        <>
+          <SectionTitle title="Resultat" />
+          <View style={{
+            backgroundColor: T.card, borderRadius: 12, padding: 14, marginBottom: 14,
+            borderWidth: 0.5, borderColor: T.border,
+          }}>
+            <Text style={{ fontSize: 13, color: T.textMuted, lineHeight: 19 }}>
+              Fyll i beräkningsstegen för att se ditt zakatsresultat.
+            </Text>
+          </View>
+          <ZakatReminderCard />
+          <StepButtons onBack={back} onNext={() => setStep(1)} nextLabel="Till beräkning" T={T} />
+        </>
+      );
+    }
     const notEligible = !result.eligible;
     return (
       <>
@@ -1127,6 +1146,9 @@ function AnnualZakatWizard({
           </Text>
         </View>
 
+        {/* Annual reminder */}
+        <ZakatReminderCard />
+
         <StepButtons onBack={back} onNext={() => setStep(1)} nextLabel="Börja om" T={T} />
       </>
     );
@@ -1237,6 +1259,11 @@ export default function ZakatScreen() {
   const [tab, setTab] = useState<'annual' | 'fitr'>('annual');
   const { annual, setAnnual, fitr, setFitr } = useZakatStorage();
 
+  // Support deep-link navigation from Zakat reminder notification:
+  // /zakat?step=result → wizard opens directly on the result step (step 6).
+  const { step: stepParam } = useLocalSearchParams<{ step?: string }>();
+  const initialStep = stepParam === 'result' ? 6 : 1;
+
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
       {/* Header */}
@@ -1290,7 +1317,7 @@ export default function ZakatScreen() {
         >
           <View style={{ paddingTop: 8 }}>
             {tab === 'annual'
-              ? <AnnualZakatWizard state={annual} setState={setAnnual} />
+              ? <AnnualZakatWizard state={annual} setState={setAnnual} initialStep={initialStep} />
               : <ZakatAlFitrCalc state={fitr} setState={setFitr} />
             }
           </View>

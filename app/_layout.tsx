@@ -12,6 +12,7 @@ import { BookingNotifProvider } from '../context/BookingNotifContext';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { initStorage } from '../services/storage';
 import { syncKahfReminderOnStartup, savePushToken } from '../services/notifications';
+import { syncZakatRemindersOnStartup } from '../services/zakatReminderService';
 import '../services/quranLastPage'; // side-effect: pre-warms last Quran page font + data at startup
 import CustomSplashScreen from '../components/SplashScreen';
 import { YoutubePlayerProvider } from '../context/YoutubePlayerContext';
@@ -60,6 +61,11 @@ function AppContent({ onFontsReady }: { onFontsReady: () => void }) {
   //   Cold-start (app was killed): getLastNotificationResponseAsync picks up the
   //   tap that launched the app — the listener alone does NOT cover this case.
   useEffect(() => {
+    // Wait until fonts are loaded and the Stack navigator is mounted.
+    // On cold-start, router.push/navigate fired before fontsLoaded=true lands in
+    // a blank navigator — the tabs group hasn't rendered yet, producing a black screen.
+    if (!fontsLoaded) return;
+
     let N: typeof import('expo-notifications') | null = null;
     try { N = require('expo-notifications'); } catch { return; }
     if (!N) return;
@@ -98,17 +104,20 @@ function AppContent({ onFontsReady }: { onFontsReady: () => void }) {
           // Fallback: ingen khatmah-data — öppna senast lästa sidan
           router.push('/quran' as any);
         })();
+      } else if (data?.screen === 'zakatResult') {
+        // Zakat-påminnelse — navigera direkt till resultatsidan i Zakat-kalkylatorn.
+        router.push('/zakat?step=result' as any);
       } else if (data?.screen === 'dhikr') {
         // Dhikr-påminnelse — öppna Dhikr-sidan direkt.
         router.push('/dhikr' as any);
       } else if (data?.screen === 'youtube_live') {
         // YouTube live notification — navigate to home tab where the stream is shown.
-        router.push('/(tabs)/' as any);
+        router.navigate('/(tabs)/home' as any);
       } else if (data?.announcementId) {
         // Store the tapped announcement ID so HomeScreen can react on focus.
         // Fire-and-forget — navigation happens immediately regardless of storage result.
         AsyncStorage.setItem('islamnu_notif_tap', data.announcementId).catch(() => {});
-        router.push('/(tabs)/' as any);
+        router.navigate('/(tabs)/home' as any);
       }
     };
 
@@ -127,7 +136,7 @@ function AppContent({ onFontsReady }: { onFontsReady: () => void }) {
     // while the app is running or resumed from background.
     const sub = N.addNotificationResponseReceivedListener(handleResponse);
     return () => sub.remove();
-  }, [router]);
+  }, [router, fontsLoaded]);
 
   if (!fontsLoaded) return null;
 
@@ -193,6 +202,7 @@ export default function RootLayout() {
     initStorage().then(async () => {
       setStorageReady(true);
       syncKahfReminderOnStartup();
+      syncZakatRemindersOnStartup();
       // Only attempt token registration if onboarding is already completed —
       // prevents the iOS notification permission dialog from appearing before
       // the onboarding flow has had a chance to ask for it properly.
