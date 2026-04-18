@@ -44,6 +44,8 @@ export type UseZakatReminderReturn = {
   disable: () => Promise<void>;
   /** Update the advance-days offset and reschedule. */
   updateAdvanceDays: (days: number) => Promise<void>;
+  /** Update the Hijri day + month and reschedule. */
+  updateHijriDate: (day: number, month: number, monthName: string) => Promise<void>;
 };
 
 export function useZakatReminder(): UseZakatReminderReturn {
@@ -126,5 +128,22 @@ export function useZakatReminder(): UseZakatReminderReturn {
     await syncZakatReminders();
   }, []);
 
-  return { settings, loading, setupError, reload, enable, disable, updateAdvanceDays };
+  const updateHijriDate = useCallback(async (
+    day: number,
+    month: number,
+    monthName: string,
+  ) => {
+    // Optimistically update UI
+    setSettings(prev => {
+      if (!prev) return prev;
+      return { ...prev, hijriDay: day, hijriMonth: month, hijriMonthName: monthName };
+    });
+    const current = await loadZakatReminderSettings();
+    if (!current) return;
+    const updated = { ...current, hijriDay: day, hijriMonth: month, hijriMonthName: monthName };
+    await saveZakatReminderSettings(updated);
+    await syncZakatReminders();
+  }, []);
+
+  return { settings, loading, setupError, reload, enable, disable, updateAdvanceDays, updateHijriDate };
 }
