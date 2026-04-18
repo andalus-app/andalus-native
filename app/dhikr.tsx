@@ -1014,55 +1014,6 @@ export default function DhikrScreen() {
         <SearchView query={searchQ} onSelectDhikr={goToDhikr} onSelectGrupp={goToCat} T={T} isDark={isDark} />
       )}
 
-      {/* ── Wellbeing hint bubble ── */}
-      {showHint && (
-        <Animated.View
-          pointerEvents="box-none"
-          style={{
-            position: 'absolute',
-            top: hintPos.top,
-            right: 12,
-            width: 200,
-            opacity: hintOpacity,
-            transform: [{ scale: hintScale }],
-            zIndex: 999,
-          }}
-        >
-          {/* Bubble body */}
-          <TouchableOpacity
-            activeOpacity={0.9}
-            onPress={() => { dismissHint(); switchTab('wellbeing'); }}
-            style={{
-              backgroundColor: isDark ? '#2C2C2E' : '#FFFFFF',
-              borderRadius: 14,
-              paddingHorizontal: 14,
-              paddingVertical: 11,
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: isDark ? 0.45 : 0.14,
-              shadowRadius: 12,
-              borderWidth: 0.5,
-              borderColor: T.border,
-            }}>
-            <Text style={{ fontSize: 14, fontWeight: '700', color: T.text, marginBottom: 2 }}>
-              Hur mår du?
-            </Text>
-            <Text style={{ fontSize: 13, fontWeight: '400', color: T.textMuted }}>
-              Få dhikr som passar dig
-            </Text>
-          </TouchableOpacity>
-          {/* Arrow pointing down toward heart tab.
-              marginLeft = cx - bubbleLeft - halfArrowWidth
-              bubbleLeft = SCREEN_W - 12 - 200 */}
-          <View style={{
-            marginLeft: Math.max(8, Math.min(184, hintPos.cx - (SCREEN_W - 212) - 8)),
-            width: 0, height: 0,
-            borderLeftWidth: 8, borderRightWidth: 8, borderTopWidth: 10,
-            borderLeftColor: 'transparent', borderRightColor: 'transparent',
-            borderTopColor: isDark ? '#2C2C2E' : '#FFFFFF',
-          }} />
-        </Animated.View>
-      )}
 
       {/* ── Category detail (absoluteFill, slides over home) ── */}
       {selGrupp && (

@@ -100,7 +100,7 @@ function AppContent({ onFontsReady }: { onFontsReady: () => void }) {
         })();
       } else if (data?.screen === 'dhikr') {
         // Dhikr-påminnelse — öppna Dhikr-sidan direkt.
-        router.push('/(tabs)/dhikr' as any);
+        router.push('/dhikr' as any);
       } else if (data?.screen === 'youtube_live') {
         // YouTube live notification — navigate to home tab where the stream is shown.
         router.push('/(tabs)/' as any);

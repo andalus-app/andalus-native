@@ -296,6 +296,13 @@ function QuranAudioPlayer() {
   // subscription.remove() was called) from corrupting the new surah player's state.
   const playerGenerationRef = useRef<number>(0);
 
+  // Load generation counter: incremented at the start of every loadAndPlay /
+  // loadAndPlayFromVerse call. Each async call captures its own generation value
+  // and bails out after every await if the value has advanced — this prevents
+  // stale async chains (e.g. from rapid next-surah taps) from reaching startPlayer
+  // and creating multiple simultaneous AudioPlayer instances.
+  const loadGenerationRef = useRef<number>(0);
+
   // Bismillah pre-play: QuranCDN audio files do NOT contain Bismillah.
   // We play Al-Fatiha's verse 1:1 (which IS the Bismillah) before the surah audio.
   // This timer fires after the Bismillah portion ends, swapping to surah audio.
@@ -785,19 +792,24 @@ function QuranAudioPlayer() {
   const startWithBismillah = useCallback(
     async (surahUri: string, surahId: number, surahTimings: VerseTimestamp[] | null) => {
       if (!mountedRef.current) return;
+      // Capture the generation set by the caller (loadAndPlay / loadAndPlayFromVerse).
+      // Do NOT increment here — the caller already did. If this value changes before
+      // any await completes, a newer load call has taken over and this one must abort.
+      const myGen = loadGenerationRef.current;
       const reciterId = reciterIdRef.current;
 
       // Get Al-Fatiha audio (download silently if needed)
       const fatihaCached = await isSurahDownloaded(reciterId, 1);
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || loadGenerationRef.current !== myGen) return;
       let fatihaUri: string;
       if (fatihaCached) {
         fatihaUri = await getAudioUri(reciterId, 1);
+        if (!mountedRef.current || loadGenerationRef.current !== myGen) return;
       } else {
         await ensureAudioDir();
         fatihaUri = await downloadSurahAudio(reciterId, 1);
+        if (!mountedRef.current || loadGenerationRef.current !== myGen) return;
       }
-      if (!mountedRef.current) return;
 
       // Get bismillah duration (verse 1:1 of Al-Fatiha)
       let bsmDurationMs = 5000; // fallback
@@ -806,7 +818,7 @@ function QuranAudioPlayer() {
         const v1 = fatihaTimings.find((t) => t.verseKey === '1:1');
         if (v1 && v1.timestampTo > 0) bsmDurationMs = v1.timestampTo;
       } catch { /* use fallback */ }
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || loadGenerationRef.current !== myGen) return;
 
       // Null out verse timings during bismillah — prevents verse sync on Al-Fatiha positions
       verseTimingsRef.current = null;
@@ -861,6 +873,10 @@ function QuranAudioPlayer() {
   const loadAndPlay = useCallback(
     async (surahId: number) => {
       if (!mountedRef.current) return;
+      // Increment load generation so any in-flight concurrent call becomes stale
+      // and aborts at its next await. This prevents rapid next-surah taps from
+      // creating multiple simultaneous AudioPlayer instances.
+      const myGen = ++loadGenerationRef.current;
       // Pause YouTube live stream if it's playing — Quran audio takes priority.
       pauseYoutubePlayer();
       teardown();
@@ -877,11 +893,12 @@ function QuranAudioPlayer() {
 
       try {
         const cached = await isSurahDownloaded(settings.reciterId, surahId);
-        if (!mountedRef.current) return;
+        if (!mountedRef.current || loadGenerationRef.current !== myGen) return;
 
         let uri: string;
         if (cached) {
           uri = await getAudioUri(settings.reciterId, surahId);
+          if (!mountedRef.current || loadGenerationRef.current !== myGen) return;
         } else {
           // Download with progress bar
           setPlayerState({ mode: 'downloading', surahId, progress: 0 });
@@ -890,7 +907,7 @@ function QuranAudioPlayer() {
             settings.reciterId,
             surahId,
             (downloaded, total) => {
-              if (!mountedRef.current) return;
+              if (!mountedRef.current || loadGenerationRef.current !== myGen) return;
               setPlayerState({
                 mode: 'downloading',
                 surahId,
@@ -899,20 +916,23 @@ function QuranAudioPlayer() {
             },
             downloadCancelRef,
           );
-          if (!mountedRef.current) return;
+          if (!mountedRef.current || loadGenerationRef.current !== myGen) return;
           audioCacheRefreshRef.current?.();
         }
 
         if (needsBismillah) {
           const surahTimings = await timingsPromise;
+          if (!mountedRef.current || loadGenerationRef.current !== myGen) return;
           await startWithBismillah(uri, surahId, surahTimings);
         } else {
+          if (loadGenerationRef.current !== myGen) return;
           await startPlayer(uri, surahId, 0);
         }
       } catch (e) {
         if (!mountedRef.current) return;
         // Explicit cancel (user pressed X) or stop() was called — don't show error.
         if (e instanceof DownloadCancelledError || currentSurahIdRef.current === null) return;
+        if (loadGenerationRef.current !== myGen) return;
         setPlayerState({ mode: 'error', surahId, message: 'Kunde inte ladda ljud' });
       }
     },
@@ -1047,6 +1067,8 @@ function QuranAudioPlayer() {
   const loadAndPlayFromVerse = useCallback(
     async (surahId: number, startVerseKey: string, stopAtVerseKey: string | null, continuous?: boolean) => {
       console.log('[LAFV] called surah=' + surahId + ' start=' + startVerseKey + ' stop=' + stopAtVerseKey);
+      // Increment load generation so any in-flight concurrent call becomes stale.
+      const myGen = ++loadGenerationRef.current;
       // Pause YouTube live stream — Quran audio takes priority.
       pauseYoutubePlayer();
       continuousPlayRef.current = continuous ?? false;
@@ -1081,7 +1103,7 @@ function QuranAudioPlayer() {
 
       try {
         const cached = await isSurahDownloaded(reciterIdRef.current, surahId);
-        if (!mountedRef.current) return;
+        if (!mountedRef.current || loadGenerationRef.current !== myGen) return;
 
         let uri: string;
         let timings: VerseTimestamp[] | null;
@@ -1092,6 +1114,7 @@ function QuranAudioPlayer() {
             getAudioUri(reciterIdRef.current, surahId),
             fetchVerseTimings(reciterIdRef.current, surahId).catch((): null => null),
           ]);
+          if (!mountedRef.current || loadGenerationRef.current !== myGen) return;
         } else {
           // Download with progress; fetch timings concurrently
           setPlayerState({ mode: 'downloading', surahId, progress: 0 });
@@ -1101,7 +1124,7 @@ function QuranAudioPlayer() {
             reciterIdRef.current,
             surahId,
             (downloaded, total) => {
-              if (!mountedRef.current) return;
+              if (!mountedRef.current || loadGenerationRef.current !== myGen) return;
               setPlayerState({
                 mode: 'downloading',
                 surahId,
@@ -1111,11 +1134,11 @@ function QuranAudioPlayer() {
             downloadCancelRef,
           );
           timings = await timingsPromise;
-          if (!mountedRef.current) return;
+          if (!mountedRef.current || loadGenerationRef.current !== myGen) return;
           audioCacheRefreshRef.current?.();
         }
 
-        if (!mountedRef.current) return;
+        if (!mountedRef.current || loadGenerationRef.current !== myGen) return;
         verseTimingsRef.current = timings;
 
         // If starting from BSMLLH_, play Al-Fatiha bismillah first then surah from 0
@@ -1143,8 +1166,9 @@ function QuranAudioPlayer() {
 
         bismillahLockUntilMsRef.current = 0;
 
+        if (loadGenerationRef.current !== myGen) return;
         await startPlayer(uri, surahId, startMs);
-        if (!mountedRef.current) return;
+        if (!mountedRef.current || loadGenerationRef.current !== myGen) return;
 
         // Immediately set the start verse as active so the highlight appears
         if (startTiming) {
@@ -1167,6 +1191,7 @@ function QuranAudioPlayer() {
         if (!mountedRef.current) return;
         // Explicit cancel (user pressed X) or stop() was called — don't show error.
         if (e instanceof DownloadCancelledError || currentSurahIdRef.current === null) return;
+        if (loadGenerationRef.current !== myGen) return;
         setPlayerState({ mode: 'error', surahId, message: 'Kunde inte ladda ljud' });
       }
     },
