@@ -4,6 +4,7 @@ import {
   Animated, Easing, PanResponder, Dimensions, StyleSheet, ActivityIndicator, Share,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, Stack } from 'expo-router';
 import BackButton from '../components/BackButton';
@@ -119,6 +120,7 @@ function AudioPlayer({ url, T, isDark }: { url: string; T: any; isDark: boolean 
 
   const toggle = async () => {
     if (loading) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     let audio: any;
     try { audio = require('expo-audio'); } catch { return; }
 
@@ -182,6 +184,7 @@ function AudioPlayer({ url, T, isDark }: { url: string; T: any; isDark: boolean 
   const bg    = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
 
   const toggleRepeat = useCallback(() => {
+    Haptics.selectionAsync();
     const next = !repeatRef.current;
     repeatRef.current = next;
     setRepeat(next);
@@ -250,6 +253,7 @@ function DhikrCard({ d, T, isDark, favorites, onToggleFav }: {
   const dividerCol  = T.border;
 
   const share = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const text = [d.titel, d.arabisk_text, d.translitteration, d.svensk_text, d.kallhanvisning].filter(Boolean).join('\n\n');
     Share.share({ title: d.titel, message: text });
   };
@@ -288,7 +292,7 @@ function DhikrCard({ d, T, isDark, favorites, onToggleFav }: {
             </View>
           </View>
         </View>
-        <TouchableOpacity onPress={() => onToggleFav(key)} style={{ padding: 6 }}>
+        <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onToggleFav(key); }} style={{ padding: 6 }}>
           <Svg width={20} height={20} viewBox="0 0 24 24" fill={isFav ? '#f5a623' : 'none'} stroke={isFav ? '#f5a623' : T.textMuted} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
             <Polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
           </Svg>
@@ -375,7 +379,7 @@ function AccordionSection({ us, isOpen, onToggle, onSelectDhikr, favorites, T, i
   return (
     <View style={{ borderBottomWidth: 1, borderBottomColor: T.border }}>
       {/* Header */}
-      <TouchableOpacity onPress={onToggle}
+      <TouchableOpacity onPress={() => { Haptics.selectionAsync(); onToggle(); }}
         style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 15, backgroundColor: isOpen ? openBg : T.bg }}>
         <View style={{ width: 3, height: 36, borderRadius: 2, backgroundColor: isOpen ? T.accent : (isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.1)') }} />
         <View style={{ flex: 1 }}>
@@ -405,7 +409,7 @@ function AccordionSection({ us, isOpen, onToggle, onSelectDhikr, favorites, T, i
             const k = dhikrKey(d);
             const isFav = favorites.includes(k);
             return (
-              <TouchableOpacity key={i} onPress={() => onSelectDhikr(d, us.dhikr_poster)}
+              <TouchableOpacity key={i} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onSelectDhikr(d, us.dhikr_poster); }}
                 style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingLeft: 31, paddingRight: 16, backgroundColor: rowBg, borderBottomWidth: 1, borderBottomColor: T.border }}>
                 <View style={{ width: 24, height: 24, borderRadius: 7, backgroundColor: badgeBg, alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   <Text style={{ fontSize: 11, fontWeight: '700', color: T.accent }}>{i + 1}</Text>
@@ -435,7 +439,7 @@ function AccordionSection({ us, isOpen, onToggle, onSelectDhikr, favorites, T, i
 function GridCard({ g, count, onPress, T, isDark }: { g: Grupp; count: number; onPress: () => void; T: any; isDark: boolean }) {
   const iconBg = T.accentGlow;
   return (
-    <TouchableOpacity onPress={onPress}
+    <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onPress(); }}
       style={{ flex: 1, backgroundColor: T.card, borderWidth: 1, borderColor: T.border, borderRadius: 18, alignItems: 'center', justifyContent: 'center', padding: 20, paddingTop: 22, gap: 12, marginBottom: 10 }}>
       <View style={{ width: 72, height: 72, borderRadius: 22, backgroundColor: iconBg, alignItems: 'center', justifyContent: 'center' }}>
         <DhikrCategoryIcon id={g.id} color={T.accent} size={36} />
@@ -452,7 +456,7 @@ function GridCard({ g, count, onPress, T, isDark }: { g: Grupp; count: number; o
 function ListRow({ g, count, onPress, T, isDark }: { g: Grupp; count: number; onPress: () => void; T: any; isDark: boolean }) {
   const iconBg = T.accentGlow;
   return (
-    <TouchableOpacity onPress={onPress}
+    <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onPress(); }}
       style={{ flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: T.card, borderWidth: 1, borderColor: T.border, borderRadius: 14, padding: 13, marginBottom: 8 }}>
       <View style={{ width: 46, height: 46, borderRadius: 14, backgroundColor: iconBg, alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
         <DhikrCategoryIcon id={g.id} color={T.accent} size={24} />
@@ -526,7 +530,7 @@ function DhikrDetailView({ selDhikr, setSelDhikr, siblings, onClose, favorites, 
 
   const navigate = (delta: number) => {
     const next = siblings[currIdx + delta];
-    if (next) { setSelDhikr(next); scrollRef.current?.scrollTo({ y: 0, animated: false }); }
+    if (next) { Haptics.selectionAsync(); setSelDhikr(next); scrollRef.current?.scrollTo({ y: 0, animated: false }); }
   };
 
   return (
@@ -611,7 +615,7 @@ function SearchView({ query, onSelectDhikr, onSelectGrupp, T, isDark }: {
             <Text style={{ fontSize: 11, fontWeight: '700', color: T.textMuted, textTransform: 'uppercase', letterSpacing: 1 }}>Kategorier</Text>
           </View>
           {grupper.map(g => (
-            <TouchableOpacity key={g.id} onPress={() => onSelectGrupp(g)}
+            <TouchableOpacity key={g.id} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onSelectGrupp(g); }}
               style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: T.border }}>
               <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: iconBg, alignItems: 'center', justifyContent: 'center' }}>
                 <DhikrCategoryIcon id={g.id} color={T.accent} size={20} />
@@ -635,7 +639,7 @@ function SearchView({ query, onSelectDhikr, onSelectGrupp, T, isDark }: {
             </Text>
           </View>
           {dhikrs.map((d, i) => (
-            <TouchableOpacity key={i} onPress={() => onSelectDhikr(d, [])}
+            <TouchableOpacity key={i} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onSelectDhikr(d, []); }}
               style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: T.border }}>
               <View style={{ flex: 1 }}>
                 <Text style={{ fontSize: 13, fontWeight: '600', color: T.text, lineHeight: 20 }}>{d.titel}</Text>
@@ -690,7 +694,7 @@ function SavedView({ favorites, onSelectDhikr, onClearFav, T }: {
         <Text style={{ fontSize: 11, fontWeight: '700', color: T.textMuted, textTransform: 'uppercase', letterSpacing: 1 }}>
           Favoriter ({favDhikr.length})
         </Text>
-        <TouchableOpacity onPress={onClearFav}>
+        <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onClearFav(); }}>
           <Text style={{ fontSize: 11, color: T.textMuted }}>Rensa alla</Text>
         </TouchableOpacity>
       </View>
@@ -706,7 +710,7 @@ function SavedView({ favorites, onSelectDhikr, onClearFav, T }: {
           </View>
           {/* Items under this category */}
           {items.map((d, i) => (
-            <TouchableOpacity key={i} onPress={() => onSelectDhikr(d, [])}
+            <TouchableOpacity key={i} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onSelectDhikr(d, []); }}
               style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: T.border }}>
               <View style={{ flex: 1 }}>
                 <Text style={{ fontSize: 13, fontWeight: '600', color: T.text, lineHeight: 20 }}>{d.titel}</Text>
@@ -934,6 +938,7 @@ export default function DhikrScreen() {
               <View key={t.id} ref={isWellbeing ? wellbeingRef : undefined} collapsable={false}>
                 <TouchableOpacity
                   onPress={() => {
+                    Haptics.selectionAsync();
                     if (isWellbeing && showHint) dismissHint();
                     switchTab(t.id as any);
                   }}
@@ -968,7 +973,7 @@ export default function DhikrScreen() {
               style={{ flex: 1, color: T.text, fontSize: 16, padding: 0 }}
             />
             {!!searchQ && (
-              <TouchableOpacity onPress={() => setSearchQ('')}>
+              <TouchableOpacity onPress={() => { Haptics.selectionAsync(); setSearchQ(''); }}>
                 <Text style={{ color: T.textMuted, fontSize: 18, lineHeight: 20 }}>×</Text>
               </TouchableOpacity>
             )}
