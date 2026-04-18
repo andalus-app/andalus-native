@@ -686,6 +686,16 @@ export default function MushafRenderer({
   }, [activeVerseKey, page.pageNumber, fontState.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── PASS 2: measure per-verse fragment widths ──────────────────────────────
+  //
+  // Initial 50ms delay: pass-2 hidden elements (fragRefs / prefixRefs) are added
+  // in the re-render triggered by setLineBboxes (pass-1 result). Native may not
+  // have committed those new views before useEffect fires at 0ms — the 50ms gap
+  // ensures Core Text has rendered before the first getBBox call.
+  //
+  // Retry pattern: when fragBbox is null for a shared slot, set needRetry=true
+  // and skip (do NOT fall back to full-line). After the loop, if needRetry, wait
+  // another 50ms and re-measure. A full-line fallback would highlight adjacent
+  // verses on the same line, making multiple unrelated verses appear highlighted.
   useEffect(() => {
     // Reject stale lineBboxes computed for a different verse or page.
     // This guards against pass-2 firing with old lineBboxes while activeVerseKey
@@ -714,111 +724,112 @@ export default function MushafRenderer({
         } catch { return null; }
       };
 
-      const layouts = slotLayoutsRef.current;
-      const rects: HighlightRect[] = [];
-      const isDebug = __DEV__ && (page.pageNumber === 1 || page.pageNumber === 2 || page.pageNumber === 604);
+      const measureAudioHighlight = async (): Promise<{ rects: HighlightRect[]; needRetry: boolean }> => {
+        const layouts = slotLayoutsRef.current;
+        const rects: HighlightRect[] = [];
+        let needRetry = false;
+        const isDebug = __DEV__ && (page.pageNumber === 1 || page.pageNumber === 2 || page.pageNumber === 604);
 
-      for (const slot of page.slots) {
-        if (slot.kind !== 'verse_line') continue;
-        if (!slot.line.verseKeys.includes(activeVerseKey)) continue;
+        for (const slot of page.slots) {
+          if (slot.kind !== 'verse_line') continue;
+          if (!slot.line.verseKeys.includes(activeVerseKey)) continue;
 
-        const layout = layouts[slot.slotNumber - 1];
-        if (!layout) continue;
+          const layout = layouts[slot.slotNumber - 1];
+          if (!layout) continue;
 
-        const y = Math.round(layout.centerY - layout.slotHeight / 2) + 2;
-        const h = layout.slotHeight - 4;
-        const fullBbox = lineBboxes.bboxes[slot.slotNumber];
+          const y = Math.round(layout.centerY - layout.slotHeight / 2) + 2;
+          const h = layout.slotHeight - 4;
+          const fullBbox = lineBboxes.bboxes[slot.slotNumber];
 
-        if (!fullBbox) {
-          if (isDebug) console.log(`[HL] p2 skip ${activeVerseKey} slot=${slot.slotNumber} — no fullBbox`);
-          continue;
-        }
-
-        if (slot.line.verseKeys.length === 1) {
-          rects.push({ x: fullBbox.x, y, w: fullBbox.width, h });
-          if (isDebug) console.log(`[HL] ${activeVerseKey} slot=${slot.slotNumber} PURE x=${fullBbox.x.toFixed(1)} w=${fullBbox.width.toFixed(1)}`);
-          continue;
-        }
-
-        // Shared slot: use TWO measurements for precise RTL positioning.
-        //
-        // fragBbox.width  = physical advance width of the active verse only (rect width).
-        // prefixBbox.width = physical advance width of glyphs(v1…activeVerse) (for rectX).
-        //
-        // In RTL layout the line reads right→left: v1 (rightmost) … vN (leftmost).
-        // The left edge of verse vI is exactly `lineRight - prefixWidth(v1…vI)`.
-        //
-        //   Lead   (I=1): prefix = frag → rectX = lineRight - fragWidth              ✓
-        //   Last   (I=N): prefix = full line → rectX = lineRight - fullWidth = lineLeft ✓
-        //   Middle (I=k): rectX = lineRight - prefixWidth(v1…vk)                     ✓
-        //
-        // fragBbox.x and prefixBbox.x are both discarded — LTR getBBox semantics.
-        //
-        // Fallback: if fragBbox is unavailable, use fullBbox for the whole line.
-        const activeIdx = slot.line.verseKeys.indexOf(activeVerseKey);
-        const isLead    = activeIdx === 0;
-        const lineLeft  = fullBbox.x;
-        const lineRight = fullBbox.x + fullBbox.width;
-
-        const fragKey   = `${slot.slotNumber}_${activeVerseKey}`;
-        const fragBbox  = await getBBox(fragRefs.current[fragKey]);
-        if (cancelled) return;
-
-        if (!fragBbox) {
-          // Fall back to the full line bbox — a wider rect is better than no highlight.
-          rects.push({ x: fullBbox.x, y, w: fullBbox.width, h });
-          if (isDebug) {
-            console.log(
-              `[HL] ${activeVerseKey} slot=${slot.slotNumber} idx=${activeIdx}/${slot.line.verseKeys.length - 1}` +
-              ` no fragBbox — FALLBACK to fullBbox x=${fullBbox.x.toFixed(1)} w=${fullBbox.width.toFixed(1)}`,
-            );
+          if (!fullBbox) {
+            if (isDebug) console.log(`[HL] p2 skip ${activeVerseKey} slot=${slot.slotNumber} — no fullBbox`);
+            continue;
           }
-          continue;
-        }
 
-        let rectX: number;
+          if (slot.line.verseKeys.length === 1) {
+            rects.push({ x: fullBbox.x, y, w: fullBbox.width, h });
+            if (isDebug) console.log(`[HL] ${activeVerseKey} slot=${slot.slotNumber} PURE x=${fullBbox.x.toFixed(1)} w=${fullBbox.width.toFixed(1)}`);
+            continue;
+          }
 
-        if (isLead) {
-          // Lead verse: prefix = frag, no extra measurement needed.
-          rectX = lineRight - fragBbox.width;
-        } else {
-          // Non-lead: measure the prefix (v1…activeVerse) to find the correct x.
-          const prefixKey  = `prefix_${slot.slotNumber}_${activeVerseKey}`;
-          const prefixBbox = await getBBox(prefixRefs.current[prefixKey]);
-          if (cancelled) return;
+          // Shared slot: use TWO measurements for precise RTL positioning.
+          //
+          // fragBbox.width  = physical advance width of the active verse only (rect width).
+          // prefixBbox.width = physical advance width of glyphs(v1…activeVerse) (for rectX).
+          //
+          // In RTL layout the line reads right→left: v1 (rightmost) … vN (leftmost).
+          // The left edge of verse vI is exactly `lineRight - prefixWidth(v1…vI)`.
+          //
+          //   Lead   (I=1): prefix = frag → rectX = lineRight - fragWidth              ✓
+          //   Last   (I=N): prefix = full line → rectX = lineRight - fullWidth = lineLeft ✓
+          //   Middle (I=k): rectX = lineRight - prefixWidth(v1…vk)                     ✓
+          //
+          // fragBbox.x and prefixBbox.x are both discarded — LTR getBBox semantics.
+          const activeIdx = slot.line.verseKeys.indexOf(activeVerseKey);
+          const isLead    = activeIdx === 0;
+          const lineRight = fullBbox.x + fullBbox.width;
 
-          if (prefixBbox) {
-            rectX = lineRight - prefixBbox.width;
-          } else {
-            // prefixBbox unavailable — fall back to lineLeft (old behaviour, only
-            // correct for the last verse but avoids a blank highlight).
-            rectX = lineLeft;
+          const fragKey   = `${slot.slotNumber}_${activeVerseKey}`;
+          const fragBbox  = await getBBox(fragRefs.current[fragKey]);
+          if (cancelled) return { rects, needRetry };
+
+          if (!fragBbox) {
+            // Do NOT fall back to full-line: that would highlight adjacent verses
+            // on the same shared line. Retry after 50ms instead.
+            needRetry = true;
             if (isDebug) {
               console.log(
                 `[HL] ${activeVerseKey} slot=${slot.slotNumber} idx=${activeIdx}/${slot.line.verseKeys.length - 1}` +
-                ` no prefixBbox — fallback rectX=lineLeft`,
+                ` no fragBbox — will retry`,
               );
             }
+            continue;
+          }
+
+          let rectX: number;
+
+          if (isLead) {
+            // Lead verse: prefix = frag, no extra measurement needed.
+            rectX = lineRight - fragBbox.width;
+          } else {
+            // Non-lead: measure the prefix (v1…activeVerse) to find the correct x.
+            const prefixKey  = `prefix_${slot.slotNumber}_${activeVerseKey}`;
+            const prefixBbox = await getBBox(prefixRefs.current[prefixKey]);
+            if (cancelled) return { rects, needRetry };
+            rectX = prefixBbox ? lineRight - prefixBbox.width : fullBbox.x;
+          }
+
+          rects.push({ x: rectX, y, w: fragBbox.width, h });
+
+          if (isDebug) {
+            console.log(
+              `[HL] ${activeVerseKey} slot=${slot.slotNumber} idx=${activeIdx}/${slot.line.verseKeys.length - 1}` +
+              ` segments=${slot.line.verseKeys.length}` +
+              ` fragWidth=${fragBbox.width.toFixed(1)}` +
+              ` line=[${fullBbox.x.toFixed(1)},${lineRight.toFixed(1)}]` +
+              ` rectX=${rectX.toFixed(1)}`,
+            );
           }
         }
 
-        rects.push({ x: rectX, y, w: fragBbox.width, h });
+        return { rects, needRetry };
+      };
 
-        if (isDebug) {
-          console.log(
-            `[HL] ${activeVerseKey} slot=${slot.slotNumber} idx=${activeIdx}/${slot.line.verseKeys.length - 1}` +
-            ` segments=${slot.line.verseKeys.length}` +
-            ` fragWidth=${fragBbox.width.toFixed(1)}` +
-            ` line=[${lineLeft.toFixed(1)},${lineRight.toFixed(1)}]` +
-            ` rectX=${rectX.toFixed(1)}`,
-          );
-        }
+      let { rects, needRetry } = await measureAudioHighlight();
+      if (cancelled || !mountedRef.current) return;
+
+      if (needRetry) {
+        await new Promise<void>(r => setTimeout(r, 50));
+        if (cancelled || !mountedRef.current) return;
+        const retry = await measureAudioHighlight();
+        if (cancelled) return;
+        rects = retry.rects;
       }
 
       if (!cancelled && mountedRef.current) {
         setMeasuredRects(rects.length > 0 ? rects : null);
       }
-    }, 0);
+    }, 50);
 
     return () => { cancelled = true; clearTimeout(timer); };
   }, [lineBboxes, activeVerseKey, page.pageNumber, fontState.status]); // eslint-disable-line react-hooks/exhaustive-deps

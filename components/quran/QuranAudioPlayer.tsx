@@ -986,6 +986,80 @@ function QuranAudioPlayer() {
     [loadAndPlay],
   );
 
+  const skipVerse = useCallback(
+    (delta: 1 | -1) => {
+      const surahId = currentSurahIdRef.current;
+      if (surahId === null) return;
+
+      const currentKey = activeVerseKeyRef.current;
+
+      // ── Case 1: currently on bismillah pre-play ────────────────────────────
+      // verseTimingsRef is null during bismillah (set to null in startWithBismillah).
+      // Read surahId from the active key and handle directly.
+      if (currentKey?.startsWith('BSMLLH_')) {
+        if (delta > 0) {
+          // Skip bismillah → start surah from verse 1 (no bismillah re-play)
+          loadAndPlayFromVerse(surahId, `${surahId}:1`, null);
+        } else {
+          // Previous from bismillah → last verse of previous surah
+          const prevSurah = Math.max(1, surahId - 1);
+          if (prevSurah !== surahId) {
+            continuousPlayRef.current = false;
+            pendingStopVerseKeyRef.current = null;
+            loadAndPlay(prevSurah);
+          }
+        }
+        return;
+      }
+
+      // ── Case 2: normal verse playback ─────────────────────────────────────
+      // Include BSMLLH_ entries so pressing ← on verse 1 reaches the bismillah.
+      const timings = verseTimingsRef.current;
+
+      if (!timings || timings.length === 0) {
+        // No timings available — fall back to surah skip
+        skipSurah(delta);
+        return;
+      }
+
+      const currentIndex = currentKey
+        ? timings.findIndex((t) => t.verseKey === currentKey)
+        : -1;
+
+      const nextIndex = currentIndex + delta;
+
+      if (nextIndex >= 0 && nextIndex < timings.length) {
+        const target = timings[nextIndex];
+        if (target.verseKey.startsWith('BSMLLH_')) {
+          // Target is bismillah — must reload via loadAndPlayFromVerse to trigger
+          // the Al-Fatiha pre-play sequence (seeking alone won't play it).
+          const targetSurahId = parseInt(target.verseKey.split('_')[1], 10);
+          loadAndPlayFromVerse(targetSurahId, target.verseKey, null);
+        } else {
+          // Normal verse within same surah — just seek, no audio reload
+          playerRef.current?.seekTo(target.timestampFrom / 1000);
+        }
+      } else if (delta > 0) {
+        // Past last verse — go to next surah (bismillah included via loadAndPlay)
+        const nextSurah = Math.min(114, surahId + 1);
+        if (nextSurah !== surahId) {
+          continuousPlayRef.current = false;
+          pendingStopVerseKeyRef.current = null;
+          loadAndPlay(nextSurah);
+        }
+      } else {
+        // Before first verse (surah 1/9 or no BSMLLH_ entry) — previous surah
+        const prevSurah = Math.max(1, surahId - 1);
+        if (prevSurah !== surahId) {
+          continuousPlayRef.current = false;
+          pendingStopVerseKeyRef.current = null;
+          loadAndPlay(prevSurah);
+        }
+      }
+    },
+    [skipSurah, loadAndPlay, loadAndPlayFromVerse],
+  );
+
   const seekTo = useCallback((positionMs: number) => {
     playerRef.current?.seekTo(positionMs / 1000); // expo-audio seeks in seconds
   }, []);
@@ -1635,7 +1709,7 @@ function QuranAudioPlayer() {
             </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.controlBtn} onPress={() => skipSurah(-1)} activeOpacity={0.7}>
+          <TouchableOpacity style={styles.controlBtn} onPress={() => skipVerse(-1)} activeOpacity={0.7}>
             <SvgIcon name="skip-back" size={22} color={T.text} />
           </TouchableOpacity>
 
@@ -1653,7 +1727,7 @@ function QuranAudioPlayer() {
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.controlBtn} onPress={() => skipSurah(1)} activeOpacity={0.7}>
+          <TouchableOpacity style={styles.controlBtn} onPress={() => skipVerse(1)} activeOpacity={0.7}>
             <SvgIcon name="skip-fwd" size={22} color={T.text} />
           </TouchableOpacity>
 

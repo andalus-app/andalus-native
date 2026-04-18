@@ -473,7 +473,30 @@ When the khatmah end (or start) verse is the last verse on a shared line (multip
 **Permanent rules:**
 - NEVER use `setTimeout(0)` for getBBox measurements on elements that were just added in the same re-render cycle that triggered the effect. Use at least 50ms to allow native commit.
 - NEVER fall back to full-line for multi-verse slots on first getBBox failure. Retry after 50ms — native rendering is usually the cause.
-- The pattern: `measureFn → needRetry → 50ms → measureFn again` is the correct retry pattern for pass-2 khatmah effects.
+- The pattern: `measureFn → needRetry → 50ms → measureFn again` is the correct retry pattern for ALL pass-2 highlight effects (khatmah AND audio highlight).
+
+---
+
+### `MushafRenderer.tsx` — audio highlight covers multiple verses (full-line fallback bug) — fixed 2026-04-18
+
+When a verse occupied a shared line (multiple verses per row), the audio highlight highlight rect covered the ENTIRE line width instead of only the active verse's portion — making it appear as if multiple consecutive verses were highlighted simultaneously and that the highlight was "ahead" of the audio.
+
+**Root cause:** Audio pass-2 (`useEffect` on `[lineBboxes, activeVerseKey, ...]`) had two violations of the permanent rules established by the khatmah fix:
+
+1. **`setTimeout(0)`** — fired before native Core Text had committed the hidden `SvgText` elements (fragRefs / prefixRefs) added in the same re-render that triggered the effect. `getBBox` returned null for all shared-slot fragments on the first call.
+
+2. **Full-line fallback on `fragBbox === null`** — when `getBBox` returned null for the fragment element, the code pushed the ENTIRE line rect (`fullBbox.x, fullBbox.width`). On a line shared by verses [82:5, 82:6, 82:7], highlighting the full line when active verse is 82:6 made 82:5 and 82:7 appear highlighted too.
+
+**Fix:** Matched audio pass-2 to the khatmah pass-2 pattern:
+1. Initial delay changed from `0` to `50ms` — gives native time to commit the new fragRef/prefixRef elements before first getBBox call.
+2. Extracted measurement into `measureAudioHighlight()` returning `{ rects, needRetry }`.
+3. When `fragBbox` is null for a shared slot: set `needRetry = true; continue` — no full-line fallback.
+4. After loop: if `needRetry`, wait 50ms and call `measureAudioHighlight()` again. Use the retry result.
+
+**Permanent rules:**
+- NEVER use `setTimeout(0)` for getBBox in audio pass-2. Use at least 50ms.
+- NEVER push a full-line rect when `fragBbox` is null for a shared slot. It highlights adjacent verses. Retry instead.
+- Audio pass-2 and khatmah pass-2 must use identical timing/retry patterns — if one is fixed, verify the other.
 
 ---
 
