@@ -2,13 +2,21 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
-import { sendLiveNotification } from '../services/notifications';
+import {
+  scheduleUpcomingStreamNotifications,
+  cancelUpcomingStreamNotifications,
+  LIVE_NOTIF_ENABLED_KEY,
+  UPCOMING_REMIND_ENABLED_KEY,
+} from '../services/notifications';
 
 export const CHANNEL_ID = 'UCQhN1h0T-02TYWf-mD3-2hQ';
 const CACHE_KEY    = 'yt_stream_cache_v2';
 // Persisted across app restarts so we never re-notify for the same live videoId.
-const NOTIFIED_KEY = 'yt_notified_video_id';
+const NOTIFIED_KEY   = 'yt_notified_video_id';
+// Persisted so we don't re-schedule upcoming notifications on every app open.
+const SCHEDULED_KEY  = 'yt_scheduled_upcoming_id';
 const ENDPOINT     = 'https://yqtnwgezqbznbpeooott.supabase.co/functions/v1/youtube-streams';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlxdG53Z2V6cWJ6bmJwZW9vb3R0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzOTkyNzIsImV4cCI6MjA4ODk3NTI3Mn0.ELMMwwFKuT7JnXDU0NiQDYFXs8eZWSjThZH1bNJAw6Y';
 
 export type YTStream = {
   status: 'live' | 'upcoming';
@@ -58,7 +66,9 @@ function pollInterval(stream: YTStream | null): number {
 }
 
 async function fetchStream(): Promise<YTStream | null> {
-  const res = await fetch(ENDPOINT);
+  const res = await fetch(ENDPOINT, {
+    headers: { Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
+  });
   if (!res.ok) {
     console.warn('[YT] endpoint error:', res.status);
     return null;
@@ -103,9 +113,12 @@ export function useYoutubeLive() {
   // FIX 1: ref always reflects the latest stream so AppState listener never reads stale state
   const streamRef          = useRef<YTStream | null>(null);
   // FIX 2: track last videoId we notified about so we only fire once per unique live stream
-  const notifiedVideoIdRef = useRef<string | null>(null);
+  const notifiedVideoIdRef  = useRef<string | null>(null);
+  // Track which upcoming videoId we've scheduled DATE-trigger notifications for.
+  // Persisted in AsyncStorage so we don't re-schedule on every app open.
+  const scheduledVideoIdRef = useRef<string | null>(null);
   // Safety: prevent state updates after unmount
-  const mountedRef         = useRef(true);
+  const mountedRef          = useRef(true);
 
   function scheduleNext(current: YTStream | null) {
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -123,12 +136,51 @@ export function useYoutubeLive() {
       // either never went live or the Edge Function cache is stale — hide it.
       if (isStaleUpcoming(result)) result = null;
 
-      // Only notify once per unique videoId — ref is pre-loaded from AsyncStorage
-      // on mount so this holds across app restarts, not just within a session.
-      if (result?.status === 'live' && result.videoId !== notifiedVideoIdRef.current) {
+      // Read notification preferences — treat null (never set) as ON (default).
+      const [liveNotifPref, upcomingPref] = await Promise.all([
+        AsyncStorage.getItem(LIVE_NOTIF_ENABLED_KEY),
+        AsyncStorage.getItem(UPCOMING_REMIND_ENABLED_KEY),
+      ]);
+      const liveNotifEnabled    = liveNotifPref  !== 'false';
+      const upcomingReminderEnabled = upcomingPref !== 'false';
+
+      // ── Live stream notification ─────────────────────────────────────────────
+      // Push is sent server-side by the Edge Function (Expo Push API → APNs/FCM),
+      // which reaches ALL registered devices even when the app is killed.
+      // We only track the notifiedVideoIdRef here to stay in sync — no local
+      // notification is fired from the client to avoid duplicates (client + server
+      // would both fire for the device that triggered the Edge Function refresh).
+      if (
+        liveNotifEnabled &&
+        result?.status === 'live' &&
+        result.videoId !== notifiedVideoIdRef.current
+      ) {
         notifiedVideoIdRef.current = result.videoId;
         AsyncStorage.setItem(NOTIFIED_KEY, result.videoId); // fire-and-forget persist
-        await sendLiveNotification(result.videoId, result.title);
+        // sendLiveNotification intentionally NOT called here — Edge Function handles push
+      }
+
+      // ── Upcoming stream: schedule DATE-trigger notifications ─────────────────
+      // DATE triggers fire even when the app is killed or the screen is locked.
+      // We schedule two notifications: 30 min before and at the scheduled start.
+      //
+      // Only re-schedule if the videoId has changed (avoids re-scheduling on every
+      // poll — the OS scheduler already has the notification, no need to replace it).
+      if (upcomingReminderEnabled && result?.status === 'upcoming' && result.scheduledStart) {
+        if (result.videoId !== scheduledVideoIdRef.current) {
+          // Cancel notifications for any previous upcoming stream
+          if (scheduledVideoIdRef.current) {
+            await cancelUpcomingStreamNotifications(scheduledVideoIdRef.current);
+          }
+          scheduledVideoIdRef.current = result.videoId;
+          AsyncStorage.setItem(SCHEDULED_KEY, result.videoId); // fire-and-forget persist
+          await scheduleUpcomingStreamNotifications(result.videoId, result.title, result.scheduledStart);
+        }
+      } else if (scheduledVideoIdRef.current) {
+        // Stream gone, transitioned to live, or upcoming reminder disabled — cancel
+        await cancelUpcomingStreamNotifications(scheduledVideoIdRef.current);
+        scheduledVideoIdRef.current = null;
+        AsyncStorage.removeItem(SCHEDULED_KEY); // fire-and-forget
       }
 
       // Cache thumbnail locally so subsequent renders load from disk instantly
@@ -157,26 +209,35 @@ export function useYoutubeLive() {
   useEffect(() => {
     mountedRef.current = true;
 
-    // 1. Load cache + persisted notified videoId in parallel.
-    //    doFetch() is called only after both are ready so notifiedVideoIdRef is
-    //    correctly initialised before the first live-check runs — this prevents
-    //    re-notifying for the same videoId after an app restart.
+    // 1. Load cache + persisted refs in parallel.
+    //    doFetch() is called only after all are ready so refs are correctly
+    //    initialised before the first poll runs. This prevents:
+    //    - re-notifying for the same live videoId after an app restart
+    //    - re-scheduling upcoming notifications for the same videoId on every open
     Promise.all([
       AsyncStorage.getItem(CACHE_KEY),
       AsyncStorage.getItem(NOTIFIED_KEY),
-    ]).then(([rawCache, notifiedId]) => {
+      AsyncStorage.getItem(SCHEDULED_KEY),
+    ]).then(([rawCache, notifiedId, scheduledId]) => {
       if (!mountedRef.current) return;
 
-      // Restore the last-notified videoId so we don't spam on app reopen.
-      if (notifiedId) notifiedVideoIdRef.current = notifiedId;
+      // Restore refs so deduplication persists across app restarts.
+      if (notifiedId)  notifiedVideoIdRef.current  = notifiedId;
+      if (scheduledId) scheduledVideoIdRef.current = scheduledId;
 
       // Show cached stream immediately while the fresh fetch is in flight.
-      // Apply the same stale-upcoming filter so a past broadcast never flashes
-      // on screen before doFetch() has a chance to return null.
+      // Guards:
+      //   - isStaleUpcoming: don't show an upcoming stream whose scheduled time
+      //     has already passed (same filter as doFetch).
+      //   - status === 'live': NEVER show a cached live status. Live requires
+      //     real-time confirmation — a cached "live" from a previous session
+      //     means the stream has ended and the app was closed while it was still
+      //     running. Showing it causes the LIVE badge to pulse incorrectly until
+      //     the fresh fetch returns.
       if (rawCache) {
         try {
           const { data, ts } = JSON.parse(rawCache) as { data: YTStream | null; ts: number };
-          if (data && !isStaleUpcoming(data)) {
+          if (data && data.status !== 'live' && !isStaleUpcoming(data)) {
             streamRef.current  = data;
             setStream(data);
             lastFetchTs.current = ts;

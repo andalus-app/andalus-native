@@ -18,6 +18,11 @@ import {
   cancelPrayerNotifications,
   enableKahfReminder,
   disableKahfReminder,
+  enableAllahNamesReminder,
+  disableAllahNamesReminder,
+  cancelAllUpcomingStreamNotifications,
+  LIVE_NOTIF_ENABLED_KEY,
+  UPCOMING_REMIND_ENABLED_KEY,
 } from '../services/notifications';
 import {
   loadZakatReminderSettings,
@@ -115,8 +120,11 @@ export default function SettingsScreen() {
   const [methodModal,   setMethodModal]   = useState(false);
   const [schoolModal,   setSchoolModal]   = useState(false);
   const [cityModal,     setCityModal]     = useState(false);
-  const [kahfEnabled,    setKahfEnabled]    = useState(true);
-  const [zakatEnabled,   setZakatEnabled]   = useState(false);
+  const [kahfEnabled,            setKahfEnabled]            = useState(true);
+  const [zakatEnabled,           setZakatEnabled]           = useState(false);
+  const [allahNamesEnabled,      setAllahNamesEnabled]      = useState(true);
+  const [liveNotifEnabled,       setLiveNotifEnabled]       = useState(true);
+  const [upcomingReminderEnabled, setUpcomingReminderEnabled] = useState(true);
 
   useFocusEffect(useCallback(() => { loadAll(); }, []));
 
@@ -135,6 +143,12 @@ export default function SettingsScreen() {
       else setLocationLabel('Ej angiven');
       const kahf = await AsyncStorage.getItem('kahfReminderEnabled');
       setKahfEnabled(kahf !== 'false'); // null (never set) = default on
+      const allahNames = await AsyncStorage.getItem('allahNamesNotificationEnabled');
+      setAllahNamesEnabled(allahNames !== 'false'); // null (never set) = default on
+      const liveNotif = await AsyncStorage.getItem(LIVE_NOTIF_ENABLED_KEY);
+      setLiveNotifEnabled(liveNotif !== 'false'); // null (never set) = default on
+      const upcomingRemind = await AsyncStorage.getItem(UPCOMING_REMIND_ENABLED_KEY);
+      setUpcomingReminderEnabled(upcomingRemind !== 'false'); // null (never set) = default on
       const zakat = await loadZakatReminderSettings();
       setZakatEnabled(zakat?.enabled ?? false);
     } catch {}
@@ -248,6 +262,27 @@ export default function SettingsScreen() {
             }}
             trackColor={{false:T.border,true:T.accent}} thumbColor="#fff" ios_backgroundColor={T.border}/>}/>
 
+        <Row T={T} iconName="bell" label="Allahs namn" value="Få en daglig påminnelse med ett av Allahs namn och dess betydelse"
+          right={<Switch value={allahNamesEnabled}
+            onValueChange={async (v) => {
+              if (v) {
+                const granted = await requestNotificationPermission();
+                if (!granted) {
+                  Alert.alert(
+                    'Notiser nekade',
+                    'Aktivera notiser för Hidayah i iOS-inställningar.',
+                    [{ text: 'OK' }],
+                  );
+                  return;
+                }
+                await enableAllahNamesReminder();
+              } else {
+                await disableAllahNamesReminder();
+              }
+              setAllahNamesEnabled(v);
+            }}
+            trackColor={{false:T.border,true:T.accent}} thumbColor="#fff" ios_backgroundColor={T.border}/>}/>
+
         <Row T={T} iconName="bell" label="Dhikr-påminnelse" value="1 timme innan Maghrib varje dag"
           right={<Switch value={settings.dhikrReminder ?? false}
             onValueChange={async (v) => {
@@ -263,6 +298,65 @@ export default function SettingsScreen() {
                 }
               }
               saveSettings({ dhikrReminder: v });
+            }}
+            trackColor={{false:T.border,true:T.accent}} thumbColor="#fff" ios_backgroundColor={T.border}/>}/>
+
+        <Row T={T} iconName="bell" label="Fredagens sista timme (dua)" value="Få en påminnelse 30 minuter innan Maghrib på fredag."
+          right={<Switch value={settings.fridayDuaReminder ?? true}
+            onValueChange={async (v) => {
+              if (v) {
+                const granted = await requestNotificationPermission();
+                if (!granted) {
+                  Alert.alert(
+                    'Notiser nekade',
+                    'Aktivera notiser för Hidayah i iOS-inställningar.',
+                    [{ text: 'OK' }],
+                  );
+                  return;
+                }
+              }
+              saveSettings({ fridayDuaReminder: v });
+            }}
+            trackColor={{false:T.border,true:T.accent}} thumbColor="#fff" ios_backgroundColor={T.border}/>}/>
+
+        <Row T={T} iconName="bell" label="Direktsändning" value="Notis när en sändning är live"
+          right={<Switch value={liveNotifEnabled}
+            onValueChange={async (v) => {
+              if (v) {
+                const granted = await requestNotificationPermission();
+                if (!granted) {
+                  Alert.alert(
+                    'Notiser nekade',
+                    'Aktivera notiser för Hidayah i iOS-inställningar.',
+                    [{ text: 'OK' }],
+                  );
+                  return;
+                }
+              }
+              await AsyncStorage.setItem(LIVE_NOTIF_ENABLED_KEY, v ? 'true' : 'false');
+              setLiveNotifEnabled(v);
+            }}
+            trackColor={{false:T.border,true:T.accent}} thumbColor="#fff" ios_backgroundColor={T.border}/>}/>
+
+        <Row T={T} iconName="bell" label="Påminnelse inför sändning" value="30 min innan en schemalagd direktsändning"
+          right={<Switch value={upcomingReminderEnabled}
+            onValueChange={async (v) => {
+              if (v) {
+                const granted = await requestNotificationPermission();
+                if (!granted) {
+                  Alert.alert(
+                    'Notiser nekade',
+                    'Aktivera notiser för Hidayah i iOS-inställningar.',
+                    [{ text: 'OK' }],
+                  );
+                  return;
+                }
+              } else {
+                // Cancel any already-scheduled upcoming reminders immediately
+                cancelAllUpcomingStreamNotifications().catch(() => {});
+              }
+              await AsyncStorage.setItem(UPCOMING_REMIND_ENABLED_KEY, v ? 'true' : 'false');
+              setUpcomingReminderEnabled(v);
             }}
             trackColor={{false:T.border,true:T.accent}} thumbColor="#fff" ios_backgroundColor={T.border}/>}/>
 

@@ -34,7 +34,7 @@ const SECTIONS: Section[] = [
   {
     title: 'Verktyg',
     data: [
-      { key: 'zakat',   title: 'Zakat kalkylator', icon: 'zakat',       route: '/zakat'   },
+      { key: 'zakat',   title: 'Beräkna zakat',    icon: 'zakat',       route: '/zakat'   },
       { key: 'booking', title: 'Boka lokal',        icon: 'calendar',    route: '/booking' },
     ],
   },

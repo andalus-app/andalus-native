@@ -1,5 +1,4 @@
-import { View, Text, ScrollView, TouchableOpacity, RefreshControl, Linking, Image, useWindowDimensions, Animated, PanResponder, Modal, StyleSheet, ActivityIndicator, AppState } from 'react-native';
-import { WebView } from 'react-native-webview';
+import { View, Text, ScrollView, TouchableOpacity, RefreshControl, Linking, Image, useWindowDimensions, Animated, PanResponder, Modal, StyleSheet, AppState } from 'react-native';
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Svg, { Path } from 'react-native-svg';
@@ -23,32 +22,6 @@ import AdminPinModal, { EligibleAdminUser } from '../../components/AdminPinModal
 
 
 const SWIPE_THRESHOLD = 80;
-
-const YT_BROWSER_UA =
-  'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) ' +
-  'AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
-
-function buildYouTubeEmbedHtml(videoId: string): string {
-  return `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; background: #000; overflow: hidden; }
-    iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; }
-  </style>
-</head>
-<body>
-  <iframe
-    src="https://www.youtube-nocookie.com/embed/${videoId}?playsinline=1&rel=0&modestbranding=1&enablejsapi=1&autoplay=1"
-    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-    allowfullscreen>
-  </iframe>
-</body>
-</html>`;
-}
 
 
 function BannerCard({ banner, onDismiss, theme: T }: { banner: Banner; onDismiss: () => void; theme: any }) {
@@ -152,42 +125,36 @@ type YoutubeCardProps = {
 function YoutubeCard({ stream, isLive, isUpcoming }: YoutubeCardProps) {
   const { theme: T } = useTheme();
   const { width } = useWindowDimensions();
-  const { videoId: activeVideoId, isPlaying, play, stop } = useYoutubePlayer();
+  const { videoId: activeVideoId, isPlaying, play, stop, inlineFrame, setInlineFrame } = useYoutubePlayer();
 
-  // Inline video player state (watching = WebView visible in card)
-  const [watchingVideo, setWatchingVideo]   = useState(false);
-  const [playerLoading, setPlayerLoading]   = useState(true);
-  const [playerError,   setPlayerError]     = useState(false);
-  const [playerRetry,   setPlayerRetry]     = useState(0);
-  const watchingVideoRef = useRef(watchingVideo);
-  watchingVideoRef.current = watchingVideo;
+  // Ref on the thumbnail container — used to measure its screen position for the
+  // single background WebView to reposition itself at.
+  const thumbRef = useRef<View>(null);
 
-  // Open inline video: stop background WebView entirely so only the inline
-  // player is active. Background audio only starts on explicit user action
-  // ("Spela i bakgrunden" button) or when the user switches to another tab.
+  // watchingVideo = the single background WebView is showing at this card's position.
+  const isThisActive  = activeVideoId === stream?.videoId;
+  const watchingVideo = isThisActive && inlineFrame !== null;
+
+  // Open the single WebView in inline mode at this card's screen coordinates.
+  // Both state updates (play + setInlineFrame) land in the same React render via
+  // automatic batching, so the WebView mounts directly at the inline position.
   const openVideo = useCallback(() => {
-    stop(); // unmount background WebView — no competing audio source
-    setWatchingVideo(true);
-    setPlayerLoading(true);
-    setPlayerError(false);
-  }, [stop]);
+    if (!stream) return;
+    thumbRef.current?.measureInWindow((x, y, w, h) => {
+      play(stream.videoId);
+      setInlineFrame({ top: y, left: x, width: w, height: h });
+    });
+  }, [stream, play, setInlineFrame]);
 
-  // Close inline video and STOP everything — no background audio resumes.
-  const closeVideo = useCallback(() => {
-    setWatchingVideo(false);
-    stop();
-  }, [stop]);
-
-  // When the user switches tabs: close inline video and resume background audio.
-  // (User explicitly chose to switch tab while watching — background audio continues.)
+  // When the user switches tabs: move the WebView off-screen (background audio mode).
+  // Audio continues — the single WebView stays alive off-screen.
   useFocusEffect(useCallback(() => {
     return () => {
-      if (watchingVideoRef.current && stream) {
-        setWatchingVideo(false);
-        play(stream.videoId); // resume background audio when leaving tab
+      if (isThisActive && inlineFrame !== null) {
+        setInlineFrame(null);
       }
     };
-  }, [stream, play]));
+  }, [isThisActive, inlineFrame, setInlineFrame]));
 
   // Pulsing animation — only runs when live
   const pulseAnim = useRef(new Animated.Value(0)).current;
@@ -210,11 +177,7 @@ function YoutubeCard({ stream, isLive, isUpcoming }: YoutubeCardProps) {
   // No stream — render nothing
   if (!stream) return null;
 
-  // Hide upcoming streams whose scheduled time has passed by more than 15 minutes.
-  // After 90 min without going live the stream is over or the Edge Function cache
-  // is stale — either way the card should not be shown.
-  // 90 min matches the hook's isStaleUpcoming threshold. Real live streams always
-  // transition to status="live" well within 30 min of going on air.
+  // Hide upcoming streams whose scheduled time has passed by more than 90 minutes.
   if (
     stream.status === 'upcoming' &&
     stream.scheduledStart &&
@@ -225,7 +188,6 @@ function YoutubeCard({ stream, isLive, isUpcoming }: YoutubeCardProps) {
 
   const cardWidth     = width - 32;
   const THUMB_HEIGHT  = 182;
-  const isThisActive  = activeVideoId === stream.videoId; // background player has this stream
   const isThisPlaying = isThisActive && isPlaying;
   const isThisPaused  = isThisActive && !isPlaying && !watchingVideo;
 
@@ -235,178 +197,98 @@ function YoutubeCard({ stream, isLive, isUpcoming }: YoutubeCardProps) {
     timeLabel = d.toLocaleString('sv-SE', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
   }
 
-  const embedHtml = buildYouTubeEmbedHtml(stream.videoId);
-
   return (
     <View style={{ marginBottom: 12, borderRadius: 16, overflow: 'hidden', borderWidth: 0.5, borderColor: T.border }}>
-      {/* Thumbnail / inline video player */}
-      <View style={{ width: cardWidth, height: THUMB_HEIGHT, backgroundColor: '#000' }}>
-        {watchingVideo ? (
-          /* ── Inline video player (same as before) ── */
-          <>
-            {playerLoading && !playerError && (
-              <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center', backgroundColor: '#000', zIndex: 10 }]}>
-                <ActivityIndicator color="#FF3B30" size="large" />
-              </View>
-            )}
-            {playerError && (
-              <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center', backgroundColor: '#000', zIndex: 10, gap: 12 }]}>
-                <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13, fontWeight: '500' }}>
-                  Kunde inte ladda videon
-                </Text>
-                <TouchableOpacity
-                  onPress={() => { setPlayerError(false); setPlayerLoading(true); setPlayerRetry((r) => r + 1); }}
-                  activeOpacity={0.75}
-                  style={{ backgroundColor: '#FF3B30', paddingHorizontal: 20, paddingVertical: 8, borderRadius: 8 }}
-                >
-                  <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>Försök igen</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-            <WebView
-              key={playerRetry}
-              source={{ html: embedHtml, baseUrl: 'https://www.youtube-nocookie.com' }}
-              style={{ flex: 1, backgroundColor: '#000' }}
-              userAgent={YT_BROWSER_UA}
-              allowsInlineMediaPlayback
-              mediaPlaybackRequiresUserAction={false}
-              javaScriptEnabled
-              domStorageEnabled
-              thirdPartyCookiesEnabled
-              originWhitelist={['*']}
-              scrollEnabled={false}
-              bounces={false}
-              onLoadStart={() => { setPlayerLoading(true); setPlayerError(false); }}
-              onLoad={() => setPlayerLoading(false)}
-              onError={() => { setPlayerLoading(false); setPlayerError(true); }}
-              onShouldStartLoadWithRequest={(req) =>
-                req.url === 'about:blank' ||
-                req.url.startsWith('https://www.youtube-nocookie.com') ||
-                req.url.startsWith('https://www.youtube.com') ||
-                req.url.startsWith('https://youtube.com')
-              }
+      {/* Thumbnail area — always shown. The single background WebView overlays this
+          area at root level when in inline mode (inlineFrame set). The card itself
+          just shows the thumbnail / background-playing indicator. */}
+      <View ref={thumbRef} style={{ width: cardWidth, height: THUMB_HEIGHT, backgroundColor: '#000' }}>
+        <TouchableOpacity
+          onPress={() => { if (!watchingVideo) openVideo(); }}
+          activeOpacity={0.85}
+          style={{ width: cardWidth, height: THUMB_HEIGHT }}
+        >
+          {(stream.thumbnailLocal ?? stream.thumbnail) ? (
+            <Image
+              source={{ uri: stream.thumbnailLocal ?? stream.thumbnail! }}
+              style={{ width: cardWidth, height: THUMB_HEIGHT }}
+              resizeMode="cover"
             />
-            {/* Stop / close video controls */}
-            {/* Top-right ✕ — closes video AND stops audio */}
-            <TouchableOpacity
-              onPress={closeVideo}
-              activeOpacity={0.8}
-              style={{
-                position: 'absolute', top: 8, right: 8, zIndex: 20,
-                width: 32, height: 32, borderRadius: 16,
-                backgroundColor: 'rgba(0,0,0,0.65)',
-                alignItems: 'center', justifyContent: 'center',
-              }}
-            >
-              <Svg width={12} height={12} viewBox="0 0 14 14" fill="none">
-                <Path d="M1 1l12 12M13 1L1 13" stroke="#fff" strokeWidth={2} strokeLinecap="round" />
-              </Svg>
-            </TouchableOpacity>
-            {/* Bottom-left pill — "Spela i bakgrunden" keeps audio, closes video */}
-            <TouchableOpacity
-              onPress={() => { setWatchingVideo(false); if (stream) play(stream.videoId); }}
-              activeOpacity={0.8}
-              style={{
-                position: 'absolute', bottom: 10, left: 10, zIndex: 20,
-                flexDirection: 'row', alignItems: 'center', gap: 5,
-                backgroundColor: 'rgba(0,0,0,0.65)', borderRadius: 8,
-                paddingHorizontal: 10, paddingVertical: 5,
-              }}
-            >
-              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#34C759' }} />
-              <Text style={{ color: '#fff', fontSize: 11, fontWeight: '600' }}>Spela i bakgrunden</Text>
-            </TouchableOpacity>
-          </>
-        ) : (
-          /* ── Thumbnail with controls ── */
-          <TouchableOpacity
-            onPress={() => {
-              // Never call play() here — that would mount the background WebView
-              // alongside the inline player, causing duplicate audio.
-              // openVideo() calls stop() which unmounts the background WebView first.
-              if (!watchingVideo) openVideo();
-            }}
-            activeOpacity={0.85}
-            style={{ width: cardWidth, height: THUMB_HEIGHT }}
-          >
-            {(stream.thumbnailLocal ?? stream.thumbnail) ? (
-              <Image source={{ uri: stream.thumbnailLocal ?? stream.thumbnail! }} style={{ width: cardWidth, height: THUMB_HEIGHT }} resizeMode="cover" />
-            ) : (
-              <View style={{ width: cardWidth, height: THUMB_HEIGHT, backgroundColor: '#111' }} />
-            )}
+          ) : (
+            <View style={{ width: cardWidth, height: THUMB_HEIGHT, backgroundColor: '#111' }} />
+          )}
 
-            {/* Slight dim when audio is playing in background */}
-            {isThisPlaying && (
-              <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.25)' }]} />
-            )}
+          {/* Slight dim when audio is playing in background */}
+          {isThisPlaying && (
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.25)' }]} />
+          )}
 
-            {/* LIVE badge */}
-            {isLive && (
-              <View style={{
-                position: 'absolute', top: 10, left: 10,
-                flexDirection: 'row', alignItems: 'center', gap: 7,
-                backgroundColor: '#FF3B30', borderRadius: 6, paddingHorizontal: 9, paddingVertical: 5,
-              }}>
-                <View style={{ width: 14, height: 14, alignItems: 'center', justifyContent: 'center' }}>
-                  <Animated.View style={{
-                    position: 'absolute',
-                    width: 10, height: 10, borderRadius: 5,
-                    backgroundColor: '#fff',
-                    transform: [{ scale: ringScale }],
-                    opacity: ringOpacity,
-                  }} />
-                  <Animated.View style={{
-                    width: 8, height: 8, borderRadius: 4,
-                    backgroundColor: '#fff',
-                    transform: [{ scale: dotScale }],
-                  }} />
-                </View>
-                <Text style={{ color: '#fff', fontWeight: '800', fontSize: 12, letterSpacing: 0.5 }}>LIVE</Text>
-              </View>
-            )}
-
-            {/* Upcoming badge */}
-            {isUpcoming && (
-              <View style={{
-                position: 'absolute', top: 10, left: 10,
-                backgroundColor: 'rgba(0,0,0,0.72)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4,
-              }}>
-                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 12 }}>
-                  {timeLabel ? `Sänds ${timeLabel}` : 'Kommer snart'}
-                </Text>
-              </View>
-            )}
-
-            {/* Play button overlay */}
+          {/* LIVE badge */}
+          {isLive && (
             <View style={{
-              position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+              position: 'absolute', top: 10, left: 10,
+              flexDirection: 'row', alignItems: 'center', gap: 7,
+              backgroundColor: '#FF3B30', borderRadius: 6, paddingHorizontal: 9, paddingVertical: 5,
+            }}>
+              <View style={{ width: 14, height: 14, alignItems: 'center', justifyContent: 'center' }}>
+                <Animated.View style={{
+                  position: 'absolute',
+                  width: 10, height: 10, borderRadius: 5,
+                  backgroundColor: '#fff',
+                  transform: [{ scale: ringScale }],
+                  opacity: ringOpacity,
+                }} />
+                <Animated.View style={{
+                  width: 8, height: 8, borderRadius: 4,
+                  backgroundColor: '#fff',
+                  transform: [{ scale: dotScale }],
+                }} />
+              </View>
+              <Text style={{ color: '#fff', fontWeight: '800', fontSize: 12, letterSpacing: 0.5 }}>LIVE</Text>
+            </View>
+          )}
+
+          {/* Upcoming badge */}
+          {isUpcoming && (
+            <View style={{
+              position: 'absolute', top: 10, left: 10,
+              backgroundColor: 'rgba(0,0,0,0.72)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4,
+            }}>
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 12 }}>
+                {timeLabel ? `Sänds ${timeLabel}` : 'Kommer snart'}
+              </Text>
+            </View>
+          )}
+
+          {/* Play button overlay */}
+          <View style={{
+            position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+            alignItems: 'center', justifyContent: 'center',
+          }}>
+            <View style={{
+              width: 48, height: 48, borderRadius: 24,
+              backgroundColor: 'rgba(0,0,0,0.55)',
               alignItems: 'center', justifyContent: 'center',
             }}>
-              <View style={{
-                width: 48, height: 48, borderRadius: 24,
-                backgroundColor: 'rgba(0,0,0,0.55)',
-                alignItems: 'center', justifyContent: 'center',
-              }}>
-                <Svg width={22} height={22} viewBox="0 0 24 24" fill="#fff">
-                  <Path d="M8 5v14l11-7z" />
-                </Svg>
-              </View>
+              <Svg width={22} height={22} viewBox="0 0 24 24" fill="#fff">
+                <Path d="M8 5v14l11-7z" />
+              </Svg>
             </View>
+          </View>
 
-            {/* "Spelar i bakgrunden" indicator */}
-            {isThisPlaying && (
-              <View style={{
-                position: 'absolute', bottom: 10, right: 10,
-                flexDirection: 'row', alignItems: 'center', gap: 5,
-                backgroundColor: 'rgba(0,0,0,0.65)', borderRadius: 6,
-                paddingHorizontal: 8, paddingVertical: 4,
-              }}>
-                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#34C759' }} />
-                <Text style={{ color: '#fff', fontSize: 11, fontWeight: '600' }}>Spelar ljud</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        )}
+          {/* "Spelar i bakgrunden" indicator */}
+          {isThisPlaying && (
+            <View style={{
+              position: 'absolute', bottom: 10, right: 10,
+              flexDirection: 'row', alignItems: 'center', gap: 5,
+              backgroundColor: 'rgba(0,0,0,0.65)', borderRadius: 6,
+              paddingHorizontal: 8, paddingVertical: 4,
+            }}>
+              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#34C759' }} />
+              <Text style={{ color: '#fff', fontSize: 11, fontWeight: '600' }}>Spelar ljud</Text>
+            </View>
+          )}
+        </TouchableOpacity>
       </View>
 
       {/* Bottom info bar */}

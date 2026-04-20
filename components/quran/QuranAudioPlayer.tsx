@@ -40,6 +40,7 @@ import {
   type AudioPlayer,
   type AudioStatus,
 } from 'expo-audio';
+import { Asset } from 'expo-asset';
 import { BlurView } from 'expo-blur';
 import SvgIcon from '../SvgIcon';
 import { useTheme } from '../../context/ThemeContext';
@@ -81,6 +82,48 @@ const PICKER_CLEARANCE = Platform.OS === 'ios'
 // Sorted highest-first so top of popup = fastest, bottom = slowest
 const RATE_STEPS = [2, 1.75, 1.5, 1.25, 1, 0.75, 0.5] as const;
 const DEFAULT_RATE_INDEX = 4; // 1× normal speed
+
+// ── Lock-screen artwork ────────────────────────────────────────────────────────
+//
+// The iOS Now Playing widget requires artwork to show the player prominently on
+// the lock screen. We use the app icon (bundled asset) as the artwork image.
+//
+// expo-asset resolves the require() to a local file:// URI after downloading
+// the asset from the JS bundle cache. URLSession on the Swift side can load
+// file:// URIs via dataTask, so this works without any extra native code.
+//
+// Module-level cache: resolved once per app session, shared across all players.
+// If resolution fails (e.g., simulator file-system edge case), artworkUrl stays
+// null and the lock screen shows with a gray placeholder instead of crashing.
+//
+let _artworkUri: string | null = null;
+let _artworkResolving = false;
+let _artworkCallbacks: Array<(uri: string | null) => void> = [];
+
+function resolveArtworkUri(): Promise<string | null> {
+  if (_artworkUri !== null) return Promise.resolve(_artworkUri);
+  return new Promise((resolve) => {
+    _artworkCallbacks.push(resolve);
+    if (_artworkResolving) return; // already in progress — just enqueue the callback
+    _artworkResolving = true;
+    (async () => {
+      try {
+        const asset = Asset.fromModule(
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          require('../../assets/images/icon.png'),
+        );
+        await asset.downloadAsync();
+        _artworkUri = asset.localUri ?? null;
+      } catch {
+        _artworkUri = null;
+      }
+      const uri = _artworkUri;
+      const cbs = _artworkCallbacks.splice(0);
+      _artworkResolving = false;
+      cbs.forEach((cb) => cb(uri));
+    })();
+  });
+}
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -326,6 +369,13 @@ function QuranAudioPlayer() {
   // declared later in the same component body.
   const onPlaybackStatusUpdateRef = useRef<((status: AudioStatus) => void) | null>(null);
 
+  // file:// URI of the bundled app icon, used as lock-screen artwork.
+  // Resolved once at mount via expo-asset; stays null until resolution completes.
+  // All setActiveForLockScreen and updateLockScreenMetadata calls read this ref
+  // so they always include the artwork URL (prevents Swift from clearing it when
+  // metadata is partially overwritten by updateLockScreenMetadata).
+  const artworkUriRef = useRef<string | null>(null);
+
   // ── Helpers ────────────────────────────────────────────────────────────────
 
   // Tears down the current player instance. All state is in refs so no deps needed.
@@ -368,7 +418,13 @@ function QuranAudioPlayer() {
       if (!mountedRef.current) return;
       setPlayerState({ mode: 'loading', surahId });
 
-      const player = createAudioPlayer({ uri }, { updateInterval: 250 });
+      // keepAudioSessionActive: true — prevents the iOS AVAudioSession from
+      // being deactivated when this player is paused or destroyed. This is
+      // critical during the bismillah → surah transition: the Al-Fatiha player
+      // is paused/removed and a new surah player is immediately created. Without
+      // this flag, pause() triggers deactivateSession(), which can kill the
+      // background audio session before the new player's play() reactivates it.
+      const player = createAudioPlayer({ uri }, { updateInterval: 250, keepAudioSessionActive: true });
       // Capture the generation at creation time. If playerGenerationRef.current has
       // advanced beyond this value when a status event fires, the event belongs to a
       // stale player (e.g. Al-Fatiha events queued in the JS bridge after its
@@ -412,8 +468,36 @@ function QuranAudioPlayer() {
       const surahName = SURAH_INDEX.find((s) => s.id === surahId)?.nameSimple ?? '';
       const reciterName = RECITERS.find((r) => r.id === reciterIdRef.current)?.name ?? '';
       try {
-        player.setActiveForLockScreen(true, { title: surahName, artist: reciterName });
+        // Register the lock screen player IMMEDIATELY — before any async work.
+        // Calling setActiveForLockScreen after an await (even a resolved Promise)
+        // creates an event-loop gap where the player may have been replaced or
+        // torn down, which would leave the lock screen never registered.
+        player.setActiveForLockScreen(
+          true,
+          {
+            title: surahName,
+            artist: reciterName,
+            artworkUrl: artworkUriRef.current ?? undefined, // use cached URI if already resolved
+          },
+        );
       } catch {}
+
+      // Resolve artwork URI and update lock screen metadata once available.
+      // This is a fire-and-forget update — lock screen is already registered above.
+      resolveArtworkUri().then((iconUri) => {
+        if (!mountedRef.current) return;
+        if (playerRef.current !== player) return; // player was replaced — skip stale update
+        artworkUriRef.current = iconUri;
+        if (iconUri) {
+          try {
+            player.updateLockScreenMetadata({
+              title: surahName,
+              artist: reciterName,
+              artworkUrl: iconUri,
+            });
+          } catch {}
+        }
+      }).catch(() => {});
     },
     [], // stable: uses onPlaybackStatusUpdateRef wrapper — no deps needed
   );
@@ -427,6 +511,15 @@ function QuranAudioPlayer() {
       shouldPlayInBackground: true,
       interruptionMode: 'duckOthers',
     }).catch(() => undefined);
+  }, []);
+
+  // Pre-warm the lock-screen artwork URI at mount.
+  // resolveArtworkUri() is idempotent (module-level cache) — safe to call here
+  // even though _layout.tsx may have already kicked off resolution.
+  useEffect(() => {
+    resolveArtworkUri().then((uri) => {
+      artworkUriRef.current = uri;
+    }).catch(() => {});
   }, []);
 
   // ── Cleanup ────────────────────────────────────────────────────────────────
@@ -752,7 +845,11 @@ function QuranAudioPlayer() {
 
           lastVerseKeyRef.current = verse.verseKey;
           setPlaybackVerseRef.current(verse.verseKey, verse.pageNumber);
-          // Update lock screen title to show current verse
+          // Update lock screen title to show current verse.
+          // IMPORTANT: updateLockScreenMetadata replaces player.metadata entirely
+          // in Swift. Always include artworkUrl here — omitting it causes Swift to
+          // set artworkUrl=nil, which clears the artwork from the lock screen on
+          // every verse transition.
           const parsed = parseVerseKey(verse.verseKey);
           if (parsed) {
             const reciterName = RECITERS.find((r) => r.id === reciterIdRef.current)?.name ?? '';
@@ -760,6 +857,7 @@ function QuranAudioPlayer() {
               playerRef.current?.updateLockScreenMetadata({
                 title: `${parsed.surahName}: ${parsed.verseNum}`,
                 artist: reciterName,
+                artworkUrl: artworkUriRef.current ?? undefined,
               });
             } catch {}
           }
@@ -1256,6 +1354,7 @@ function QuranAudioPlayer() {
               playerRef.current?.updateLockScreenMetadata({
                 title: `${parsed.surahName}: ${parsed.verseNum}`,
                 artist: reciterName,
+                artworkUrl: artworkUriRef.current ?? undefined,
               });
             } catch {}
           }

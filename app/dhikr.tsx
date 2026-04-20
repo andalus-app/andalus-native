@@ -19,10 +19,13 @@ import {
   dhikrKey,
   groupCount,
   type DhikrPost,
+  type Delpost,
   type GruppUndersida,
   type Grupp,
 } from '../data/dhikrRepository';
 import { searchDhikr } from '../services/wellbeingSearch';
+import ArabicText from '../components/ArabicText';
+import QCFVerseText from '../components/QCFVerseText';
 
 // Global stopper — ensures only one AudioPlayer plays at a time across the whole screen.
 // When a player starts, it registers its stop function here. Any subsequent play call
@@ -240,6 +243,59 @@ function AudioPlayer({ url, T, isDark }: { url: string; T: any; isDark: boolean 
   );
 }
 
+// ─── Repetition badge with rotating icon ─────────────────────────────────────
+function RepetitionBadge({ text, T, isDark }: { text: string; T: any; isDark: boolean }) {
+  const rotation = useRef(new Animated.Value(0)).current;
+  const rotDeg   = useRef(0);
+
+  useEffect(() => {
+    const run = () => {
+      Animated.sequence([
+        Animated.delay(5000),
+        Animated.timing(rotation, {
+          toValue: rotDeg.current + 180,
+          duration: 600,
+          useNativeDriver: true,
+        }),
+      ]).start(({ finished }) => {
+        if (finished) {
+          rotDeg.current += 180;
+          run();
+        }
+      });
+    };
+    run();
+    return () => rotation.stopAnimation();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const iconRotate = rotation.interpolate({
+    inputRange:  [0, 360],
+    outputRange: ['0deg', '360deg'],
+    extrapolate: 'extend',
+  });
+
+  return (
+    <View style={{ flexDirection: 'row', marginBottom: 10 }}>
+      <View style={{
+        flexDirection: 'row', alignItems: 'center', gap: 7,
+        backgroundColor: isDark ? 'rgba(36,100,93,0.32)' : 'rgba(36,100,93,0.14)',
+        borderWidth: 1,
+        borderColor: T.accent,
+        borderRadius: 20, paddingHorizontal: 14, paddingVertical: 7,
+      }}>
+        <Animated.View style={{ transform: [{ rotate: iconRotate }] }}>
+          <Svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke={T.accent} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+            <Path d="M1 4v6h6M23 20v-6h-6" /><Path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10M23 14l-4.64 4.36A9 9 0 0 1 3.51 15" />
+          </Svg>
+        </Animated.View>
+        <Text style={{ fontSize: 12, fontWeight: '700', color: T.accent }}>
+          {text}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
 // ─── Dhikr detail card ────────────────────────────────────────────────────────
 function DhikrCard({ d, T, isDark, favorites, onToggleFav }: {
   d: DhikrPost; T: any; isDark: boolean;
@@ -254,8 +310,16 @@ function DhikrCard({ d, T, isDark, favorites, onToggleFav }: {
 
   const share = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const text = [d.titel, d.arabisk_text, d.translitteration, d.svensk_text, d.kallhanvisning].filter(Boolean).join('\n\n');
-    Share.share({ title: d.titel, message: text });
+    let parts: string[];
+    if (d.delposter && d.delposter.length > 0) {
+      parts = [d.titel, d.lases_info, d.kallhanvisning].filter(Boolean) as string[];
+      for (const dp of d.delposter) {
+        parts.push(...[dp.titel, dp.arabisk_text, dp.translitteration, dp.svensk_text, dp.kallhanvisning].filter(Boolean) as string[]);
+      }
+    } else {
+      parts = [d.titel, d.arabisk_text, d.translitteration, d.svensk_text, d.kallhanvisning].filter(Boolean) as string[];
+    }
+    Share.share({ title: d.titel, message: parts.join('\n\n') });
   };
 
   // Chip above, text below — full width for content
@@ -279,7 +343,7 @@ function DhikrCard({ d, T, isDark, favorites, onToggleFav }: {
   return (
     <View style={{ marginBottom: 16 }}>
       {/* Title + actions */}
-      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginBottom: 12 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginBottom: d.lases_info ? 8 : 12 }}>
         <View style={{ flex: 1 }}>
           <Text style={{ fontSize: 17, fontWeight: '700', color: T.text, lineHeight: 24 }}>{d.titel}</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 5, flexWrap: 'wrap' }}>
@@ -304,36 +368,139 @@ function DhikrCard({ d, T, isDark, favorites, onToggleFav }: {
         </TouchableOpacity>
       </View>
 
+      {/* Repetition badge — shown above the card when lases_info is set */}
+      {!!d.lases_info && (
+        <RepetitionBadge text={d.lases_info} T={T} isDark={isDark} />
+      )}
+
       {/* Content box — all sections stacked */}
       <View style={{ backgroundColor: T.card, borderWidth: 1, borderColor: T.border, borderRadius: 16, overflow: 'hidden' }}>
-        {rows.map((row, i) => (
-          <View key={row}>
-            {i > 0 && <View style={{ height: 1, backgroundColor: dividerCol, marginHorizontal: 16 }} />}
-            {row === 'ara' && (
-              <ContentRow chip="عربي" chipAccent>
-                <Text style={{ fontSize: 22, lineHeight: 46, color: T.text, textAlign: 'right', writingDirection: 'rtl' }}>{d.arabisk_text}</Text>
-              </ContentRow>
-            )}
-            {row === 'tra' && (
-              <ContentRow chip="Uttal">
-                <Text style={{ fontSize: 14, lineHeight: 26, color: T.text }}>{d.translitteration}</Text>
-              </ContentRow>
-            )}
-            {row === 'swe' && (
-              <ContentRow chip="Svenska">
-                <Text style={{ fontSize: 14, lineHeight: 26, color: T.text, fontStyle: 'italic' }}>{d.svensk_text}</Text>
-              </ContentRow>
-            )}
-          </View>
-        ))}
-
-        {/* Source */}
-        {!!d.kallhanvisning && (
+        {d.delposter && d.delposter.length > 0 ? (
+          // ── Grouped rendering ──────────────────────────────────────────────────
           <>
-            <View style={{ height: 1, backgroundColor: dividerCol, marginHorizontal: 16 }} />
-            <ContentRow chip="Källa">
-              <Text style={{ fontSize: 12, color: isDark ? 'rgba(255,255,255,0.75)' : 'rgba(0,0,0,0.6)', lineHeight: 18 }}>{d.kallhanvisning}</Text>
-            </ContentRow>
+            {/* Parent source — general hadith context */}
+            {!!d.kallhanvisning && (
+              <>
+                {!!d.lases_info && <View style={{ height: 1, backgroundColor: dividerCol, marginHorizontal: 16 }} />}
+                <ContentRow chip="Källa">
+                  <Text style={{ fontSize: 12, color: isDark ? 'rgba(255,255,255,0.75)' : 'rgba(0,0,0,0.6)', lineHeight: 18 }}>{d.kallhanvisning}</Text>
+                </ContentRow>
+              </>
+            )}
+
+            {/* Each delposter as its own block */}
+            {d.delposter.map((dp: Delpost, di: number) => {
+              const dpRows = [
+                dp.arabisk_text     ? 'ara' : null,
+                dp.translitteration ? 'tra' : null,
+                dp.svensk_text      ? 'swe' : null,
+              ].filter(Boolean) as string[];
+              return (
+                <View key={di}>
+                  <View style={{ height: 1, backgroundColor: dividerCol, marginHorizontal: 16 }} />
+                  {/* Sub-title */}
+                  <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 }}>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: T.text }}>{dp.titel}</Text>
+                  </View>
+                  {/* Arabic, transliteration, swedish */}
+                  {dpRows.map((row, ri) => (
+                    <View key={row}>
+                      {ri > 0 && <View style={{ height: 1, backgroundColor: dividerCol, marginHorizontal: 16 }} />}
+                      {row === 'ara' && (
+                        <ContentRow chip="عربي" chipAccent>
+                          {dp.qcf_page && dp.qcf_glyphs
+                            ? <QCFVerseText
+                                page={dp.qcf_page}
+                                glyphs={dp.qcf_glyphs}
+                                showBismillah={dp.qcf_bismillah}
+                                fallbackText={dp.arabisk_text}
+                                color={T.text}
+                              />
+                            : <ArabicText style={{ fontSize: 22, lineHeight: 46, color: T.text, textAlign: 'right', writingDirection: 'rtl' }}>{dp.arabisk_text}</ArabicText>
+                          }
+                        </ContentRow>
+                      )}
+                      {row === 'tra' && (
+                        <ContentRow chip="Uttal">
+                          <Text style={{ fontSize: 14, lineHeight: 26, color: T.text }}>{dp.translitteration}</Text>
+                        </ContentRow>
+                      )}
+                      {row === 'swe' && (
+                        <ContentRow chip="Svenska">
+                          <Text style={{ fontSize: 14, lineHeight: 26, color: T.text, fontStyle: 'italic' }}>{dp.svensk_text}</Text>
+                        </ContentRow>
+                      )}
+                    </View>
+                  ))}
+                  {/* Per-delposter source */}
+                  {!!dp.kallhanvisning && (
+                    <>
+                      <View style={{ height: 1, backgroundColor: dividerCol, marginHorizontal: 16 }} />
+                      <ContentRow chip="Källa">
+                        <Text style={{ fontSize: 12, color: isDark ? 'rgba(255,255,255,0.75)' : 'rgba(0,0,0,0.6)', lineHeight: 18 }}>{dp.kallhanvisning}</Text>
+                      </ContentRow>
+                    </>
+                  )}
+                </View>
+              );
+            })}
+          </>
+        ) : (
+          // ── Normal rendering ────────────────────────────────────────────────────
+          <>
+            {rows.map((row, i) => (
+              <View key={row}>
+                {i > 0 && <View style={{ height: 1, backgroundColor: dividerCol, marginHorizontal: 16 }} />}
+                {row === 'ara' && (
+                  <ContentRow chip="عربي" chipAccent>
+                    {d.qcf_page && d.qcf_glyphs
+                      ? <QCFVerseText
+                          page={d.qcf_page}
+                          glyphs={d.qcf_glyphs}
+                          showBismillah={d.qcf_bismillah}
+                          fallbackText={d.arabisk_text}
+                          color={T.text}
+                        />
+                      : <ArabicText style={{ fontSize: 22, lineHeight: 46, color: T.text, textAlign: 'right', writingDirection: 'rtl' }}>{d.arabisk_text}</ArabicText>
+                    }
+                  </ContentRow>
+                )}
+                {row === 'tra' && (
+                  <ContentRow chip="Uttal">
+                    <Text style={{ fontSize: 14, lineHeight: 26, color: T.text }}>{d.translitteration}</Text>
+                  </ContentRow>
+                )}
+                {row === 'swe' && (
+                  <ContentRow chip="Svenska">
+                    <Text style={{ fontSize: 14, lineHeight: 26, color: T.text, fontStyle: 'italic' }}>{d.svensk_text}</Text>
+                  </ContentRow>
+                )}
+              </View>
+            ))}
+
+            {/* hadiths — structured hadith texts each with their own source chip */}
+            {!!d.hadiths && d.hadiths.length > 0 && d.hadiths.map((h, i) => (
+              <View key={i}>
+                <View style={{ height: 1, backgroundColor: dividerCol, marginHorizontal: 16 }} />
+                <ContentRow chip="Hadith">
+                  <Text style={{ fontSize: 13, lineHeight: 22, color: T.text }}>{h.text}</Text>
+                </ContentRow>
+                <View style={{ height: 1, backgroundColor: dividerCol, marginHorizontal: 16 }} />
+                <ContentRow chip="Källa">
+                  <Text style={{ fontSize: 12, color: isDark ? 'rgba(255,255,255,0.75)' : 'rgba(0,0,0,0.6)', lineHeight: 18 }}>{h.kalla}</Text>
+                </ContentRow>
+              </View>
+            ))}
+
+            {/* Source */}
+            {!!d.kallhanvisning && (
+              <>
+                <View style={{ height: 1, backgroundColor: dividerCol, marginHorizontal: 16 }} />
+                <ContentRow chip="Källa">
+                  <Text style={{ fontSize: 12, color: isDark ? 'rgba(255,255,255,0.75)' : 'rgba(0,0,0,0.6)', lineHeight: 18 }}>{d.kallhanvisning}</Text>
+                </ContentRow>
+              </>
+            )}
           </>
         )}
 
@@ -355,12 +522,11 @@ function AccordionSection({ us, isOpen, onToggle, onSelectDhikr, favorites, T, i
   onSelectDhikr: (d: DhikrPost, siblings: DhikrPost[]) => void;
   favorites: string[]; T: any; isDark: boolean;
 }) {
-  const hasFav   = us.dhikr_poster.some(d => favorites.includes(dhikrKey(d)));
-  const hasAudio = us.dhikr_poster.some(d => d.mp3_url);
-  const rowBg    = isDark ? 'rgba(255,255,255,0.025)' : T.accentGlow;
-  const badgeBg  = T.accentGlow;
-  const openBg   = T.accentGlow;
-
+  const hasFav    = us.dhikr_poster.some(d => favorites.includes(dhikrKey(d)));
+  const hasAudio  = us.dhikr_poster.some(d => d.mp3_url);
+  const rowBg     = isDark ? 'rgba(255,255,255,0.025)' : T.accentGlow;
+  const badgeBg   = T.accentGlow;
+  const openBg    = T.accentGlow;
   const openAnim = useRef(new Animated.Value(isOpen ? 1 : 0)).current;
 
   useEffect(() => {
@@ -370,8 +536,13 @@ function AccordionSection({ us, isOpen, onToggle, onSelectDhikr, favorites, T, i
       tension: 120, friction: 16,
     });
     anim.start();
-    return () => anim.stop();
-  }, [isOpen]);
+    return () => {
+      anim.stop();
+      // stopAnimation clears the internal tracking nodes created by interpolate(),
+      // preventing the "onAnimatedValueUpdate with no listeners" warning.
+      openAnim.stopAnimation();
+    };
+  }, [isOpen, openAnim]);
 
   const maxHeight  = openAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 2000] });
   const chevRotate = openAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '90deg'] });
@@ -417,7 +588,7 @@ function AccordionSection({ us, isOpen, onToggle, onSelectDhikr, favorites, T, i
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={{ fontSize: 13, fontWeight: '600', color: T.text, lineHeight: 20 }}>{d.titel}</Text>
                   {!!d.arabisk_text && (
-                    <Text style={{ fontSize: 13, color: T.textMuted, marginTop: 3, textAlign: 'right' }} numberOfLines={1}>{d.arabisk_text}</Text>
+                    <ArabicText style={{ fontSize: 13, color: T.textMuted, marginTop: 3, textAlign: 'right' }} numberOfLines={1}>{d.arabisk_text}</ArabicText>
                   )}
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 0 }}>
@@ -867,6 +1038,8 @@ export default function DhikrScreen() {
       if (hintTimerRef.current)     clearTimeout(hintTimerRef.current);
       if (pulseStopTimer.current)   clearTimeout(pulseStopTimer.current);
       if (autoDismissTimer.current) clearTimeout(autoDismissTimer.current);
+      hintOpacity.stopAnimation();
+      hintScale.stopAnimation();
       heartPulse.stopAnimation();
     };
   }, []);

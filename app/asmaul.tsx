@@ -4,7 +4,7 @@ import {
   StyleSheet, Animated, Easing, ActivityIndicator, PanResponder, Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter, Stack } from 'expo-router';
+import { useRouter, Stack, useLocalSearchParams } from 'expo-router';
 import BackButton from '../components/BackButton';
 import * as Haptics from 'expo-haptics';
 import Svg, { Path, Circle, Line, Rect } from 'react-native-svg';
@@ -898,6 +898,7 @@ export default function AsmaulHusnaScreen() {
   const { theme: T } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const params = useLocalSearchParams<{ nameNr?: string }>();
   const [viewMode,     setViewMode]     = useState<'grid' | 'list'>('grid');
   const [selected,     setSelected]     = useState<Name | null>(null);
   const [showLardomar, setShowLardomar] = useState(false);
@@ -915,6 +916,15 @@ export default function AsmaulHusnaScreen() {
       }
     });
   }, []);
+
+  // Deep-link from notification: open the specific name directly
+  useEffect(() => {
+    if (!params.nameNr) return;
+    const nr = parseInt(params.nameNr, 10);
+    if (isNaN(nr)) return;
+    const name = names.find(n => n.nr === nr);
+    if (name) setSelected(name);
+  }, [params.nameNr]);
 
   // Debounce search
   useEffect(() => {

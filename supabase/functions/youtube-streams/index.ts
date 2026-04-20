@@ -208,7 +208,60 @@
     };                                                                                         
   }
                                                                                                
-  // ─── Handler ──────────────────────────────────────────────────────────────────          
+  // ─── Push notifications ───────────────────────────────────────────────────────
+  //
+  // Called when a new live stream is first detected (videoId not seen before).
+  // Fetches all Expo push tokens from `push_tokens` and sends via Expo Push API.
+  // Batches in groups of 100 (Expo API limit). Errors are logged but never thrown —
+  // a push failure must never prevent the cache from being updated.
+
+  async function sendLivePushToAll(
+    sb: SupabaseClient,
+    videoId: string,
+    title: string,
+  ): Promise<void> {
+    const { data: rows, error } = await sb
+      .from("push_tokens")
+      .select("token")
+      .not("token", "is", null);
+
+    if (error || !rows || rows.length === 0) {
+      console.warn("[Push] no tokens found or error:", error?.message ?? "empty");
+      return;
+    }
+
+    const messages = rows.map((r: { token: string }) => ({
+      to:        r.token,
+      title:     "Direktsändning pågår nu",
+      body:      title,
+      sound:     "default",
+      priority:  "high",
+      channelId: "default", // Android notification channel
+      data:      { screen: "youtube_live", videoId },
+    }));
+
+    console.log(`[Push] Sending live push to ${messages.length} devices for "${title}"`);
+
+    // Expo Push API accepts max 100 messages per request
+    for (let i = 0; i < messages.length; i += 100) {
+      const batch = messages.slice(i, i + 100);
+      try {
+        const res = await fetch("https://exp.host/--/api/v2/push/send", {
+          method:  "POST",
+          headers: { "Content-Type": "application/json", "Accept": "application/json" },
+          body:    JSON.stringify(batch),
+        });
+        if (!res.ok) {
+          const body = await res.text().catch(() => "");
+          console.warn(`[Push] Expo API error ${res.status}:`, body.slice(0, 200));
+        }
+      } catch (e) {
+        console.warn("[Push] fetch error:", e);
+      }
+    }
+  }
+
+  // ─── Handler ──────────────────────────────────────────────────────────────────
 
   Deno.serve(async (req: Request): Promise<Response> => {                                      
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
@@ -311,7 +364,22 @@
         if (c) { mode = "hot"; hotVideoId = c.videoId; hotScheduledAt = c.scheduledAt; }       
       }                                                                                        
    
-      // ── 6. Persist cache ──────────────────────────────────────────────────────            
+      // ── 5b. Push notification for new live streams ──────────────────────────────
+      // Compare what was live BEFORE this refresh vs what is live NOW.
+      // If a new videoId appears in the live list, push to all registered devices.
+      // Deduplication: as long as the cache is valid, the old `row.live` contains
+      // the videoId → prevLiveIds.has() returns true → no re-send.
+      // Uses Expo Push API which delivers to devices even when the app is killed.
+      const prevLiveIds = new Set((row?.live ?? []).map((s: StreamItem) => s.videoId));
+      const newLiveFirst = newLive[0];
+      if (newLiveFirst && !prevLiveIds.has(newLiveFirst.videoId)) {
+        // New live stream — fire-and-forget, never let push failure block cache update
+        sendLivePushToAll(sb, newLiveFirst.videoId, newLiveFirst.title).catch((e) => {
+          console.warn("[Push] sendLivePushToAll failed:", e);
+        });
+      }
+
+      // ── 6. Persist cache ──────────────────────────────────────────────────────
       const cachedAt = new Date().toISOString();                                             
       const { error: upsertErr } = await sb.from("yt_stream_cache").upsert({                   
         channel_id:         channelId,                                                         

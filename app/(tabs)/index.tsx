@@ -79,27 +79,56 @@ function getTimeUntil(timeStr: string) {
 
 export default function PrayerTimesScreen() {
   const { theme: T, isDark } = useTheme();
-  const { dispatch: appDispatch } = useApp();
+  const app            = useApp();
+  const { dispatch: appDispatch } = app;
   const router       = useRouter();
   const { width }    = useWindowDimensions();
 
-  const [timings,         setTimings]         = useState<Record<string, string> | null>(null);
-  const [tomorrowTimings, setTomorrowTimings] = useState<Record<string, string> | null>(null);
-  const [hijri,           setHijri]           = useState<any>(null);
+  // Seed local state from AppContext data that is already loaded from cache at
+  // app startup. This ensures the countdown and prayer list render immediately
+  // on mount without waiting for the async restoreCache() call.
+  const _seedT   = app.prayerTimes   ?? null;
+  const _seedTom = app.tomorrowTimes ?? null;
+  function _seedCountdown(t: Record<string, string> | null, tom: Record<string, string> | null) {
+    if (!t) return { np: '', ap: '', cd: '' };
+    const np = getNextPrayer(t);
+    const ap = getActivePrayer(t);
+    const todayFajrMin = t['Fajr'] ? timeToMinutes(t['Fajr']) : -1;
+    const isPost = np === 'Fajr' && todayFajrMin >= 0 && todayFajrMin <= nowMinutes();
+    const time   = isPost && tom?.['Fajr'] ? tom['Fajr'] : (t[np] || '');
+    return { np, ap, cd: getTimeUntil(time) };
+  }
+  const _seed = _seedCountdown(_seedT, _seedTom);
+
+  // AppContext stores location.city as "${suburb}, ${city}" when a suburb exists
+  // (built in fetchAndSetTimes). Parse it here so the initial render already uses
+  // the correct split — suburb shown small, cityName shown large — with no jump.
+  function _splitCity(combined: string): { suburb: string; cityName: string } {
+    if (!combined) return { suburb: '', cityName: '' };
+    const idx = combined.indexOf(', ');
+    if (idx === -1) return { suburb: '', cityName: combined };
+    return { suburb: combined.slice(0, idx), cityName: combined.slice(idx + 2) };
+  }
+  const _initCity = _splitCity(app.location?.city || '');
+
+  const [timings,         setTimings]         = useState<Record<string, string> | null>(_seedT);
+  const [tomorrowTimings, setTomorrowTimings] = useState<Record<string, string> | null>(_seedTom);
+  const [hijri,           setHijri]           = useState<any>(app.hijriDate ?? null);
   const [tomorrowLabel,   setTomorrowLabel]   = useState('');
-  const [suburb,          setSuburb]          = useState('');
-  const [cityName,        setCityName]        = useState('');
-  const [country,         setCountry]         = useState('');
-  const [nextPrayer,      setNextPrayer]      = useState('');
-  const [activePrayer,    setActivePrayer]    = useState('');
-  const [countdown,       setCountdown]       = useState('');
-  const [loading,              setLoading]              = useState(false);
+  const [suburb,          setSuburb]          = useState(_initCity.suburb);
+  const [cityName,        setCityName]        = useState(_initCity.cityName);
+  const [country,         setCountry]         = useState(() => app.location?.country || '');
+  const [nextPrayer,      setNextPrayer]      = useState(_seed.np);
+  const [activePrayer,    setActivePrayer]    = useState(_seed.ap);
+  const [countdown,       setCountdown]       = useState(_seed.cd);
   const [refreshing,           setRefreshing]           = useState(false);
   const [showNoLocation,       setShowNoLocation]       = useState(false);
   const [noLocationGpsLoading, setNoLocationGpsLoading] = useState(false);
 
-  const timingsRef         = useRef<Record<string, string> | null>(null);
-  const tomorrowTimingsRef = useRef<Record<string, string> | null>(null);
+  // Refs must match the seeded initial state so the countdown interval that
+  // fires immediately on mount uses the correct data.
+  const timingsRef         = useRef<Record<string, string> | null>(_seedT);
+  const tomorrowTimingsRef = useRef<Record<string, string> | null>(_seedTom);
   // Date string (e.g. "Fri Apr 04 2026") when prayer data was last fetched.
   // Used to detect civil-day crossover while the interval is running.
   const loadedDateRef  = useRef<string>('');
@@ -147,6 +176,14 @@ export default function PrayerTimesScreen() {
       useNativeDriver: true,
     }).start();
   }, [refreshing]);
+
+  // If AppContext had data ready at mount time, start the countdown interval
+  // immediately so the timer ticks from the very first frame.
+  // loadPrayerTimes will call startCountdownInterval again once fresh data
+  // arrives; clearInterval inside it makes the restart safe.
+  useEffect(() => {
+    if (timingsRef.current) startCountdownInterval();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load once on mount + re-fetch when app returns from background
   useEffect(() => {
@@ -253,12 +290,23 @@ export default function PrayerTimesScreen() {
     } catch { return false; }
   }
 
-  const FETCH_COOLDOWN_MS = 60_000; // minimum 60 s between API attempts
+  // Prayer times change once per day; 10 min cooldown is plenty.
+  const FETCH_COOLDOWN_MS = 10 * 60_000;
+
+  // Haversine distance in metres between two GPS coordinates.
+  function gpsDistance(lat1: number, lng1: number, lat2: number, lng2: number) {
+    const R = 6_371_000;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) ** 2
+      + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
 
   async function loadPrayerTimes() {
     // Guard 1: skip if a fetch is already in flight
     if (reloadingRef.current) return;
-    // Guard 2: skip if last fetch attempt was less than 60 seconds ago
+    // Guard 2: skip if last fetch attempt was less than 10 minutes ago
     if (Date.now() - lastFetchRef.current < FETCH_COOLDOWN_MS) return;
     reloadingRef.current = true;
 
@@ -274,7 +322,6 @@ export default function PrayerTimesScreen() {
 
     if (!autoLocation && !locationRaw) {
       setShowNoLocation(true);
-      setLoading(false);
       reloadingRef.current = false;
       return;
     }
@@ -283,7 +330,6 @@ export default function PrayerTimesScreen() {
     let hasCached = false;
     try {
       hasCached = await restoreCache();
-      if (!hasCached && !timingsRef.current) setLoading(true);
 
       let lat: number, lng: number;
       let resolvedCity = '', resolvedCountry = '', resolvedSuburb = '';
@@ -299,32 +345,43 @@ export default function PrayerTimesScreen() {
         const { status } = await Location.getForegroundPermissionsAsync();
         if (status !== 'granted') {
           setShowNoLocation(true);
-          setLoading(false);
           reloadingRef.current = false;
           return;
         }
         const loc = await Location.getCurrentPositionAsync({});
         lat = loc.coords.latitude;
         lng = loc.coords.longitude;
-        try {
-          const geo = await nativeReverseGeocode(lat, lng);
-          resolvedCity    = geo.city;
-          resolvedSuburb  = geo.subLocality;
-          resolvedCountry = geo.country;
-          await AsyncStorage.setItem('andalus_location', JSON.stringify({
-            lat, lng,
-            city:        geo.city,
-            subLocality: geo.subLocality,
-            country:     geo.country,
-          })).catch(() => {});
-        } catch { /* geocoding failed — prayer fetch continues without city name */ }
+
+        // Skip reverse geocoding if we haven't moved more than 500 m —
+        // reuse the cached city/suburb/country to avoid unnecessary API calls.
+        const cachedLoc = locationRaw ? (() => { try { return JSON.parse(locationRaw); } catch { return null; } })() : null;
+        const movedFar = !cachedLoc
+          || gpsDistance(cachedLoc.lat, cachedLoc.lng, lat, lng) >= 500;
+
+        if (!movedFar && cachedLoc) {
+          resolvedCity    = cachedLoc.city        || '';
+          resolvedSuburb  = cachedLoc.subLocality || '';
+          resolvedCountry = cachedLoc.country     || '';
+        } else {
+          try {
+            const geo = await nativeReverseGeocode(lat, lng);
+            resolvedCity    = geo.city;
+            resolvedSuburb  = geo.subLocality;
+            resolvedCountry = geo.country;
+            await AsyncStorage.setItem('andalus_location', JSON.stringify({
+              lat, lng,
+              city:        geo.city,
+              subLocality: geo.subLocality,
+              country:     geo.country,
+            })).catch(() => {});
+          } catch { /* geocoding failed — prayer fetch continues without city name */ }
+        }
       }
 
       await fetchAndSetTimes(lat, lng, method, school, resolvedCity, resolvedCountry, resolvedSuburb);
     } catch { /* Network or GPS failure — silently keep whatever cache was loaded */ }
     lastFetchRef.current = Date.now();
     reloadingRef.current = false;
-    setLoading(false);
   }
 
   async function handleEmptyStateCitySelected(r: CityResult) {
@@ -508,12 +565,6 @@ export default function PrayerTimesScreen() {
       );
     }
   }
-
-  if (loading && !timings) return (
-    <View style={{ flex:1, alignItems:'center', justifyContent:'center', backgroundColor: T.bg }}>
-      <ActivityIndicator size="large" color={T.accent} />
-    </View>
-  );
 
   if (showNoLocation) return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>

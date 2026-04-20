@@ -4,9 +4,23 @@ import { supabase } from '../lib/supabase';
 
 // Lazy-load expo-notifications so a missing native module (e.g. in Expo Go or
 // before a native rebuild) never crashes the app — all functions degrade to no-ops.
+//
+// Silence the two expected Expo Go warnings that expo-notifications emits on
+// require() when running outside a development build. These are cosmetic — the
+// module loads and all scheduling APIs work correctly on physical devices.
+const _origWarn = console.warn.bind(console);
+console.warn = (...args: Parameters<typeof console.warn>) => {
+  const msg = typeof args[0] === 'string' ? args[0] : '';
+  if (
+    msg.includes('expo-notifications') &&
+    (msg.includes('Expo Go') || msg.includes('not fully supported'))
+  ) return;
+  _origWarn(...args);
+};
 let N: typeof import('expo-notifications') | null = null;
 try {
   N = require('expo-notifications');
+  console.warn = _origWarn; // restore immediately after require completes
   N!.setNotificationHandler({
     handleNotification: async () => ({
       shouldShowBanner: true,
@@ -17,6 +31,7 @@ try {
   });
 } catch {
   N = null;
+  console.warn = _origWarn; // restore even on failure
 }
 
 // ── Prayer names ─────────────────────────────────────────────────────────────
@@ -179,6 +194,92 @@ export async function cancelDhikrReminder(): Promise<void> {
   } catch {}
 }
 
+// ── Friday Last Hour (Jumu'ah) dua reminder ──────────────────────────────────
+// Fires 30 minutes before Maghrib on Fridays only.
+// Reminds the user of the blessed last hour of Jumu'ah when duas are accepted.
+// Uses DATE triggers (same as prayer + dhikr) so AppContext reschedules on each
+// prayer-times load — no separate startup sync needed.
+
+const FRIDAY_DUA_PREFIX = 'andalus-friday-dua-';
+
+const FRIDAY_DUA_MESSAGES: { title: string; body: string }[] = [
+  {
+    title: 'En stund då Allah svarar 🤲',
+    body:  "Profeten ﷺ sade: På fredag finns en stund då varje dua besvaras. Sök den nu – särskilt efter 'Asr.",
+  },
+  {
+    title: 'Missa inte denna timme',
+    body:  "Det finns en stund på fredag då ingen dua avslås. Lärda säger: den är i dagens sista timme. Gör din dua nu.",
+  },
+  {
+    title: 'Sista timmen av fredag',
+    body:  "Följ Sunnah – sök den välsignade stunden efter 'Asr. Be Allah om det goda, Han ger.",
+  },
+  {
+    title: 'En gåva varje fredag',
+    body:  'Varje vecka finns en stund då dua accepteras. Sitt kvar, minns Allah och be från hjärtat i denna sista timme.',
+  },
+];
+
+/** Schedules a notification 30 minutes before Maghrib for today and/or tomorrow
+ *  if that day is a Friday (getDay() === 5). Cancels any existing Friday dua
+ *  notifications before rescheduling to avoid duplicates. */
+export async function scheduleFridayDuaReminder(
+  todayMaghrib:    string,
+  tomorrowMaghrib: string | null,
+): Promise<void> {
+  if (!N) return;
+  try {
+    const { status } = await N.getPermissionsAsync();
+    if (status !== 'granted') return;
+
+    await cancelFridayDuaReminder();
+
+    const now      = new Date();
+    const today    = new Date();
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const scheduleFor = async (timeStr: string, base: Date) => {
+      const [hh, mm] = timeStr.split(':').map(Number);
+      if (isNaN(hh) || isNaN(mm)) return;
+      const totalMin = hh * 60 + mm - 30; // 30 min before Maghrib
+      if (totalMin < 0) return;
+      const fire = new Date(base);
+      fire.setHours(Math.floor(totalMin / 60), totalMin % 60, 0, 0);
+      if (fire <= now) return; // already past — skip
+
+      const msg     = FRIDAY_DUA_MESSAGES[Math.floor(Math.random() * FRIDAY_DUA_MESSAGES.length)];
+      const dateKey = base.toISOString().slice(0, 10); // YYYY-MM-DD — unique per Friday
+      await N!.scheduleNotificationAsync({
+        identifier: `${FRIDAY_DUA_PREFIX}${dateKey}`,
+        content: {
+          title: msg.title,
+          body:  msg.body,
+          sound: true,
+          data:  { screen: 'dhikr' },
+        },
+        trigger: {
+          type: N!.SchedulableTriggerInputTypes.DATE,
+          date: fire,
+        },
+      });
+    };
+
+    if (today.getDay() === 5)    await scheduleFor(todayMaghrib, today);
+    if (tomorrow.getDay() === 5 && tomorrowMaghrib) await scheduleFor(tomorrowMaghrib, tomorrow);
+  } catch {}
+}
+
+export async function cancelFridayDuaReminder(): Promise<void> {
+  if (!N) return;
+  try {
+    const all  = await N.getAllScheduledNotificationsAsync();
+    const ours = all.filter(n => n.identifier.startsWith(FRIDAY_DUA_PREFIX));
+    await Promise.all(ours.map(n => N!.cancelScheduledNotificationAsync(n.identifier)));
+  } catch {}
+}
+
 // ── Banner (Google Sheets) notifications ─────────────────────────────────────
 const BANNER_PREFIX = 'andalus-msg-';
 
@@ -198,7 +299,10 @@ export async function deliverBannerNotification(id: string, title: string): Prom
 }
 
 // ── YouTube live stream notification ─────────────────────────────────────────
-// Called at most once per unique videoId (deduplication is enforced by useYoutubeLive)
+// Called at most once per unique videoId (deduplication is enforced by useYoutubeLive).
+// NOTE: This fires an immediate local notification — it only works when the app is
+// in the foreground or recently backgrounded. For notifications when the app is
+// killed, the Supabase Edge Function must push via the Expo Push API.
 const LIVE_PREFIX = 'andalus-live-';
 
 export async function sendLiveNotification(videoId: string, title: string): Promise<void> {
@@ -207,10 +311,10 @@ export async function sendLiveNotification(videoId: string, title: string): Prom
     await N.scheduleNotificationAsync({
       identifier: LIVE_PREFIX + videoId,
       content: {
-        title: 'Direktsändning pågår',
+        title: 'Direktsändning pågår nu',
         body:  title,
         sound: true,
-        data:  { screen: 'youtube_live' },
+        data:  { screen: 'youtube_live', videoId },
       },
       trigger: {
         type:    N.SchedulableTriggerInputTypes.TIME_INTERVAL,
@@ -220,6 +324,86 @@ export async function sendLiveNotification(videoId: string, title: string): Prom
     });
   } catch {}
 }
+
+// ── YouTube upcoming stream notifications ─────────────────────────────────────
+// Uses DATE triggers — these are scheduled by the OS and fire even when the app
+// is killed or the screen is locked. Schedule on first detection of an upcoming
+// stream; cancel when the stream goes live or disappears.
+//
+// Two notifications per upcoming stream:
+//   1. 30-minute advance reminder   (identifier: andalus-upcoming-remind-{videoId})
+//   2. Notification at start time   (identifier: andalus-upcoming-start-{videoId})
+
+const UPCOMING_REMIND_PREFIX = 'andalus-upcoming-remind-';
+const UPCOMING_START_PREFIX  = 'andalus-upcoming-start-';
+
+export async function scheduleUpcomingStreamNotifications(
+  videoId: string,
+  title: string,
+  scheduledStart: string, // ISO 8601 date string from API
+): Promise<void> {
+  if (!N) return;
+  try {
+    const { status } = await N.getPermissionsAsync();
+    if (status !== 'granted') return;
+
+    const startMs  = new Date(scheduledStart).getTime();
+    const now      = Date.now();
+    const remindMs = startMs - 30 * 60_000;
+
+    // 30-minute advance reminder — only useful if the stream hasn't started yet.
+    // No start-time notification is scheduled here: the actual live notification
+    // is sent by the Edge Function (server push) or sendLiveNotification() when
+    // the stream transitions to live — not at the scheduled clock time.
+    if (remindMs > now) {
+      await N.scheduleNotificationAsync({
+        identifier: UPCOMING_REMIND_PREFIX + videoId,
+        content: {
+          title: 'Direktsändning om 30 min',
+          body:  title,
+          sound: true,
+          data:  { screen: 'youtube_live', videoId },
+        },
+        trigger: {
+          type: N.SchedulableTriggerInputTypes.DATE,
+          date: new Date(remindMs),
+        },
+      });
+      console.log('[YT] 30-min reminder scheduled for:', title, 'at', new Date(remindMs).toLocaleString('sv-SE'));
+    }
+  } catch (e) {
+    console.warn('[YT] scheduleUpcomingStreamNotifications error:', e);
+  }
+}
+
+export async function cancelUpcomingStreamNotifications(videoId: string): Promise<void> {
+  if (!N) return;
+  try {
+    await Promise.all([
+      N.cancelScheduledNotificationAsync(UPCOMING_REMIND_PREFIX + videoId).catch(() => {}),
+      N.cancelScheduledNotificationAsync(UPCOMING_START_PREFIX + videoId).catch(() => {}),
+    ]);
+  } catch {}
+}
+
+/** Cancels ALL scheduled upcoming-stream notifications regardless of videoId.
+ *  Used when the user disables the upcoming reminder toggle in settings. */
+export async function cancelAllUpcomingStreamNotifications(): Promise<void> {
+  if (!N) return;
+  try {
+    const all  = await N.getAllScheduledNotificationsAsync();
+    const ours = all.filter(n =>
+      n.identifier.startsWith(UPCOMING_REMIND_PREFIX) ||
+      n.identifier.startsWith(UPCOMING_START_PREFIX),
+    );
+    await Promise.all(ours.map(n => N!.cancelScheduledNotificationAsync(n.identifier)));
+  } catch {}
+}
+
+// AsyncStorage keys for live-stream notification preferences.
+// Exported so settings.tsx can read/write them and useYoutubeLive can respect them.
+export const LIVE_NOTIF_ENABLED_KEY      = 'liveNotificationEnabled';
+export const UPCOMING_REMIND_ENABLED_KEY = 'upcomingReminderEnabled';
 
 // ── Admin push token ─────────────────────────────────────────────────────────
 // Returns the Expo push token string, or null if unavailable.
@@ -251,7 +435,11 @@ export async function getExpoPushToken(): Promise<string | null> {
     console.log('[PushToken] token:', tokenData?.data);
     return tokenData?.data ?? null;
   } catch (e) {
-    console.warn('[PushToken] getExpoPushToken error:', e);
+    // Network errors are expected at startup (device just woke, no connectivity yet).
+    // All other unexpected errors are logged for diagnostics.
+    if (!isTransientPushError(e)) {
+      console.warn('[PushToken] getExpoPushToken error:', e);
+    }
     return null;
   }
 }
@@ -323,7 +511,9 @@ function isTransientPushError(e: unknown): boolean {
     msg.includes('no healthy upstream') ||
     msg.includes('connection timeout') ||
     msg.includes('upstream connect') ||
-    msg.includes('reset before headers')
+    msg.includes('reset before headers') ||
+    msg.includes('network request failed') ||
+    msg.includes('typeerror: network')
   );
 }
 
@@ -373,8 +563,23 @@ export async function savePushToken(attempt = 1): Promise<void> {
       setTimeout(() => { savePushToken(attempt + 1); }, delay);
       return;
     }
-    // Non-fatal permanent errors: simulator, permission denied, missing projectId.
-    console.warn('[savePushToken]', e);
+    // Silence known non-fatal conditions that are expected in certain environments:
+    // - "physical device" → running in simulator or Expo Go
+    // - "Permission not granted" → user declined notification permission
+    // - "Missing EAS projectId" → dev build without EAS config
+    // - "not fully supported" → Expo Go SDK 53+ limitation message
+    // - "Keychain access failed" → iOS keychain locked (device locked, simulator cold boot)
+    // - "getRegistrationInfoAsync" → same keychain failure surfaced from native layer
+    const msg = (e as Error)?.message ?? String(e);
+    const isSilent =
+      msg.includes('physical device') ||
+      msg.includes('Permission not granted') ||
+      msg.includes('Missing EAS projectId') ||
+      msg.includes('not fully supported') ||
+      msg.includes('Keychain access failed') ||
+      msg.includes('getRegistrationInfoAsync') ||
+      msg.includes('User interaction is not allowed');
+    if (!isSilent) console.warn('[savePushToken]', e);
   }
 }
 
@@ -437,6 +642,114 @@ export async function cancelZakatNotifications(): Promise<void> {
       N.cancelScheduledNotificationAsync(ZAKAT_EXACT_ID).catch(() => {}),
     ]);
   } catch {}
+}
+
+// ── Allah's 99 Names daily notification ──────────────────────────────────────
+// Fires every day at 12:00 local time with the next name in sequential rotation.
+// Schedules the next 30 days in advance so notifications fire even if the app
+// isn't opened daily. Re-synced on app startup and when the toggle changes.
+
+const ALLAH_NAMES_PREFIX      = 'andalus-allah-names-';
+const ALLAH_NAMES_ENABLED_KEY = 'allahNamesNotificationEnabled';
+
+// Fixed epoch — do not change. Makes the rotation deterministic across devices.
+const ALLAH_NAMES_EPOCH_MS = new Date('2025-01-01T00:00:00Z').getTime();
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const ALLAH_NAMES_DATA: { nr: number; arabic: string; transliteration: string; forklaring: string }[] =
+  require('../app/asmaul_husna.json');
+
+/** Returns the 0-based index into ALLAH_NAMES_DATA for a given day offset from today. */
+function allahNamesIndex(dayOffset = 0): number {
+  const daysSinceEpoch =
+    Math.floor((Date.now() - ALLAH_NAMES_EPOCH_MS) / 86_400_000) + dayOffset;
+  return ((daysSinceEpoch % ALLAH_NAMES_DATA.length) + ALLAH_NAMES_DATA.length) %
+    ALLAH_NAMES_DATA.length;
+}
+
+/** Schedules daily 12:00 notifications for the next 30 days.
+ *  Each notification carries the sequential name for that calendar day. */
+export async function scheduleAllahNamesNotifications(): Promise<void> {
+  if (!N) return;
+  try {
+    const { status } = await N.getPermissionsAsync();
+    if (status !== 'granted') return;
+
+    await cancelAllahNamesNotifications();
+
+    const now = new Date();
+
+    for (let dayOffset = 0; dayOffset < 30; dayOffset++) {
+      const fire = new Date(now);
+      fire.setDate(fire.getDate() + dayOffset);
+      fire.setHours(12, 0, 0, 0);
+      if (fire <= now) continue; // already past noon today — skip
+
+      const idx  = allahNamesIndex(dayOffset);
+      const name = ALLAH_NAMES_DATA[idx];
+      const dateKey = fire.toISOString().slice(0, 10); // YYYY-MM-DD
+
+      await N.scheduleNotificationAsync({
+        identifier: `${ALLAH_NAMES_PREFIX}${dateKey}`,
+        content: {
+          title: `${name.transliteration} - ${name.arabic}`,
+          body:  name.forklaring,
+          sound: true,
+          data:  { screen: 'asmaul', nameNr: name.nr },
+        },
+        trigger: {
+          type: N.SchedulableTriggerInputTypes.DATE,
+          date: fire,
+        },
+      });
+    }
+    console.log('[AllahNames] Scheduled 30-day notifications at 12:00');
+  } catch (e) {
+    console.warn('[AllahNames] scheduleAllahNamesNotifications error:', e);
+  }
+}
+
+export async function cancelAllahNamesNotifications(): Promise<void> {
+  if (!N) return;
+  try {
+    const all  = await N.getAllScheduledNotificationsAsync();
+    const ours = all.filter(n => n.identifier.startsWith(ALLAH_NAMES_PREFIX));
+    await Promise.all(ours.map(n => N!.cancelScheduledNotificationAsync(n.identifier)));
+  } catch {}
+}
+
+export async function enableAllahNamesReminder(): Promise<void> {
+  await AsyncStorage.setItem(ALLAH_NAMES_ENABLED_KEY, 'true');
+  await scheduleAllahNamesNotifications();
+}
+
+export async function disableAllahNamesReminder(): Promise<void> {
+  await AsyncStorage.setItem(ALLAH_NAMES_ENABLED_KEY, 'false');
+  await cancelAllahNamesNotifications();
+}
+
+/** Called once at app startup. Re-schedules if enabled but scheduler is stale
+ *  (e.g. after OS purge, reinstall, or 30-day window has rolled forward). */
+export async function syncAllahNamesReminderOnStartup(): Promise<void> {
+  try {
+    const onboarded = await AsyncStorage.getItem('islamnu_onboarding_completed');
+    if (!onboarded) return; // new user — wait until after onboarding
+
+    const enabled = await AsyncStorage.getItem(ALLAH_NAMES_ENABLED_KEY);
+    if (enabled === 'false') return; // explicitly disabled
+    // null (never set) = default on
+
+    if (!N) return;
+    const existing = await N.getAllScheduledNotificationsAsync();
+    const ours = existing.filter(n => n.identifier.startsWith(ALLAH_NAMES_PREFIX));
+
+    // Re-schedule if fewer than 7 days remain in the window
+    if (ours.length < 7) {
+      await scheduleAllahNamesNotifications();
+    }
+  } catch (e) {
+    console.warn('[AllahNames] syncAllahNamesReminderOnStartup error:', e);
+  }
 }
 
 export async function dismissBannerNotification(id: string): Promise<void> {

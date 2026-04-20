@@ -1274,7 +1274,7 @@ export default function ZakatScreen() {
         <BackButton onPress={() => router.back()} />
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, marginLeft: 12 }}>
           <SvgIcon name="zakat" size={24} color={T.accent} />
-          <Text style={{ fontSize: 22, fontWeight: '700', color: T.text }}>Zakat kalkylator</Text>
+          <Text style={{ fontSize: 22, fontWeight: '700', color: T.text }}>Zakatkalkylator</Text>
         </View>
       </View>
 

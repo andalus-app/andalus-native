@@ -18,6 +18,7 @@ import {
   enableZakatReminder,
   disableZakatReminder,
   syncZakatReminders,
+  updateZakatReminderTime,
 } from '../services/zakatReminderService';
 
 export type UseZakatReminderReturn = {
@@ -46,6 +47,8 @@ export type UseZakatReminderReturn = {
   updateAdvanceDays: (days: number) => Promise<void>;
   /** Update the Hijri day + month and reschedule. */
   updateHijriDate: (day: number, month: number, monthName: string) => Promise<void>;
+  /** Update the time of day for both notifications and reschedule. */
+  updateReminderTime: (hour: number, minute: number) => Promise<void>;
 };
 
 export function useZakatReminder(): UseZakatReminderReturn {
@@ -145,5 +148,13 @@ export function useZakatReminder(): UseZakatReminderReturn {
     await syncZakatReminders();
   }, []);
 
-  return { settings, loading, setupError, reload, enable, disable, updateAdvanceDays, updateHijriDate };
+  const updateReminderTime = useCallback(async (hour: number, minute: number) => {
+    setSettings(prev => {
+      if (!prev) return prev;
+      return { ...prev, reminderTimeHour: hour, reminderTimeMinute: minute };
+    });
+    await updateZakatReminderTime(hour, minute);
+  }, []);
+
+  return { settings, loading, setupError, reload, enable, disable, updateAdvanceDays, updateHijriDate, updateReminderTime };
 }

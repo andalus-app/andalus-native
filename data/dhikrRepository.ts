@@ -32,6 +32,17 @@ type RawWellbeingMeta = {
   source_context: { kategori: string; undersida: string };
 };
 
+type RawDelpost = {
+  titel: string;
+  arabisk_text: string;
+  translitteration: string;
+  svensk_text: string;
+  kallhanvisning: string;
+  qcf_page?:      number;
+  qcf_glyphs?:    string;
+  qcf_bismillah?: boolean;
+};
+
 type RawDhikrPost = {
   titel: string;
   url?: string;
@@ -42,6 +53,14 @@ type RawDhikrPost = {
   mp3_url: string;
   wellbeing_metadata: RawWellbeingMeta;
   source_integrity?: { original_post_index: number; source_url_present: boolean };
+  lases_info?: string;
+  hadiths?: { text: string; kalla: string }[];
+  delposter?: RawDelpost[];
+  presentation_type?: string;
+  display_fields_from?: string;
+  qcf_page?:      number;
+  qcf_glyphs?:    string;
+  qcf_bismillah?: boolean;
 };
 
 type RawUndersida = {
@@ -116,6 +135,17 @@ export type WellbeingMetadata = {
   wellbeing_description?: string;
 };
 
+export type Delpost = {
+  titel: string;
+  arabisk_text: string;
+  translitteration: string;
+  svensk_text: string;
+  kallhanvisning: string;
+  qcf_page?:      number;
+  qcf_glyphs?:    string;
+  qcf_bismillah?: boolean;
+};
+
 export type DhikrPost = {
   titel: string;
   url?: string;
@@ -129,6 +159,14 @@ export type DhikrPost = {
   _kategori: string;
   // Wellbeing metadata (from lossless JSON)
   _wellbeing?: WellbeingMetadata;
+  // Enriched fields
+  lases_info?: string;
+  hadiths?: { text: string; kalla: string }[];
+  delposter?: Delpost[];
+  // QCF V2 Mushaf font rendering (optional — present for Quranic verses)
+  qcf_page?:      number;
+  qcf_glyphs?:    string;
+  qcf_bismillah?: boolean;
 };
 
 export type Undersida = {
@@ -205,6 +243,21 @@ export const KATEGORIER: Kategori[] = data.kategorier.map((rawCat) => ({
               wellbeing_description: rawPost.wellbeing_metadata.wellbeing_description,
             }
           : undefined,
+        lases_info: rawPost.lases_info,
+        hadiths: rawPost.hadiths,
+        delposter: rawPost.delposter?.map(dp => ({
+          titel:           dp.titel,
+          arabisk_text:    dp.arabisk_text,
+          translitteration: dp.translitteration,
+          svensk_text:     dp.svensk_text,
+          kallhanvisning:  dp.kallhanvisning,
+          qcf_page:        dp.qcf_page,
+          qcf_glyphs:      dp.qcf_glyphs,
+          qcf_bismillah:   dp.qcf_bismillah,
+        })),
+        qcf_page:      rawPost.qcf_page,
+        qcf_glyphs:    rawPost.qcf_glyphs,
+        qcf_bismillah: rawPost.qcf_bismillah,
       };
       return post;
     }),

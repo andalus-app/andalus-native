@@ -215,6 +215,21 @@ export async function syncZakatReminders(): Promise<void> {
   }
 }
 
+/** Update the time of day for both notifications and reschedule. */
+export async function updateZakatReminderTime(
+  hour: number,
+  minute: number,
+): Promise<void> {
+  const settings = await loadZakatReminderSettings();
+  if (!settings) return;
+  await saveZakatReminderSettings({
+    ...settings,
+    reminderTimeHour:   hour,
+    reminderTimeMinute: minute,
+  });
+  if (settings.enabled) await syncZakatReminders();
+}
+
 /**
  * Safe startup wrapper. Skips gracefully if:
  *   - reminder is disabled

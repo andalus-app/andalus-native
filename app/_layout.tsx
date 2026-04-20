@@ -2,8 +2,9 @@ import { Stack, useRouter } from 'expo-router';
 import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
 import * as NativeSplash from 'expo-splash-screen';
 import { useCallback, useEffect, useState } from 'react';
-import { Animated, View, StyleSheet } from 'react-native';
+import { Animated, View, StyleSheet, AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { setAudioModeAsync } from 'expo-audio';
 import { ThemeProvider, useTheme } from '../context/ThemeContext';
 import { AppProvider, useApp } from '../context/AppContext';
 import { NotificationProvider } from '../context/NotificationContext';
@@ -11,17 +12,28 @@ import { BannerProvider } from '../context/BannerContext';
 import { BookingNotifProvider } from '../context/BookingNotifContext';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { initStorage } from '../services/storage';
-import { syncKahfReminderOnStartup, savePushToken } from '../services/notifications';
+import { syncKahfReminderOnStartup, savePushToken, syncAllahNamesReminderOnStartup } from '../services/notifications';
 import { syncZakatRemindersOnStartup } from '../services/zakatReminderService';
 import '../services/quranLastPage'; // side-effect: pre-warms last Quran page font + data at startup
 import CustomSplashScreen from '../components/SplashScreen';
 import { YoutubePlayerProvider } from '../context/YoutubePlayerContext';
 import YoutubeBackgroundPlayer from '../components/YoutubeBackgroundPlayer';
 import OnboardingFlow, { ONBOARDING_COMPLETED_KEY } from '../components/OnboardingFlow';
+import { Asset } from 'expo-asset';
 
 // Keep the native iOS launch screen visible until we explicitly call hideAsync()
 // inside CustomSplashScreen (triggered by isReady=true).
 NativeSplash.preventAutoHideAsync();
+
+// Pre-warm the app icon asset at launch so QuranAudioPlayer's artworkUriRef is
+// populated before the user ever opens the Quran screen. This is a fire-and-forget
+// side-effect — the same module-level cache in QuranAudioPlayer is populated here.
+// No await needed; QuranAudioPlayer's own useEffect enqueues itself on the same
+// promise and picks up the result when it resolves.
+Asset.fromModule(
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  require('../assets/images/icon.png'),
+).downloadAsync().catch(() => {});
 
 // ── Inner app content ─────────────────────────────────────────────────────────
 
@@ -92,11 +104,20 @@ function AppContent({ onFontsReady }: { onFontsReady: () => void }) {
             if (raw) {
               const kd = JSON.parse(raw) as {
                 currentDay: number;
-                dayRanges: { dayNumber: number; startPage: number }[];
+                dayRanges: {
+                  dayNumber:   number;
+                  startPage:   number;
+                  startSurahId?: number;
+                  startAyah?:    number;
+                }[];
               };
               const range = kd.dayRanges.find(r => r.dayNumber === kd.currentDay);
               if (range?.startPage) {
-                router.push(`/quran?page=${range.startPage}` as any);
+                const params: string[] = [`page=${range.startPage}`];
+                if (range.startSurahId && range.startAyah) {
+                  params.push(`verseKey=${range.startSurahId}:${range.startAyah}`);
+                }
+                router.push(`/quran?${params.join('&')}` as any);
                 return;
               }
             }
@@ -107,6 +128,10 @@ function AppContent({ onFontsReady }: { onFontsReady: () => void }) {
       } else if (data?.screen === 'zakatResult') {
         // Zakat-påminnelse — navigera direkt till resultatsidan i Zakat-kalkylatorn.
         router.push('/zakat?step=result' as any);
+      } else if (data?.screen === 'asmaul') {
+        // Allahs namn-påminnelse — öppna Asmaul Husna-sidan med det aktuella namnet.
+        const nameNr = data.nameNr ? `?nameNr=${data.nameNr}` : '';
+        router.push(`/asmaul${nameNr}` as any);
       } else if (data?.screen === 'dhikr') {
         // Dhikr-påminnelse — öppna Dhikr-sidan direkt.
         router.push('/dhikr' as any);
@@ -123,12 +148,14 @@ function AppContent({ onFontsReady }: { onFontsReady: () => void }) {
 
     // Cold-start: check if the app was launched by tapping a notification.
     // Guard against replaying stale responses from a previous session — only
-    // handle responses where the notification arrived within the last 60 seconds.
+    // handle responses where the notification arrived within the last 5 minutes.
+    // 300 s covers lock-screen taps where the user sees the notification, puts
+    // the phone down, and taps a minute or two later (60 s was too strict).
     N.getLastNotificationResponseAsync()
       .then(response => {
         if (!response) return;
         const ageSeconds = Date.now() / 1000 - response.notification.date;
-        if (ageSeconds < 60) handleResponse(response);
+        if (ageSeconds < 300) handleResponse(response);
       })
       .catch(() => {});
 
@@ -143,13 +170,18 @@ function AppContent({ onFontsReady }: { onFontsReady: () => void }) {
   return (
     <View style={{ flex: 1 }}>
       <Stack
-        screenOptions={{
+        screenOptions={({ route }) => ({
           headerShown: false,
           gestureEnabled: true,
           gestureDirection: 'horizontal',
-          animation: 'slide_from_right',
+          // _dir param is injected by the custom tab bar to control slide direction.
+          // 'left' → tab is to the left of the current one → slide in from left.
+          // Anything else (or absent) → default slide from right.
+          animation: (route.params as Record<string, string> | undefined)?._dir === 'left'
+            ? 'slide_from_left'
+            : 'slide_from_right',
           fullScreenGestureEnabled: true,
-        }}
+        })}
       >
         {/* Ruqyah sub-app: edge-only swipe back — full-screen swipe disabled */}
         <Stack.Screen name="ruqyah" options={{ fullScreenGestureEnabled: false }} />
@@ -173,6 +205,9 @@ function AppContent({ onFontsReady }: { onFontsReady: () => void }) {
             // Schedule Kahf reminder immediately now that permission may have been granted.
             // syncKahfReminderOnStartup is a no-op if permission wasn't granted.
             syncKahfReminderOnStartup();
+            // Register push token immediately after onboarding — the user may have
+            // just granted notification permission for the first time.
+            savePushToken();
           }}
           onNotificationsGranted={() => {
             // Activate dhikr reminder in live AppContext state so scheduling
@@ -198,16 +233,52 @@ export default function RootLayout() {
   const [fontsReady,   setFontsReady]   = useState(false);
   const [showSplash,   setShowSplash]   = useState(true);
 
+  // Configure the global audio session at startup — before any screen mounts.
+  // This ensures AudioModule.shouldPlayInBackground = true from the very first
+  // render, so OnAppEntersBackground never calls pauseAllPlayers() even if the
+  // QuranAudioPlayer component hasn't mounted yet.
+  // Category: .playback (playsInSilentMode:true + allowsRecording:false)
+  // → required for iOS background audio (UIBackgroundModes:audio in Info.plist).
+  useEffect(() => {
+    setAudioModeAsync({
+      playsInSilentMode: true,
+      shouldPlayInBackground: true,
+      interruptionMode: 'duckOthers',
+      allowsRecording: false,
+    }).catch(() => undefined);
+  }, []);
+
   useEffect(() => {
     initStorage().then(async () => {
       setStorageReady(true);
       syncKahfReminderOnStartup();
       syncZakatRemindersOnStartup();
+      syncAllahNamesReminderOnStartup();
       // Only attempt token registration if onboarding is already completed —
       // prevents the iOS notification permission dialog from appearing before
       // the onboarding flow has had a chance to ask for it properly.
       const onboarded = await AsyncStorage.getItem('islamnu_onboarding_completed');
-      if (onboarded) savePushToken();
+
+      if (onboarded) {
+        // iOS Keychain (required by expo-notifications) is only accessible when
+        // the app is in the foreground and the device is unlocked. Calling
+        // getExpoPushTokenAsync() while launched in the background (silent push,
+        // background fetch) causes "Keychain access failed: User interaction is
+        // not allowed" warnings from the native layer.
+        // Fix: only call savePushToken() when the app is already active; otherwise
+        // defer until the next time it comes to the foreground.
+        if (AppState.currentState === 'active') {
+          savePushToken();
+        } else {
+          const sub = AppState.addEventListener('change', (state) => {
+            if (state === 'active') {
+              sub.remove();
+
+              savePushToken();
+            }
+          });
+        }
+      }
     });
   }, []);
 

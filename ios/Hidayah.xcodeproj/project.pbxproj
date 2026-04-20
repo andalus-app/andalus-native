@@ -64,7 +64,7 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		DC96A8D02F8B6D00003994AE /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+		DC96A8D02F8B6D00003994AE /* Exceptions for "HidayahWidget" folder in "HidayahWidgetExtension" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
@@ -74,7 +74,18 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		DC96A8AF2F8B6BCF003994AE /* HidayahWidget */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (DC96A8D02F8B6D00003994AE /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = HidayahWidget; sourceTree = "<group>"; };
+		DC96A8AF2F8B6BCF003994AE /* HidayahWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				DC96A8D02F8B6D00003994AE /* Exceptions for "HidayahWidget" folder in "HidayahWidgetExtension" target */,
+			);
+			explicitFileTypes = {
+			};
+			explicitFolders = (
+			);
+			path = HidayahWidget;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */

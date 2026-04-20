@@ -15,20 +15,23 @@ export type HijriDate = {
   year: number;
 };
 
-/** Standard English transliterations for all 12 Hijri months. */
+/**
+ * English transliterations matching AlAdhan API's h.month.en field exactly.
+ * Used as fallback when the API response is unavailable, and in the date picker UI.
+ */
 export const HIJRI_MONTH_NAMES: Record<number, string> = {
   1:  'Muharram',
   2:  'Safar',
-  3:  'Rabi al-Awwal',
-  4:  'Rabi al-Thani',
-  5:  'Jumada al-Awwal',
-  6:  'Jumada al-Thani',
+  3:  "Rabi' al-awwal",
+  4:  "Rabi' al-akhir",
+  5:  'Jumada al-ula',
+  6:  'Jumada al-akhira',
   7:  'Rajab',
-  8:  'Shaban',
+  8:  "Sha'ban",
   9:  'Ramadan',
   10: 'Shawwal',
-  11: 'Dhul-Qadah',
-  12: 'Dhul-Hijjah',
+  11: "Dhu al-Qa'dah",
+  12: 'Dhu al-Hijjah',
 };
 
 /** Convert a Gregorian date (DD-MM-YYYY string) to a HijriDate. */
@@ -41,10 +44,13 @@ export async function gregorianToHijri(
   const json = await res.json();
   const h = json?.data?.hijri;
   if (!h) throw new Error('AlAdhan gToH: unexpected response shape');
+  const monthNum = parseInt(h.month.number, 10);
   return {
     day:       parseInt(h.day, 10),
-    month:     parseInt(h.month.number, 10),
-    monthName: HIJRI_MONTH_NAMES[parseInt(h.month.number, 10)] ?? h.month.en,
+    month:     monthNum,
+    // Prefer the API's own transliteration — it is the authoritative source
+    // and is already in sync with what the user sees in AlAdhan prayer times.
+    monthName: (h.month.en as string) || HIJRI_MONTH_NAMES[monthNum] || '',
     year:      parseInt(h.year, 10),
   };
 }
@@ -68,7 +74,11 @@ export async function hijriToGregorian(
   year: number,
   signal?: AbortSignal,
 ): Promise<Date> {
-  const res = await fetch(`${ALADHAN_BASE}/hToG/${day}/${month}/${year}`, { signal });
+  // AlAdhan /hToG expects ?date=DD-MM-YYYY (zero-padded Hijri components).
+  const dd = String(day).padStart(2, '0');
+  const mm = String(month).padStart(2, '0');
+  const yyyy = String(year);
+  const res = await fetch(`${ALADHAN_BASE}/hToG?date=${dd}-${mm}-${yyyy}`, { signal });
   if (!res.ok) throw new Error(`AlAdhan hToG HTTP ${res.status}`);
   const json = await res.json();
   const g = json?.data?.gregorian;

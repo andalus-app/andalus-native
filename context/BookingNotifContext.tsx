@@ -293,10 +293,7 @@ export function BookingNotifProvider({ children }: { children: React.ReactNode }
         if (status !== 'granted') return;
       }
       const token = await getExpoPushToken();
-      if (!token) {
-        console.warn('[PushToken] no token returned — skipping upsert');
-        return;
-      }
+      if (!token) return; // network unavailable or permission missing — silent, savePushToken retries
       // Read announcement notification preference from saved settings
       let announcementNotif = true;
       try {

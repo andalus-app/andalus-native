@@ -8,12 +8,18 @@ import React, {
 } from 'react';
 import { setAudioModeAsync } from 'expo-audio';
 
+export type InlineFrame = { top: number; left: number; width: number; height: number };
+
 type YoutubePlayerContextValue = {
   videoId: string | null;
   isPlaying: boolean;
   play: (videoId: string) => void;
   pause: () => void;
   stop: () => void;
+  // When non-null: the single WebView is visible at these screen coordinates (inline mode).
+  // When null:     the single WebView is off-screen (background audio mode or stopped).
+  inlineFrame: InlineFrame | null;
+  setInlineFrame: (frame: InlineFrame | null) => void;
 };
 
 const YoutubePlayerContext = createContext<YoutubePlayerContextValue | null>(null);
@@ -28,8 +34,13 @@ export function pauseYoutubePlayer(): void {
 }
 
 export function YoutubePlayerProvider({ children }: { children: React.ReactNode }) {
-  const [videoId, setVideoId]     = useState<string | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [videoId, setVideoId]         = useState<string | null>(null);
+  const [isPlaying, setIsPlaying]     = useState(false);
+  const [inlineFrame, setInlineFrameState] = useState<InlineFrame | null>(null);
+
+  const setInlineFrame = useCallback((frame: InlineFrame | null) => {
+    setInlineFrameState(frame);
+  }, []);
 
   const play = useCallback((id: string) => {
     // Configure and activate AVAudioSession BEFORE the WebView loads so iOS
@@ -44,8 +55,14 @@ export function YoutubePlayerProvider({ children }: { children: React.ReactNode 
     setVideoId(id);
     setIsPlaying(true);
   }, []);
+
   const pause = useCallback(() => setIsPlaying(false), []);
-  const stop  = useCallback(() => { setVideoId(null); setIsPlaying(false); }, []);
+
+  const stop = useCallback(() => {
+    setVideoId(null);
+    setIsPlaying(false);
+    setInlineFrameState(null);
+  }, []);
 
   // Register the stable pause fn for module-level callers.
   useEffect(() => {
@@ -54,8 +71,8 @@ export function YoutubePlayerProvider({ children }: { children: React.ReactNode 
   }, [pause]);
 
   const value = useMemo<YoutubePlayerContextValue>(
-    () => ({ videoId, isPlaying, play, pause, stop }),
-    [videoId, isPlaying, play, pause, stop],
+    () => ({ videoId, isPlaying, play, pause, stop, inlineFrame, setInlineFrame }),
+    [videoId, isPlaying, play, pause, stop, inlineFrame, setInlineFrame],
   );
 
   return (

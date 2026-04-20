@@ -13,14 +13,11 @@
       "bundleIdentifier": "com.anonymous.Hidayah",
       "entitlements": {
         "com.apple.security.application-groups": [
-          "group.com.anonymous.Hidayah",
           "group.com.anonymous.Hidayah"
         ]
       },
       "infoPlist": {
         "UIBackgroundModes": [
-          "audio",
-          "location",
           "audio",
           "location"
         ],

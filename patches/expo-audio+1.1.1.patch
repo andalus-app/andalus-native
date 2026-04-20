@@ -1,0 +1,29 @@
+diff --git a/node_modules/expo-audio/.DS_Store b/node_modules/expo-audio/.DS_Store
+new file mode 100644
+index 0000000..bc5503a
+Binary files /dev/null and b/node_modules/expo-audio/.DS_Store differ
+diff --git a/node_modules/expo-audio/ios/MediaController.swift b/node_modules/expo-audio/ios/MediaController.swift
+index 2dd3fb2..2fda4c9 100644
+--- a/node_modules/expo-audio/ios/MediaController.swift
++++ b/node_modules/expo-audio/ios/MediaController.swift
+@@ -110,6 +110,20 @@ class MediaController {
+   }
+ 
+   private func loadArtworkFromURL(url: URL, completion: @escaping (MPMediaItemArtwork?) -> Void) {
++    // URLSession.shared does not support file:// URLs — use Data(contentsOf:) for bundled assets.
++    if url.isFileURL {
++      DispatchQueue.global(qos: .userInitiated).async {
++        guard let data = try? Data(contentsOf: url),
++              let image = UIImage(data: data) else {
++          DispatchQueue.main.async { completion(nil) }
++          return
++        }
++        let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
++        DispatchQueue.main.async { completion(artwork) }
++      }
++      return
++    }
++
+     URLSession.shared.dataTask(with: url) { data, _, error in
+       if error != nil {
+         completion(nil)

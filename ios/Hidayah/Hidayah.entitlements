@@ -7,7 +7,6 @@
     <key>com.apple.security.application-groups</key>
     <array>
       <string>group.com.anonymous.Hidayah</string>
-      <string>group.com.anonymous.Hidayah</string>
     </array>
   </dict>
 </plist>

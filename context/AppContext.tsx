@@ -4,7 +4,7 @@ import * as Location from 'expo-location';
 import { Platform } from 'react-native';
 import { fetchPrayerTimes, fetchTomorrowPrayerTimes, calcMidnight, reverseGeocode } from '../services/prayerApi';
 import { buildYearlyCache } from '../services/monthlyCache';
-import { schedulePrayerNotifications, cancelPrayerNotifications, scheduleDhikrReminder, cancelDhikrReminder } from '../services/notifications';
+import { schedulePrayerNotifications, cancelPrayerNotifications, scheduleDhikrReminder, cancelDhikrReminder, scheduleFridayDuaReminder, cancelFridayDuaReminder } from '../services/notifications';
 import { updateWidgetData } from '../modules/WidgetData';
 
 // ── Samma CALC_METHODS som PWA (method=3 = Muslim World League) ──
@@ -34,7 +34,7 @@ function getTodayStr() {
 }
 
 type LocationType = { latitude: number; longitude: number; city: string; country: string } | null;
-type Settings = { calculationMethod: number; school: number; notifications: boolean; announcementNotifications: boolean; autoLocation: boolean; dhikrReminder: boolean };
+type Settings = { calculationMethod: number; school: number; notifications: boolean; announcementNotifications: boolean; autoLocation: boolean; dhikrReminder: boolean; fridayDuaReminder: boolean };
 type Timings  = Record<string, string> | null;
 
 type State = {
@@ -54,6 +54,7 @@ const DEFAULT_SETTINGS: Settings = {
   announcementNotifications: true,
   autoLocation:             true,
   dhikrReminder:            false,
+  fridayDuaReminder:        true,
 };
 
 const initialState: State = {
@@ -289,7 +290,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         state.tomorrowTimes?.Maghrib ?? null,
       ).catch(() => {});
     }
-  }, [state.prayerTimes, state.tomorrowTimes, state.settings.notifications, state.settings.dhikrReminder, state.location?.city]); // eslint-disable-line
+    // Friday Last Hour (Jumu'ah) dua reminder: 30 min before Maghrib on Fridays only
+    if (!state.settings.fridayDuaReminder) {
+      cancelFridayDuaReminder().catch(() => {});
+    } else if (state.prayerTimes.Maghrib) {
+      scheduleFridayDuaReminder(
+        state.prayerTimes.Maghrib,
+        state.tomorrowTimes?.Maghrib ?? null,
+      ).catch(() => {});
+    }
+  }, [state.prayerTimes, state.tomorrowTimes, state.settings.notifications, state.settings.dhikrReminder, state.settings.fridayDuaReminder, state.location?.city]); // eslint-disable-line
 
   const value = useMemo(() => ({ ...state, dispatch, refreshPrayers, refreshLocation }), [state]); // eslint-disable-line
 
