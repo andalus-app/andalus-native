@@ -630,14 +630,27 @@ export default function PrayerTimesScreen() {
         <Text style={{ fontSize:12, color: T.textMuted, textAlign:'center' }}>
           Du följer bönetiderna i
         </Text>
-        {suburb ? (
-          <Text style={{ fontSize:13, color: T.textMuted, textAlign:'center', marginTop:4 }}>
-            {suburb}
-          </Text>
-        ) : null}
-        <Text style={{ fontSize:24, fontWeight:'bold', color: T.text, textAlign:'center', marginTop:2 }}>
-          {cityName || suburb}
-        </Text>
+        {(() => {
+          // suburb may be empty if cache was saved before split logic existed —
+          // in that case cityName holds the full "Spånga, Stockholm" string.
+          // Always derive the display pair so suburb shows small on its own line.
+          const raw = suburb && cityName
+            ? `${suburb}, ${cityName}`
+            : (cityName || suburb);
+          const split = _splitCity(raw);
+          return (
+            <>
+              {split.suburb ? (
+                <Text style={{ fontSize:13, color: T.textMuted, textAlign:'center', marginTop:4 }}>
+                  {split.suburb}
+                </Text>
+              ) : null}
+              <Text style={{ fontSize:24, fontWeight:'bold', color: T.text, textAlign:'center', marginTop:2 }}>
+                {split.cityName || split.suburb}
+              </Text>
+            </>
+          );
+        })()}
       </View>
 
       {/* ── Countdown ── */}
