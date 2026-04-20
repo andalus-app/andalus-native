@@ -6,7 +6,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter, Stack } from 'expo-router';
+import { useRouter, Stack, useLocalSearchParams } from 'expo-router';
 import BackButton from '../components/BackButton';
 import Svg, { Path, Rect, Polygon } from 'react-native-svg';
 import { useTheme } from '../context/ThemeContext';
@@ -950,6 +950,7 @@ export default function DhikrScreen() {
   const insets  = useSafeAreaInsets();
   const router  = useRouter();
   const searchRef = useRef<TextInput>(null);
+  const params  = useLocalSearchParams<{ dhikrId?: string }>();
 
   const [mainTab,  setMainTab]  = useState<'grid' | 'list' | 'saved' | 'wellbeing' | 'search'>('grid');
   const [selGrupp, setSelGrupp] = useState<Grupp | null>(null);
@@ -1063,6 +1064,24 @@ export default function DhikrScreen() {
       try { setFavorites(JSON.parse(raw || '[]')); } catch {}
     });
   }, []);
+
+  // Deep-link from DailyReminderCard: open the specific post directly.
+  // Uses a small delay so the screen layout is ready before state updates.
+  useEffect(() => {
+    if (!params.dhikrId) return;
+    const decodedId = decodeURIComponent(params.dhikrId);
+    const post = ALL_DHIKR.find(d => dhikrKey(d) === decodedId);
+    if (!post) return;
+    const sibs = ALL_DHIKR.filter(
+      d => d._kategori === post._kategori && d._undersida === post._undersida,
+    );
+    const timer = setTimeout(() => {
+      setSelDhikr(post);
+      setSiblings(sibs);
+    }, 80);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.dhikrId]);
 
   const saveFavs = (val: string[]) => AsyncStorage.setItem(STORAGE_FAV, JSON.stringify(val));
 

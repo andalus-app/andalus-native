@@ -35,7 +35,6 @@ const SECTIONS: Section[] = [
     title: 'Verktyg',
     data: [
       { key: 'zakat',   title: 'Beräkna zakat',    icon: 'zakat',       route: '/zakat'   },
-      { key: 'booking', title: 'Boka lokal',        icon: 'calendar',    route: '/booking' },
     ],
   },
   {
@@ -48,8 +47,8 @@ const SECTIONS: Section[] = [
   {
     title: 'Övrigt',
     data: [
-      { key: 'support', title: 'Stöd oss',          icon: 'heart',       route: '/support' },
-      { key: 'about',   title: 'Om oss',            icon: 'info',        route: '/about'   },
+      { key: 'support', title: 'Stötta kallet',      icon: 'heart',       route: '/support' },
+      { key: 'about',   title: 'Om Hidayah',        icon: 'info',        route: '/about'   },
     ],
   },
 ];
@@ -174,6 +173,23 @@ export default function MoreScreen() {
   const insets  = useSafeAreaInsets();
   const C       = getColors(isDark);
 
+  // Secret booking entry: tap "Mer" three times within 1.5 s
+  const secretTapCount = useRef(0);
+  const secretTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleSecretTap = useCallback(() => {
+    secretTapCount.current += 1;
+    if (secretTapTimer.current) clearTimeout(secretTapTimer.current);
+    if (secretTapCount.current >= 3) {
+      secretTapCount.current = 0;
+      router.push('/booking' as any);
+      return;
+    }
+    secretTapTimer.current = setTimeout(() => {
+      secretTapCount.current = 0;
+    }, 1500);
+  }, [router]);
+
   const handlePress = useCallback((route: string) => {
     router.push(route as any);
   }, [router]);
@@ -182,7 +198,9 @@ export default function MoreScreen() {
     <View style={[styles.root, { backgroundColor: T.bg }]}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
-        <Text style={[styles.headerTitle, { color: T.text }]}>Mer</Text>
+        <TouchableOpacity onPress={handleSecretTap} activeOpacity={1} style={{ flex: 1 }}>
+          <Text style={[styles.headerTitle, { color: T.text }]}>Mer</Text>
+        </TouchableOpacity>
         <TouchableOpacity
           onPress={() => router.push('/settings' as any)}
           style={[styles.settingsBtn, { backgroundColor: C.rowBg, borderColor: C.border }]}

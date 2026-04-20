@@ -3,6 +3,7 @@ import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Svg, { Path } from 'react-native-svg';
 import HidayahLogo from '../../components/HidayahLogo';
+import DailyReminderCard from '../../components/DailyReminderCard';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ThemeToggle from '../../components/ThemeToggle';
@@ -962,25 +963,8 @@ export default function HomeScreen() {
           <BannerCard key={b.id} banner={b} onDismiss={() => dismissBanner(b.id)} theme={T} />
         ))}
 
-        {/* Empty state — shown when there is absolutely nothing to display */}
-        {banners.length === 0 &&
-          bannerAnnouncements.length === 0 &&
-          (isAdmin ? (pendingCount === 0 && cancelledCount === 0) : bookingNotifs.length === 0) && (
-          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14 }}>
-            <View style={{
-              width: 64, height: 64, borderRadius: 32,
-              backgroundColor: T.cardElevated,
-              alignItems: 'center', justifyContent: 'center',
-            }}>
-              <Svg width={28} height={28} viewBox="0 0 24 24" fill={T.textMuted}>
-                <Path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z" />
-              </Svg>
-            </View>
-            <Text style={{ fontSize: 15, color: T.textMuted, textAlign: 'center' }}>
-              Inga nya meddelanden just nu
-            </Text>
-          </View>
-        )}
+        {/* Dagens påminnelse — always visible on the home screen */}
+        <DailyReminderCard />
       </ScrollView>
 
       {/* ── Admin PIN modal ── */}

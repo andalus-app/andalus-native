@@ -6,16 +6,8 @@ import { useTheme } from '../context/ThemeContext';
 
 const SECTIONS = [
   {
-    title: 'Om oss',
-    body: 'Islam.nu har varit verksamma snart två årtionden med att sprida kunskap inom islam baserat på klassiskt sunnitisk troslära och de fyra erkända rättskolorna. Islam.nu drivs av sakkunniga experter med högskoleutbildning inom islamisk teologi och rättslära. En mycket stor del i vårt arbete är hemsidan www.islam.nu och dess tillhörande sociala medier.',
-  },
-  {
-    title: 'Vårt arbete',
-    body: 'Vi arbetar främst med att informera om och lära ut islam på olika plattformar till muslimer och icke-muslimer över hela Sverige. Vi arbetar med sociala insatser och arbetar mot utanförskap, kriminalitet och all form av extremism.\n\nVi arbetar främst i Stockholmsområdet men reser även regelbundet till många andra städer för att undervisa, ge råd och stötta olika lokala moskéer. Även lokalpoliser, fältassistenter, kommuner, fritidsgårdar, gymnasier och högskolor har bjudit in oss att föreläsa eller ta del av vår expertis och erfarenhet i dessa frågor.',
-  },
-  {
-    title: 'Helt fristående och oberoende',
-    body: 'Vi har valt att arbeta helt ideellt av många anledningar. Vi tar inte stöd från varken den svenska staten eller någon annan stat och har aldrig gjort det. Inte för att det är fel i sig, utan för att vi värnar om vår integritet, självständighet och absoluta oberoende. Vill någon inom ramen för dessa premisser stödja oss är de mer än varmt välkomna. Vi är helt politiskt obundna och kommer alltid vara det.',
+    title: 'Om Hidayah',
+    body: 'Hidayah är en app som har utvecklats för att underlätta det dagliga religiösa livet för muslimer i Sverige. Den samlar flera viktiga funktioner på ett och samma ställe, såsom bönetider, dhikr, Allahs 99 namn, Koranen på svenska (översatt av Knut Bernström), en vägledning för Umrah, ruqyah, zakatberäkning, e-böcker samt frågesport.\n\nSyftet med Hidayah är att göra det enklare att söka kunskap, stärka sin tro och praktisera islam i vardagen.\n\nMaterialet för Allahs namn, ruqyah och e-böcker har hämtats från islam.nu. Må Allah belöna islam.nu rikligt för det värdefulla arbete och den kunskap som gjorts tillgänglig.',
   },
 ];
 
@@ -33,7 +25,7 @@ export default function AboutScreen() {
         backgroundColor: T.bg,
       }]}>
         <BackButton onPress={() => router.back()} />
-        <Text style={[styles.headerTitle, { color: T.text }]}>Om oss</Text>
+        <Text style={[styles.headerTitle, { color: T.text }]}>Om Hidayah</Text>
         <View style={{ width: 36 }} />
       </View>
 
@@ -67,14 +59,20 @@ export default function AboutScreen() {
             </View>
           ))}
 
-          {/* Website button */}
-          <TouchableOpacity
-            style={[styles.websiteBtn, { backgroundColor: T.accent }]}
-            onPress={() => Linking.openURL('https://www.islam.nu')}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.websiteBtnText}>Besök islam.nu</Text>
-          </TouchableOpacity>
+          {/* Contact */}
+          <View style={[styles.contactRow, { borderTopColor: T.border }]}>
+            <Text style={[styles.contactLabel, { color: T.textMuted }]}>
+              Vid buggar eller tekniska problem:
+            </Text>
+            <TouchableOpacity
+              onPress={() => Linking.openURL('mailto:fatih.koker@outlook.com')}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.contactEmail, { color: T.accent }]}>
+                fatih.koker@outlook.com
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </ScrollView>
     </View>
@@ -131,16 +129,17 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 26,
   },
-  websiteBtn: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 14,
-    borderRadius: 14,
-    marginTop: 4,
+  contactRow: {
+    paddingTop: 20,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    gap: 6,
   },
-  websiteBtnText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '700',
+  contactLabel: {
+    fontSize: 13,
+    lineHeight: 20,
+  },
+  contactEmail: {
+    fontSize: 15,
+    fontWeight: '600',
   },
 });

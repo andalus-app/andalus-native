@@ -4,7 +4,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Circle, Path, Polyline, Line, Text as SvgText } from 'react-native-svg';
+import Svg, { Path, Polyline, Line } from 'react-native-svg';
 import BackButton from '../components/BackButton';
 import { useTheme } from '../context/ThemeContext';
 
@@ -15,22 +15,6 @@ function ExternalLinkIcon({ color = '#fff', size = 14 }: { color?: string; size?
       <Path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
       <Polyline points="15 3 21 3 21 9" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
       <Line x1="10" y1="14" x2="21" y2="3" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
-    </Svg>
-  );
-}
-
-// ── Bitcoin inline logo ───────────────────────────────────────────────────────
-function BitcoinLogo({ textColor }: { textColor: string }) {
-  return (
-    <Svg width={120} height={32} viewBox="0 0 120 32" fill="none">
-      <Circle cx="16" cy="16" r="16" fill="#F7931A"/>
-      <Path
-        d="M22.5 13.8c.3-2-1.2-3.1-3.3-3.8l.7-2.7-1.6-.4-.6 2.6-1.3-.3.6-2.6-1.6-.4-.7 2.7-1.1-.3-2.2-.5-.4 1.7s1.2.3 1.1.3c.6.2.7.6.7.9l-1.7 6.8c-.1.2-.3.5-.8.4l-1.1-.3-.8 1.8 2.1.5 1.1.3-.7 2.7 1.6.4.7-2.7 1.3.3-.7 2.7 1.6.4.7-2.7c2.7.5 4.7.3 5.6-2.1.7-2-.0-3.1-1.5-3.9 1.1-.2 1.9-1 2.1-2.5zm-3.7 5.2c-.5 2-3.9.9-5 .6l.9-3.6c1.1.3 4.6.8 4.1 3zm.5-5.2c-.5 1.8-3.3.9-4.3.6l.8-3.3c.9.2 3.9.7 3.5 2.7z"
-        fill="white"
-      />
-      <SvgText x="38" y="22" fontFamily="system-ui" fontSize="15" fontWeight="700" fill={textColor}>
-        bitcoin
-      </SvgText>
     </Svg>
   );
 }
@@ -50,7 +34,7 @@ function PaymentBlock({ children }: { children: React.ReactNode }) {
 }
 
 export default function SupportScreen() {
-  const { theme: T, isDark } = useTheme();
+  const { theme: T } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -63,7 +47,7 @@ export default function SupportScreen() {
         backgroundColor: T.bg,
       }]}>
         <BackButton onPress={() => router.back()} />
-        <Text style={[styles.headerTitle, { color: T.text }]}>Stöd oss</Text>
+        <Text style={[styles.headerTitle, { color: T.text }]}>Stötta kallet</Text>
         <View style={{ width: 36 }} />
       </View>
 
@@ -73,16 +57,18 @@ export default function SupportScreen() {
       >
         {/* Intro */}
         <View style={styles.intro}>
-          <Text style={[styles.introTitle, { color: T.text }]}>Stöd oss</Text>
+          <Text style={[styles.introTitle, { color: T.text }]}>Stötta kallet</Text>
           <Text style={[styles.introText, { color: T.textMuted }]}>
-            Var med och sprid gott genom att bli månadsgivare eller donera en gåva.
+            Genom att bli månadsgivare eller ge en gåva bidrar man till att stötta islam.nu och sprida gott.
+          </Text>
+          <Text style={[styles.introText, { color: T.textMuted }]}>
+            Arbetet på islam.nu möjliggörs genom bidrag från givare. Profeten ﷺ sade:
           </Text>
           <Text style={[styles.introSub, { color: T.textMuted }]}>
-            Kom ihåg att du belönas för det arbete vi kan utföra tack vare ditt bidrag! Profeten (ﷺ) sade:{' '}
             <Text style={{ fontStyle: 'italic' }}>
-              "Den som vägleder till gott får samma belöning som den som utför handlingen"
+              "Den som vägleder till gott får samma belöning som den som utför handlingen."
             </Text>
-            . [Muslim]
+            {' '}[Muslim]
           </Text>
         </View>
 
@@ -92,23 +78,6 @@ export default function SupportScreen() {
           <View style={{ paddingTop: 14, alignItems: 'center' }}>
             <Text style={[styles.cardLabel, { color: T.textMuted }]}>Ge en gåva</Text>
           </View>
-
-          {/* Bitcoin */}
-          <PaymentBlock>
-            <BitcoinLogo textColor={isDark ? '#fff' : '#1a1a1a'} />
-            <TouchableOpacity
-              onPress={() => Linking.openURL('bitcoin:bc1qe62zvm59cltlkqjekz4vz9nueh7hq3ejxcsktk')}
-              style={{ flexDirection: 'row', alignItems: 'center' }}
-            >
-              <View style={{ width: 13 }} />
-              <Text style={[styles.btcAddress, { color: T.accent, textAlign: 'center', flex: 1 }]}>
-                bc1qe62zvm59cltlkqjekz4vz9nueh7hq3ejxcsktk
-              </Text>
-              <ExternalLinkIcon color={T.accent} size={13} />
-            </TouchableOpacity>
-          </PaymentBlock>
-
-          <Divider color={T.border} />
 
           {/* Swish */}
           <PaymentBlock>
@@ -205,12 +174,6 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     textTransform: 'uppercase',
     marginBottom: 2,
-  },
-  btcAddress: {
-    fontSize: 12,
-    textDecorationLine: 'underline',
-    textAlign: 'center',
-    letterSpacing: 0.3,
   },
   // swish-logo.png: 400×143 → aspect 2.797 → at height 34 → width 95
   swishLogo: {
