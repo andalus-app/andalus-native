@@ -11,6 +11,7 @@ import {
   Modal, Image, ActivityIndicator, StyleSheet, Switch,
   KeyboardAvoidingView, Platform, Alert, RefreshControl,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 // Lazy-load expo-image-picker — the native module requires a rebuilt binary.
 // Until the app is rebuilt, this degrades gracefully instead of crashing on import.
 let ImagePicker: typeof import('expo-image-picker') | null = null;
@@ -103,6 +104,38 @@ export default function AdminAnnouncementsScreen() {
   const [imageLoading,    setImageLoading]    = useState(false);
   const [formError,       setFormError]       = useState('');
   const [datePickerTarget, setDatePickerTarget] = useState<'starts_at' | 'ends_at' | null>(null);
+
+  // ── Hem-banner topp (local AsyncStorage, no Supabase) ─────────────────────
+  const HT_KEY = 'andalus_home_top_banner_v1';
+  const [htText,     setHtText]     = useState('');
+  const [htUrl,      setHtUrl]      = useState('');
+  const [htActive,   setHtActive]   = useState(false);
+  const [htExpanded, setHtExpanded] = useState(false);
+  const [htSaving,   setHtSaving]   = useState(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem(HT_KEY).then(raw => {
+      if (!raw) return;
+      try {
+        const { text, url, active } = JSON.parse(raw);
+        setHtText(text ?? '');
+        setHtUrl(url ?? '');
+        setHtActive(active ?? false);
+      } catch {}
+    });
+  }, []);
+
+  const saveHt = useCallback(async () => {
+    setHtSaving(true);
+    await AsyncStorage.setItem(HT_KEY, JSON.stringify({ text: htText.trim(), url: htUrl.trim(), active: htActive }));
+    setHtSaving(false);
+    setHtExpanded(false);
+  }, [htText, htUrl, htActive]);
+
+  const clearHt = useCallback(async () => {
+    await AsyncStorage.removeItem(HT_KEY);
+    setHtText(''); setHtUrl(''); setHtActive(false); setHtExpanded(false);
+  }, []);
 
   const appUserId = Storage.getItem('islamnu_user_id') ?? '';
 
@@ -210,11 +243,14 @@ export default function AdminAnnouncementsScreen() {
     const payload: AnnouncementInput = {
       title:             form.title.trim(),
       message:           form.message.trim() || null,
-      image_url:         form.image_url.trim() || null,
+      image_url:         form.display_type === 'notification_only' ? null : (form.image_url.trim() || null),
       link_url:          form.link_url.trim()  || null,
       link_text:         form.link_text.trim() || null,
       display_type:      form.display_type,
-      notification_mode: form.display_type === 'banner' ? form.notification_mode : 'none',
+      // notification_only always forces push; banner uses form choice; popup: none
+      notification_mode: form.display_type === 'notification_only' ? 'push'
+                       : form.display_type === 'banner' ? form.notification_mode
+                       : 'none',
       is_active:         form.is_active,
       starts_at:         form.starts_at || null,
       ends_at:           form.ends_at   || null,
@@ -304,6 +340,113 @@ export default function AdminAnnouncementsScreen() {
         contentContainerStyle={{ padding: 16, paddingBottom: 120 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={T.accent} />}
       >
+        {/* ── Hem-banner topp ─────────────────────────────────────────────── */}
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={() => setHtExpanded(e => !e)}
+          style={[styles.card, { backgroundColor: T.card, borderColor: T.border, marginBottom: 20 }]}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: T.accent + '22', alignItems: 'center', justifyContent: 'center' }}>
+                <Svg width={18} height={18} viewBox="0 0 24 24">
+                  <Path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" stroke={T.accent} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                  <Path d="M9 22V12h6v10" stroke={T.accent} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                </Svg>
+              </View>
+              <View>
+                <Text style={{ fontSize: 15, fontWeight: '600', color: T.text }}>Hem-banner topp</Text>
+                <Text style={{ fontSize: 12, color: T.textMuted, marginTop: 1 }}>
+                  {htActive && htText ? 'Aktiv · ' + htText.slice(0, 30) + (htText.length > 30 ? '…' : '') : 'Inaktiv'}
+                </Text>
+              </View>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              {htActive && (
+                <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: '#34C759' + '22' }}>
+                  <Text style={{ fontSize: 10, fontWeight: '700', color: '#34C759' }}>AKTIV</Text>
+                </View>
+              )}
+              <Svg width={16} height={16} viewBox="0 0 24 24">
+                <Path d={htExpanded ? 'M18 15l-6-6-6 6' : 'M6 9l6 6 6-6'} stroke={T.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </Svg>
+            </View>
+          </View>
+
+          {htExpanded && (
+            <View style={{ marginTop: 16, gap: 12 }}>
+              <View style={{ backgroundColor: T.accent + '15', borderRadius: 10, padding: 12 }}>
+                <Text style={{ color: T.accent, fontSize: 12, lineHeight: 18 }}>
+                  Texten visas på hemskärmen och tonas om med hälsningen var 5:e sekund. Sparas lokalt på enheten.
+                </Text>
+              </View>
+
+              <View>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: T.textMuted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.4 }}>Bannertext</Text>
+                <TextInput
+                  style={[styles.input, { backgroundColor: T.bg, borderColor: T.border, color: T.text, marginBottom: 0 }]}
+                  value={htText}
+                  onChangeText={setHtText}
+                  placeholder="T.ex. Fredag 14:00 — Fredagsbön"
+                  placeholderTextColor={T.textMuted}
+                  selectionColor={T.accent}
+                  multiline
+                  numberOfLines={2}
+                />
+              </View>
+
+              <View>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: T.textMuted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.4 }}>URL (valfritt)</Text>
+                <TextInput
+                  style={[styles.input, { backgroundColor: T.bg, borderColor: T.border, color: T.text, marginBottom: 0 }]}
+                  value={htUrl}
+                  onChangeText={setHtUrl}
+                  placeholder="https://..."
+                  placeholderTextColor={T.textMuted}
+                  selectionColor={T.accent}
+                  keyboardType="url"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
+
+              <View style={[styles.row, { backgroundColor: T.bg, borderColor: T.border }]}>
+                <View>
+                  <Text style={{ fontSize: 14, fontWeight: '500', color: T.text }}>Aktivera banner</Text>
+                  <Text style={{ fontSize: 12, color: T.textMuted, marginTop: 1 }}>Visa på hemskärmen</Text>
+                </View>
+                <Switch
+                  value={htActive}
+                  onValueChange={setHtActive}
+                  trackColor={{ false: T.border, true: T.accent }}
+                  thumbColor="#fff"
+                />
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <TouchableOpacity
+                  onPress={clearHt}
+                  style={{ flex: 1, paddingVertical: 11, borderRadius: 10, alignItems: 'center', borderWidth: 1, borderColor: '#FF3B30' + '66' }}
+                >
+                  <Text style={{ color: '#FF3B30', fontSize: 14, fontWeight: '600' }}>Rensa</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={saveHt}
+                  disabled={htSaving}
+                  style={{ flex: 2, paddingVertical: 11, borderRadius: 10, alignItems: 'center', backgroundColor: T.accent, opacity: htSaving ? 0.6 : 1 }}
+                >
+                  <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>{htSaving ? 'Sparar…' : 'Spara'}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        {/* ── Announcement divider ─────────────────────────────────────────── */}
+        <Text style={{ fontSize: 12, fontWeight: '600', color: T.textMuted, marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+          Meddelanden
+        </Text>
+
         {announcements.length === 0 ? (
           <View style={{ alignItems: 'center', marginTop: 48, gap: 12 }}>
             <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: T.card, alignItems: 'center', justifyContent: 'center' }}>
@@ -343,7 +486,7 @@ export default function AdminAnnouncementsScreen() {
                   {/* Display type badge */}
                   <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: T.accent + '22' }}>
                     <Text style={{ fontSize: 10, fontWeight: '700', color: T.accent, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                      {a.display_type === 'popup' ? 'Popup' : 'Banner'}
+                      {a.display_type === 'popup' ? 'Popup' : a.display_type === 'notification_only' ? 'Notis' : 'Banner'}
                     </Text>
                   </View>
                   {/* Notification mode badge */}
@@ -486,7 +629,7 @@ export default function AdminAnnouncementsScreen() {
                 numberOfLines={4}
               />
 
-              {/* Link — only meaningful for banners but available for both */}
+              {/* Link */}
               <Label T={T}>Länk-URL (valfritt)</Label>
               <TextInput
                 style={[styles.input, { backgroundColor: T.card, borderColor: T.border, color: T.text }]}
@@ -514,8 +657,11 @@ export default function AdminAnnouncementsScreen() {
 
               {/* Display type */}
               <Label T={T}>Visningstyp</Label>
-              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 16 }}>
-                {(['banner', 'popup'] as DisplayType[]).map(dt => (
+              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
+                {([
+                  ['banner', 'Hem-banner', 'Visas i flödet'],
+                  ['popup',  'Popup',      'Visas vid öppning'],
+                ] as [DisplayType, string, string][]).map(([dt, label, sub]) => (
                   <TouchableOpacity
                     key={dt}
                     onPress={() => setField('display_type', dt)}
@@ -525,15 +671,34 @@ export default function AdminAnnouncementsScreen() {
                       borderWidth: 1, borderColor: form.display_type === dt ? T.accent : T.border,
                     }}
                   >
-                    <Text style={{ fontWeight: '600', fontSize: 14, color: form.display_type === dt ? '#fff' : T.textMuted }}>
-                      {dt === 'banner' ? 'Hem-banner' : 'Popup'}
-                    </Text>
-                    <Text style={{ fontSize: 11, color: form.display_type === dt ? 'rgba(255,255,255,0.75)' : T.textMuted, marginTop: 2 }}>
-                      {dt === 'banner' ? 'Visas i flödet' : 'Visas vid öppning'}
-                    </Text>
+                    <Text style={{ fontWeight: '600', fontSize: 14, color: form.display_type === dt ? '#fff' : T.textMuted }}>{label}</Text>
+                    <Text style={{ fontSize: 11, color: form.display_type === dt ? 'rgba(255,255,255,0.75)' : T.textMuted, marginTop: 2 }}>{sub}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
+              <TouchableOpacity
+                onPress={() => setField('display_type', 'notification_only')}
+                style={{
+                  paddingVertical: 12, borderRadius: 12, alignItems: 'center', marginBottom: 16,
+                  backgroundColor: form.display_type === 'notification_only' ? T.accent : T.card,
+                  borderWidth: 1, borderColor: form.display_type === 'notification_only' ? T.accent : T.border,
+                }}
+              >
+                <Text style={{ fontWeight: '600', fontSize: 14, color: form.display_type === 'notification_only' ? '#fff' : T.textMuted }}>
+                  Notifikation
+                </Text>
+                <Text style={{ fontSize: 11, color: form.display_type === 'notification_only' ? 'rgba(255,255,255,0.75)' : T.textMuted, marginTop: 2 }}>
+                  Bara push-notis, inget visas i appen
+                </Text>
+              </TouchableOpacity>
+
+              {form.display_type === 'notification_only' && (
+                <View style={{ backgroundColor: T.accent + '18', borderRadius: 10, padding: 12, marginBottom: 16 }}>
+                  <Text style={{ color: T.accent, fontSize: 13, lineHeight: 19 }}>
+                    Skickar en push-notifikation till alla användare. Inget visas i appen — vid klick öppnas hemskärmen.
+                  </Text>
+                </View>
+              )}
 
               {/* Notification mode — only for banners */}
               {form.display_type === 'banner' && (

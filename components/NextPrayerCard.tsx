@@ -6,7 +6,7 @@
  * DATA SOURCE: reads exclusively from AppContext (useApp()) — the same single
  * source of truth as the prayer times tab. No new API calls, no new fetches.
  *
- * - Shows next prayer/time, its clock time, and live countdown (updates every 60 s).
+ * - Shows next prayer/time, its clock time, and live countdown (updates every 1 s).
  * - Circular progress ring (react-native-svg) shows time remaining in the
  *   current interval.
  * - Section label adapts:
@@ -14,7 +14,10 @@
  *     Sunrise                                            → "TID KVAR TILL SHURUQ"
  *     Half the night                                     → "TID KVAR TILL HALVA NATTEN"
  * - Location row at bottom-left uses the location.svg pin shape.
- * - Countdown format: "1t 12m" / "45m" (Swedish: t = timmar, m = minuter).
+ * - Countdown format: "1t 12m" / "45m" / "50s" (Swedish: t = timmar, m = minuter, s = sekunder).
+ * - When < 60 s remain, display switches to seconds so the user can see the exact
+ *   moment the prayer switches. The 1 s interval guarantees the transition happens
+ *   at the correct second and the ring refills immediately for the next prayer.
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -26,8 +29,8 @@ import { useApp } from '@/context/AppContext';
 
 // ── Internal constants ─────────────────────────────────────────────────────────
 
-// Ordered sequence within a day (Midnight handled separately — it wraps past 00:00)
-const DAY_KEYS = ['Fajr', 'Sunrise', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'] as const;
+// Same order as Bönetider-fliken (index.tsx) — Midnight included in main loop
+const PRAYER_ORDER = ['Fajr', 'Sunrise', 'Dhuhr', 'Asr', 'Maghrib', 'Isha', 'Midnight'] as const;
 
 const DISPLAY_NAME: Record<string, string> = {
   Fajr:     'Fajr',
@@ -41,17 +44,17 @@ const DISPLAY_NAME: Record<string, string> = {
 
 const SECTION_LABEL: Record<string, string> = {
   Fajr:     'NÄSTA BÖN',
-  Sunrise:  'TID KVAR TILL SHURUQ',
+  Sunrise:  'TID KVAR TILL',
   Dhuhr:    'NÄSTA BÖN',
   Asr:      'NÄSTA BÖN',
   Maghrib:  'NÄSTA BÖN',
   Isha:     'NÄSTA BÖN',
-  Midnight: 'TID KVAR TILL HALVA NATTEN',
+  Midnight: 'TID KVAR TILL',
 };
 
-const RING_SIZE   = 76;
-const STROKE_W    = 5;
-const RING_RADIUS = (RING_SIZE - STROKE_W * 2) / 2;
+const RING_SIZE    = 110;
+const STROKE_W     = 10;
+const RING_RADIUS  = (RING_SIZE - STROKE_W * 2) / 2;
 const CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
 // SVG path from /Downloads/location.svg (viewBox 0 0 24 24)
@@ -66,79 +69,80 @@ const LOCATION_PATH =
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-function minsFromStr(t: string): number {
+/** "HH:MM" → minuter sedan midnatt (samma som index.tsx toMin) */
+function toMin(t: string): number {
   const [h, m] = t.split(':').map(Number);
   return h * 60 + m;
 }
 
-function nowMins(): number {
+/** "HH:MM" → sekunder sedan midnatt */
+function secsFromStr(t: string): number {
+  const [h, m] = t.split(':').map(Number);
+  return h * 3600 + m * 60;
+}
+
+/** Nuvarande tid i minuter (för jämförelse med bönetider) */
+function nowMin(): number {
   const n = new Date();
   return n.getHours() * 60 + n.getMinutes();
+}
+
+/** Nuvarande tid i sekunder (för nedräkning med sekundprecision) */
+function nowSecs(): number {
+  const n = new Date();
+  return n.getHours() * 3600 + n.getMinutes() * 60 + n.getSeconds();
 }
 
 type PrayerInfo = {
   key: string;
   timeStr: string;
-  remainingMins: number;
+  remainingSecs: number;
   progress: number; // 1 = interval just started, 0 = imminent
 };
 
+/**
+ * Samma logik som getNextPrayer i index.tsx — itererar PRAYER_ORDER i ordning
+ * och returnerar den första bönen som ännu inte trätt in.
+ * Midnight hanteras i huvudloopen, inte som ett specialfall.
+ */
 function getNextPrayerInfo(
   timings: Record<string, string>,
   tomorrowTimings: Record<string, string> | null,
 ): PrayerInfo {
-  const now = nowMins();
+  const nowM = nowMin();
+  const nowS = nowSecs();
+  const clamp = (v: number) => Math.max(0, Math.min(1, v));
 
-  // Step 1: Find next among Fajr → Sunrise → Dhuhr → Asr → Maghrib → Isha
-  for (let i = 0; i < DAY_KEYS.length; i++) {
-    const key = DAY_KEYS[i];
+  for (let i = 0; i < PRAYER_ORDER.length; i++) {
+    const key = PRAYER_ORDER[i];
     if (!timings[key]) continue;
-    const pMins = minsFromStr(timings[key]);
-    if (pMins > now) {
-      const prevKey  = i > 0 ? DAY_KEYS[i - 1] : null;
-      const prevMins = prevKey && timings[prevKey] ? minsFromStr(timings[prevKey]) : now - 60;
-      const remaining = pMins - now;
-      const total     = Math.max(1, pMins - prevMins);
-      return {
-        key,
-        timeStr:       timings[key],
-        remainingMins: remaining,
-        progress:      Math.max(0, Math.min(1, remaining / total)),
-      };
+    const pMin = toMin(timings[key]);
+
+    // Midnight kan vara tidig morgon (t.ex. "00:15" vintertid) — wraps past 00:00.
+    // I Sverige på sommaren är den sen kväll (t.ex. "23:32") och hanteras av pMin > nowM.
+    if (key === 'Midnight' && pMin < 12 * 60) {
+      const ishaSecs = timings['Isha'] ? secsFromStr(timings['Isha']) : nowS;
+      const remSecs  = pMin * 60 + 24 * 3600 - nowS;
+      const total    = Math.max(1, pMin * 60 + 24 * 3600 - ishaSecs);
+      return { key, timeStr: timings[key], remainingSecs: remSecs, progress: clamp(remSecs / total) };
+    }
+
+    if (pMin > nowM) {
+      const prevKey  = i > 0 ? PRAYER_ORDER[i - 1] : null;
+      const prevSecs = prevKey && timings[prevKey] ? secsFromStr(timings[prevKey]) : nowS - 3600;
+      const remSecs  = pMin * 60 - nowS;
+      const total    = Math.max(1, pMin * 60 - prevSecs);
+      return { key, timeStr: timings[key], remainingSecs: remSecs, progress: clamp(remSecs / total) };
     }
   }
 
-  // Step 2: Midnight (Halva natten) — typically early AM, comes after Isha.
-  // aladhan returns Midnight as e.g. "00:15". Since it wraps past midnight we
-  // add 24 h to its minutes so it sits after all daytime prayers in the ordering.
-  if (timings['Midnight']) {
-    const midRaw = minsFromStr(timings['Midnight']);
-    if (midRaw < 12 * 60) {
-      // Midnight is in early AM — it's still in the future relative to now (late PM)
-      const remaining = midRaw + 24 * 60 - now;
-      const ishaMins  = timings['Isha'] ? minsFromStr(timings['Isha']) : now;
-      const total     = Math.max(1, midRaw + 24 * 60 - ishaMins);
-      return {
-        key:           'Midnight',
-        timeStr:       timings['Midnight'],
-        remainingMins: remaining,
-        progress:      Math.max(0, Math.min(1, remaining / total)),
-      };
-    }
-  }
-
-  // Step 3: All times passed → next is tomorrow's Fajr
+  // Alla bönetider passerade → imorgons Fajr
   const fajrStr  = tomorrowTimings?.['Fajr'] ?? timings['Fajr'];
-  const fajrMins = minsFromStr(fajrStr) + 24 * 60;
-  const ishaMins = timings['Isha'] ? minsFromStr(timings['Isha']) : now;
-  const remaining = fajrMins - now;
-  const total     = Math.max(1, fajrMins - ishaMins);
-  return {
-    key:           'Fajr',
-    timeStr:       fajrStr,
-    remainingMins: remaining,
-    progress:      Math.max(0, Math.min(1, remaining / total)),
-  };
+  const fajrSecs = secsFromStr(fajrStr) + 24 * 3600;
+  const ishaSecs = timings['Isha'] ? secsFromStr(timings['Isha']) : nowS;
+  const remSecs  = fajrSecs - nowS;
+  const total    = Math.max(1, fajrSecs - ishaSecs);
+  return { key: 'Fajr', timeStr: fajrStr, remainingSecs: remSecs, progress: clamp(remSecs / total) };
 }
 
 // ── Component ──────────────────────────────────────────────────────────────────
@@ -155,9 +159,11 @@ export default function NextPrayerCard() {
 
   const [info, setInfo] = useState<PrayerInfo | null>(() => computeState());
 
+  // 1-second interval — ensures prayer transitions happen at the exact second
+  // and the seconds countdown (< 60 s) is always accurate.
   useEffect(() => {
     setInfo(computeState());
-    const id = setInterval(() => setInfo(computeState()), 60_000);
+    const id = setInterval(() => setInfo(computeState()), 1_000);
     return () => clearInterval(id);
   }, [computeState]);
 
@@ -165,14 +171,25 @@ export default function NextPrayerCard() {
 
   const goldColor = isDark ? '#cab488' : T.accent;
 
-  const rawCity     = app.location?.city ?? '';
-  const cityDisplay = rawCity.includes(', ')
-    ? rawCity.split(', ').slice(1).join(', ')
-    : rawCity;
+  // Location: rawCity is already "subLocality, city" or just "city" from prayerApi.reverseGeocode.
+  // Show both parts — ort first, then stad.
+  const cityDisplay = app.location?.city ?? '';
 
   const dashOffset = info ? CIRCUMFERENCE * (1 - info.progress) : 0;
-  const ringHours  = info ? Math.floor(info.remainingMins / 60) : 0;
-  const ringMins   = info ? info.remainingMins % 60 : 0;
+
+  const remainingSecs = info?.remainingSecs ?? 0;
+  const ringHours = Math.floor(remainingSecs / 3600);
+  const ringMins  = Math.floor((remainingSecs % 3600) / 60);
+
+  // Countdown text: seconds when < 60 s remain, otherwise "Xh Ym" / "Ym"
+  let countdownText: string;
+  if (remainingSecs < 60) {
+    countdownText = `${remainingSecs}s`;
+  } else if (ringHours > 0) {
+    countdownText = `${ringHours}t ${String(ringMins).padStart(2, '0')}m`;
+  } else {
+    countdownText = `${ringMins}m`;
+  }
 
   const sectionLabel = info ? (SECTION_LABEL[info.key] ?? 'NÄSTA BÖN') : 'NÄSTA BÖN';
   const displayName  = info ? (DISPLAY_NAME[info.key]  ?? info.key)    : '…';
@@ -211,7 +228,7 @@ export default function NextPrayerCard() {
       {/* Main row: prayer info (left) + progress ring (right) */}
       <View style={styles.mainRow}>
         {/* Left: prayer name + time */}
-        <View style={styles.leftCol}>
+        <View style={styles.rightCol}>
           <Text style={[styles.prayerName, { color: goldColor }]}>
             {displayName}
           </Text>
@@ -238,7 +255,7 @@ export default function NextPrayerCard() {
               cy={RING_SIZE / 2}
               r={RING_RADIUS}
               stroke={goldColor}
-              strokeWidth={STROKE_W + 7}
+              strokeWidth={STROKE_W + 8}
               strokeOpacity={0.13}
               fill="none"
               strokeDasharray={CIRCUMFERENCE}
@@ -276,9 +293,7 @@ export default function NextPrayerCard() {
           </Svg>
           <View style={styles.ringTextContainer}>
             <Text style={[styles.ringLine, { color: goldColor }]}>
-              {ringHours > 0
-                ? `${ringHours}t ${String(ringMins).padStart(2, '0')}m`
-                : `${ringMins}m`}
+              {countdownText}
             </Text>
           </View>
         </View>
@@ -305,7 +320,9 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: 16,
     borderWidth: 0.5,
-    padding: 14,
+    paddingHorizontal: 14,
+    paddingTop: 0,
+    paddingBottom: 0,
     marginBottom: 12,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.10,
@@ -313,17 +330,20 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   label: {
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 1.2,
-    marginBottom: 6,
-  },
+  fontSize: 10,
+  fontWeight: '700',
+  letterSpacing: 1.2,
+  marginTop: 0,
+  position: 'relative',
+  top: 8,
+  marginBottom: 0,
+},
   mainRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  leftCol: {
+  rightCol: {
     flex: 1,
     gap: 2,
   },
@@ -338,30 +358,32 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   ringContainer: {
-    width: RING_SIZE,
-    height: RING_SIZE,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  width: RING_SIZE,
+  height: RING_SIZE,
+  alignItems: 'center',
+  justifyContent: 'center',
+  marginTop: -2,
+},
   ringTextContainer: {
     alignItems: 'center',
     justifyContent: 'center',
   },
   ringLine: {
-    fontSize: 11,
+    fontSize: 15,
     fontWeight: '700',
     textAlign: 'center',
-    lineHeight: 14,
+    lineHeight: 18,
   },
-  locationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 8,
-  },
+locationRow: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 4,
+  position: 'relative',
+  top: -8,
+},
   locationText: {
     fontSize: 11,
-    fontWeight: '500',
+    fontWeight: '700',
     opacity: 0.65,
   },
 });

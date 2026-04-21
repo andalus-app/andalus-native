@@ -667,7 +667,7 @@ export default function PrayerTimesScreen() {
       </View>
 
       {/* ── Animated section label ── */}
-      <View style={{ height:22, marginHorizontal:16, marginBottom:8 }}>
+      <View style={{ height:22, marginHorizontal:16, marginTop:13, marginBottom:8 }}>
 
         {/* Today label — slides left + fades out */}
         <Animated.View style={{

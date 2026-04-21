@@ -13,6 +13,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
   View, Text, TouchableOpacity, ScrollView, StyleSheet, Animated, Easing,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useRouter, Stack } from 'expo-router';
@@ -40,6 +41,9 @@ import {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const PLAYABLE_CATEGORIES: QuizPlayableCategory[] = getPlayableCategories();
+
+const QUIZ_FS_KEY   = 'quiz-text-font-size-v1';
+const QUIZ_FS_STEPS = [11, 14, 16, 18, 22, 27, 32] as const; // default idx 2 (16px)
 
 const TIME_OPTIONS: { label: string; value: number }[] = [
   { label: '10s', value: 10 },
@@ -364,7 +368,7 @@ function ConfigView({
 // ── AnswerOption ──────────────────────────────────────────────────────────────
 
 function AnswerOption({
-  opt, bg, bc, tc, revealed, isCorrect, isSelected, onPress,
+  opt, bg, bc, tc, revealed, isCorrect, isSelected, onPress, fontSize = 15,
 }: {
   opt:        string;
   bg:         string;
@@ -374,6 +378,7 @@ function AnswerOption({
   isCorrect:  boolean;
   isSelected: boolean;
   onPress:    () => void;
+  fontSize?:  number;
 }) {
   const scale   = useRef(new Animated.Value(1)).current;
   const iconOp  = useRef(new Animated.Value(0)).current;
@@ -429,7 +434,7 @@ function AnswerOption({
           flexDirection: 'row', alignItems: 'center',
         }}
       >
-        <Text style={{ flex: 1, fontSize: 15, fontWeight: '600', color: tc, lineHeight: 20 }}>
+        <Text style={{ flex: 1, fontSize, fontWeight: '600', color: tc, lineHeight: Math.round(fontSize * 1.35) }}>
           {opt}
         </Text>
         {showIcon && (
@@ -472,6 +477,17 @@ function PlayView({
   const [revealed, setRevealed] = useState(false);
   const [timeLeft, setTimeLeft] = useState(config.timeLimitSec);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const [fsIdx, setFsIdx] = useState(2);
+  const [showFontPanel, setShowFontPanel] = useState(false);
+  useEffect(() => {
+    AsyncStorage.getItem(QUIZ_FS_KEY).then(v => {
+      if (v !== null) { const n = parseInt(v, 10); if (!isNaN(n) && n >= 0 && n < QUIZ_FS_STEPS.length) setFsIdx(n); }
+    });
+  }, []);
+  const decFs = useCallback(() => setFsIdx(i => { const n = Math.max(0, i-1); AsyncStorage.setItem(QUIZ_FS_KEY, String(n)); return n; }), []);
+  const incFs = useCallback(() => setFsIdx(i => { const n = Math.min(QUIZ_FS_STEPS.length-1, i+1); AsyncStorage.setItem(QUIZ_FS_KEY, String(n)); return n; }), []);
+  const bodyFs = QUIZ_FS_STEPS[fsIdx];
 
   // Reset per question
   useEffect(() => {
@@ -561,9 +577,19 @@ function PlayView({
           <Text style={{ flex: 1, textAlign: 'center', fontSize: 13, color: T.textMuted, fontWeight: '600' }}>
             {currentIndex + 1} / {total}
           </Text>
-          {config.timeLimitSec > 0
-            ? <Text style={{ fontSize: 22, fontWeight: '800', color: timerColor, minWidth: 36, textAlign: 'right' }}>{timeLeft}</Text>
-            : <View style={{ width: 36 }} />}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <TouchableOpacity onPress={() => setShowFontPanel(p => !p)} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Svg width={18} height={18} viewBox="0 0 24 24" fill="none"
+                stroke={showFontPanel ? T.accent : T.textMuted}
+                strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+                <Path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" />
+                <Path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              </Svg>
+            </TouchableOpacity>
+            {config.timeLimitSec > 0 && (
+              <Text style={{ fontSize: 22, fontWeight: '800', color: timerColor, minWidth: 36, textAlign: 'right' }}>{timeLeft}</Text>
+            )}
+          </View>
         </View>
 
         {/* Progress bar */}
@@ -576,6 +602,30 @@ function PlayView({
             width: progressAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }),
           }} />
         </View>
+
+        {/* Font size panel */}
+        {showFontPanel && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, paddingHorizontal: 4 }}>
+            <Text style={{ fontSize: 12, fontWeight: '600', color: T.textMuted }}>Textstorlek</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <TouchableOpacity onPress={decFs} disabled={fsIdx === 0} activeOpacity={0.7}
+                style={{ width: 28, height: 28, borderRadius: 7, borderWidth: 1, borderColor: T.border, backgroundColor: T.card, alignItems: 'center', justifyContent: 'center' }}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: fsIdx === 0 ? T.textMuted : T.text }}>A</Text>
+              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', gap: 4 }}>
+                {QUIZ_FS_STEPS.map((_, i) => (
+                  <View key={i} style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: i <= fsIdx ? T.accent : T.border }} />
+                ))}
+              </View>
+              <TouchableOpacity onPress={incFs} disabled={fsIdx === QUIZ_FS_STEPS.length - 1} activeOpacity={0.7}
+                style={{ width: 28, height: 28, borderRadius: 7, borderWidth: 1, borderColor: T.border, backgroundColor: T.card, alignItems: 'center', justifyContent: 'center' }}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                <Text style={{ fontSize: 17, fontWeight: '700', color: fsIdx === QUIZ_FS_STEPS.length - 1 ? T.textMuted : T.text }}>A</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
 
       </View>
 
@@ -623,8 +673,8 @@ function PlayView({
 
         {/* Question */}
         <Text style={{
-          fontSize: 18, fontWeight: '700', color: T.text,
-          lineHeight: 26, marginBottom: 24, letterSpacing: -0.2,
+          fontSize: bodyFs, fontWeight: '700', color: T.text,
+          lineHeight: Math.round(bodyFs * 1.44), marginBottom: 24, letterSpacing: -0.2,
         }}>
           {q.question}
         </Text>
@@ -652,6 +702,7 @@ function PlayView({
               isCorrect={isCorrect}
               isSelected={isSelected}
               onPress={() => !revealed && handleAnswer(opt)}
+              fontSize={bodyFs}
             />
           );
         })}

@@ -7810,7 +7810,11 @@
                 "problem_tags": [],
                 "situation_tags": [],
                 "intent_tags": [],
-                "search_synonyms_sv": ["sex", "samlag", "intimitet"],
+                "search_synonyms_sv": [
+                  "sex",
+                  "samlag",
+                  "intimitet"
+                ],
                 "priority_score": 40,
                 "wellbeing_description": "Främst situationsbaserad dhikr.",
                 "source_context": {
@@ -8771,7 +8775,7 @@
               "arabisk_text": "اللَّهُمَّ رَبَّ السَّـمَواتِ السَّبْعِ، ورَبَّ العَرْشِ العَظِيمِ، كُنْ لِي جَاراً مِنْ فُلاَنِ بْنِ فُلانٍ، وأحْزَابِهِ مِنْ خَلائِقِكَ؛ أنْ يَفْرُطَ عَلَيَّ أَحدٌ مِنْهُمْ أوْ يَطْغَى، عَزَّ جَارُكَ، وَجَلَّ ثَنُاؤُكَ، ولا إِلَهَ إلاَّ أنْتَ",
               "translitteration": "Allahumma Rabbas-samâwâtis-sab'i, wa Rabbal-'arshil-'adhîm, kun lî djâran min [nämn personens namn], wa ahzâbihi min khalâ´iqik, an yafruta 'alayya ahadun minhum aw yatghâ, 'azza djâruk, wadjalla thanâ´uk, wa lâ ilâha illâ Ant.",
               "svensk_text": "Allah! De sju himlarna och den väldiga tronens Herre! Skydda mig och hjälp mig mot [den och den[1]] och hans medhjälpare bland Dina skapelser så att ingen av dem begår överträdelser mot mig. Ditt beskydd är mäktigt och Ditt lovpris är glorifierat och ingen har rätt att dyrkas förutom Du!",
-              "kallhanvisning": "Al-Bukhârî i Al-Adab ul-Mufrad nr 707. Autentisk enligt Al-Albânî i Sahîh ul-Adab ul-Mufrad nr 545.",
+              "kallhanvisning": "Al-Bukhârî i Al-Adab ul-Mufrad nr 707. Autentisk enligt Al-Albânî i Sahîh ul-Adab ul-Mufrad nr 545.\n1. Nämn personens namn.",
               "mp3_url": "https://fra1.digitaloceanspaces.com/islamnu/dhikr/remembrance/audio/129.mp3",
               "source_integrity": {
                 "original_post_index": 0,
@@ -9480,7 +9484,7 @@
                   "svensk_text": "I Allahs Namn, Den Nåderike Den Barmhärtige. Säg: Jag tar skydd hos människornas Herre. Människornas Konung. Människornas Gud. Mot den förrädiske frestarens ondska. Han som viskar inom människornas bröst. Bland både djinnerna och människorna.",
                   "kallhanvisning": "Koranen 114:1–6. Abû Dâwûd 4/322 nr 5082, At-Tirmidhî 5/567 nr 3575. Se även Sahîh-ut-Tirmidhî 3/182.",
                   "qcf_page": 604,
-                  "qcf_glyphs": "ﱰ ﱱ ﱲ ﱳ ﱵ ﱶ ﱸ ﱹ ﱺ ﱻ ﱼ ﱽ ﱾ ﲀ ﲁ ﲂ ﲃ ﲄ ﲆ ﲇ ﲈ",
+                  "qcf_glyphs": "ﱰ ﱱ ﱲ ﱳ ﱴ ﱵ ﱶ ﱷ ﱸ ﱹ ﱺ ﱻ ﱼ ﱽ ﱾ ﱿ ﲀ ﲁ ﲂ ﲃ ﲄ ﲅ ﲆ ﲇ ﲈ ﲉ",
                   "qcf_bismillah": true
                 }
               ],
@@ -9745,8 +9749,8 @@
               "titel": "I Allahs namn [söker jag skydd]",
               "url": "https://islam.nu/dhikr/dhikr-for-morgon-och-kvall/i-allahs-namn-soker-jag-skydd/",
               "arabisk_text": "بِسْمِ اللَّهِ الَّذِي لا يَضُرُّ مَعَ اسْمِهِ شَيءٌ في الأرْضِ وَلَا فِي السَّمَاءِ وهُوَ السَّمِيعُ العَلِيْمُ",
-              "translitteration": "I Allahs namn [söker jag skydd]; Den i vars namn ingenting på jorden eller i himlarna [kan] skadas och Han är as-Samî´u [Den som Hör allt] al-´Alîm [Den Allvetande].[Sägs tre gånger.]",
-              "svensk_text": "",
+              "translitteration": "Bismillâhil-lathî lâ yadhurru ma'as-mihi shay'un fil-ardhi wa lâ fis-samâ wa Huwas-Samî' ul-'Alîm.",
+              "svensk_text": "I Allahs namn [söker jag skydd]; Den i vars namn ingenting på jorden eller i himlarna [kan] skadas och Han är as-Samî'u [Den som Hör allt] al-'Alîm [Den Allvetande].",
               "kallhanvisning": "”Den som läser detta tre gånger på morgonen kommer inte drabbas av något ont till kvällen. Och den som läser detta tre gånger på kvällen kommer inte att drabbas av något ont till morgonen.” Abû Dâwûd 4/323 nr 5088, 5089, At- Tirmidhî 5/465 nr 3388, Ibn Mâdjah nr 3869, Ahmad1/72. Se även Sahîh Ibn Mâdjah 2/332. Ibn Bâz ansåg att kedjan var god (hasan) i Tuhfat-ul-Akhyâr s. 39.",
               "mp3_url": "https://fra1.digitaloceanspaces.com/islamnu/dhikr/remembrance/audio/86.mp3",
               "source_integrity": {
@@ -9770,13 +9774,13 @@
                   "undersida": "Åminnelser under morgon och kväll"
                 }
               },
-              "lases_info": "Sägs tre gånger."
+              "lases_info": "Läses tre gånger."
             },
             {
               "titel": "Jag är nöjd med Allah som Herre",
               "url": "https://islam.nu/dhikr/dhikr-for-morgon-och-kvall/jag-ar-nojd-med-allah-som-herre/",
               "arabisk_text": "رَضِيْتُ باللَّهِ رَبًّا، وبالإسْلامِ دِيْناً، وبِمُحَمَّدٍ نَبيًّا",
-              "translitteration": "Ahmad 4/337, An-Nasâ’î i ‘Amal Al-Yaum wal-Laylah nr 4, Ibn Sunnî nr 68, Abû Dâwûd 4/318 nr 5072, At-Tirmidhî 5/465 nr 3389. Ibn Bâz ansåg den vara god (hasan) i Tuhfat ul-Akhyâr 39.",
+              "translitteration": "Radhîtu billâhi Rabba, wa bil-Islâmi dîna, wa bi-Muhammedin [sallAllahu ‘alayhi wa sallama] nabiyya.",
               "svensk_text": "Jag är nöjd med Allah som Herre, med islam som religion och med Muhammed som profet.",
               "kallhanvisning": "”Allah har lovat att den som läser detta tre gånger på morgonen eller tre gånger på kvällen kommer vara nöjd på Domedagen.” Ahmad 4/337, An-Nasâ’î i ‘Amal Al-Yaum wal-Laylah nr 4, Ibn Sunnî nr 68, Abû Dâwûd 4/318 nr 5072, At-Tirmidhî 5/465 nr 3389. Ibn Bâz ansåg den vara god (hasan) i Tuhfat ul- Akhyâr 39.",
               "mp3_url": "https://fra1.digitaloceanspaces.com/islamnu/dhikr/remembrance/audio/87.mp3",
@@ -9798,7 +9802,7 @@
                   "undersida": "Åminnelser under morgon och kväll"
                 }
               },
-              "lases_info": "Sägs tre gånger."
+              "lases_info": "Läses tre gånger."
             },
             {
               "titel": "Du Levande, Vidmakthållare!",
@@ -10223,7 +10227,7 @@
                   "svensk_text": "I Allahs Namn, Den Nåderike Den Barmhärtige. Säg: Jag tar skydd hos människornas Herre. Människornas Konung. Människornas Gud. Mot den förrädiske frestarens ondska. Han som viskar inom människornas bröst. Bland både djinnerna och människorna.",
                   "kallhanvisning": "Koranen 114:1–6. Abû Dâwûd 4/322 nr 5082, At-Tirmidhî 5/567 nr 3575. Se även Sahîh-ut-Tirmidhî 3/182.",
                   "qcf_page": 604,
-                  "qcf_glyphs": "ﱰ ﱱ ﱲ ﱳ ﱵ ﱶ ﱸ ﱹ ﱺ ﱻ ﱼ ﱽ ﱾ ﲀ ﲁ ﲂ ﲃ ﲄ ﲆ ﲇ ﲈ",
+                  "qcf_glyphs": "ﱰ ﱱ ﱲ ﱳ ﱴ ﱵ ﱶ ﱷ ﱸ ﱹ ﱺ ﱻ ﱼ ﱽ ﱾ ﱿ ﲀ ﲁ ﲂ ﲃ ﲄ ﲅ ﲆ ﲇ ﲈ ﲉ",
                   "qcf_bismillah": true
                 }
               ],
@@ -10502,8 +10506,8 @@
               "titel": "I Allahs namn [söker jag skydd]",
               "url": "https://islam.nu/dhikr/dhikr-for-morgon-och-kvall/i-allahs-namn-soker-jag-skydd/",
               "arabisk_text": "بِسْمِ اللَّهِ الَّذِي لا يَضُرُّ مَعَ اسْمِهِ شَيءٌ في الأرْضِ وَلَا فِي السَّمَاءِ وهُوَ السَّمِيعُ العَلِيْمُ",
-              "translitteration": "I Allahs namn [söker jag skydd]; Den i vars namn ingenting på jorden eller i himlarna [kan] skadas och Han är as-Samî´u [Den som Hör allt] al-´Alîm [Den Allvetande].[Sägs tre gånger.]",
-              "svensk_text": "",
+              "translitteration": "Bismillâhil-lathî lâ yadhurru ma'as-mihi shay'un fil-ardhi wa lâ fis-samâ wa Huwas-Samî' ul-'Alîm.",
+              "svensk_text": "I Allahs namn [söker jag skydd]; Den i vars namn ingenting på jorden eller i himlarna [kan] skadas och Han är as-Samî'u [Den som Hör allt] al-'Alîm [Den Allvetande].",
               "kallhanvisning": "”Den som läser detta tre gånger på morgonen kommer inte drabbas av något ont till kvällen. Och den som läser detta tre gånger på kvällen kommer inte att drabbas av något ont till morgonen.” Abû Dâwûd 4/323 nr 5088, 5089, At- Tirmidhî 5/465 nr 3388, Ibn Mâdjah nr 3869, Ahmad1/72. Se även Sahîh Ibn Mâdjah 2/332. Ibn Bâz ansåg att kedjan var god (hasan) i Tuhfat-ul-Akhyâr s. 39.",
               "mp3_url": "https://fra1.digitaloceanspaces.com/islamnu/dhikr/remembrance/audio/86.mp3",
               "source_integrity": {
@@ -10527,13 +10531,13 @@
                   "undersida": "Åminnelser under morgon och kväll"
                 }
               },
-              "lases_info": "Sägs tre gånger."
+              "lases_info": "Läses tre gånger."
             },
             {
               "titel": "Jag är nöjd med Allah som Herre",
               "url": "https://islam.nu/dhikr/dhikr-for-morgon-och-kvall/jag-ar-nojd-med-allah-som-herre/",
               "arabisk_text": "رَضِيْتُ باللَّهِ رَبًّا، وبالإسْلامِ دِيْناً، وبِمُحَمَّدٍ نَبيًّا",
-              "translitteration": "Ahmad 4/337, An-Nasâ’î i ‘Amal Al-Yaum wal-Laylah nr 4, Ibn Sunnî nr 68, Abû Dâwûd 4/318 nr 5072, At-Tirmidhî 5/465 nr 3389. Ibn Bâz ansåg den vara god (hasan) i Tuhfat ul-Akhyâr 39.",
+              "translitteration": "Radhîtu billâhi Rabba, wa bil-Islâmi dîna, wa bi-Muhammedin [sallAllahu ‘alayhi wa sallama] nabiyya.",
               "svensk_text": "Jag är nöjd med Allah som Herre, med islam som religion och med Muhammed som profet.",
               "kallhanvisning": "”Allah har lovat att den som läser detta tre gånger på morgonen eller tre gånger på kvällen kommer vara nöjd på Domedagen.” Ahmad 4/337, An-Nasâ’î i ‘Amal Al-Yaum wal-Laylah nr 4, Ibn Sunnî nr 68, Abû Dâwûd 4/318 nr 5072, At-Tirmidhî 5/465 nr 3389. Ibn Bâz ansåg den vara god (hasan) i Tuhfat ul- Akhyâr 39.",
               "mp3_url": "https://fra1.digitaloceanspaces.com/islamnu/dhikr/remembrance/audio/87.mp3",
@@ -10555,7 +10559,7 @@
                   "undersida": "Åminnelser under morgon och kväll"
                 }
               },
-              "lases_info": "Sägs tre gånger."
+              "lases_info": "Läses tre gånger."
             },
             {
               "titel": "Du Levande, Vidmakthållare!",
@@ -11313,10 +11317,10 @@
             {
               "titel": "Håll ihop händerna med handflatorna uppåt, blås i dem mjukt och läs",
               "url": "https://islam.nu/dhikr/vad-man-sager-innan-man-gar-och-lagger-sig/hall-ihop-handerna-med-handflatorna-uppat-blas-i-dem-mjukt-och-las/",
-              "arabisk_text": "۞ بَسْمِ اللهِ الرَّحْمَنِ الرَّحِيمِ ۞ قُلْ هُوَ اللهُ أَحَدٌ ۞ اللهُ الصَّمَدُ ۞ لَمْ يَلِدْ وَلَمْ يُولَدْ ۞ وَلَمْ يَكُنْ لَهُ كُفُوًا أَحَدٌ ۞۞ بِسۡمِ ٱللَّهِ ٱلرَّحۡمَٰنِ ٱلرَّحِيمِ ۞ قُلۡ أَعُوذُ بِرَبِّ ٱلۡفَلَقِ۞ مِن شَرِّ مَا خَلَقَ۞ وَمِن شَرِّ غَاسِقٍ إِذَا وَقَبَ۞ وَمِن شَرِّ ٱلنَّفَّٰثَٰتِ فِي ٱلۡعُقَدِ۞ وَمِن شَرِّ حَاسِدٍ إِذَا حَسَدَ۞۞ بِسۡمِ ٱللَّهِ ٱلرَّحۡمَٰنِ ٱلرَّحِيمِ ۞ قُلۡ أَعُوذُ بِرَبِّ ٱلنَّاسِ۞ مَلِكِ ٱلنَّاسِ۞ إِلَٰهِ ٱلنَّاسِ۞ مِن شَرِّ ٱلۡوَسۡوَاسِ ٱلۡخَنَّاسِ٤ ٱلَّذِي يُوَسۡوِسُ فِي صُدُورِ ٱلنَّاسِ۞ مِنَ ٱلۡجِنَّةِ وَٱلنَّاسِ ۞",
-              "translitteration": "Bismillâhir-Rahmânir-Rahîm.Qul HuwAllahu Ahad. Allahus-Samad. Lam yalid wa lam yûlad. Wa lam yakun lahu kufuwan Ahad.Bismillâhir-Rahmânir-Rahîm.Qul a'ûthu birabbil-falaq. Min sharri mâ khalaq. Wa min sharri ghâsiqin ithâ waqab. Wa min sharrin-naffâthâti fil-'uqad. Wa min sharri hâsidin ithâ hasad.Bismillâhir-Rahmânir-Rahîm.Qul a'ûthu birabbin-nâs. Malikin-nâs. Ilâhin-nâs. Min sharril-waswâsil-khannâs. Allathî yuwaswisu fî sudûrin-nâs. Minal-djinnati wannâs.",
-              "svensk_text": "Håll ihop händerna med handflatorna uppåt, blås i dem mjukt och läs:\"I Allahs Namn, Den Nåderike, Den Barmhärtige.Säg Han är Allah, [Han är] En. Allah - Den av skapelsen oberoende, av vilken alla beror. Han har inte avlat och inte heller är Han född, och ingen finns som kan liknas vid Honom.\"\"I Allahs Namn, Den Nåderike Den Barmhärtige.Säg: Jag tar skydd hos gryningens Herre. Mot ondskan i det som Han har skapat. Och mot ondskan i natten när den mörknar. Och mot ondskan hos de [magiker] som blåser på knutarna. Och mot den avundsammes ondska när han avundas.\"\"I Allahs Namn, Den Nåderike Den Barmhärtige.Säg: Jag tar skydd hos människornas Herre. Människornas Konung. Människornas Gud. Mot den förrädiske frestarens ondska. Han som viskar inom människornas bröst. Bland både djinnerna och människorna.\"- stryk sedan med händerna över kroppen. Börja med huvudet och ansiktet och sedan [framdelen av] kroppen.[Detta görs tre gånger].",
-              "kallhanvisning": "Al-Bukhârî med Fath-ul-Bârî 9/62 nr 5017, Muslim 4/1723 nr 2192.",
+              "arabisk_text": "",
+              "translitteration": "",
+              "svensk_text": "",
+              "kallhanvisning": "",
               "mp3_url": "https://fra1.digitaloceanspaces.com/islamnu/dhikr/remembrance/audio/99.mp3",
               "source_integrity": {
                 "original_post_index": 0,
@@ -11341,7 +11345,47 @@
                   "kategori": "Sömn",
                   "undersida": "Vad man säger innan man går och lägger sig"
                 }
-              }
+              },
+              "delposter": [
+                {
+                  "titel": "al-Ikhlâs",
+                  "arabisk_text": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ قُلْ هُوَ ٱللَّهُ أَحَدٌ ﴿١﴾ ٱللَّهُ ٱلصَّمَدُ ﴿٢﴾ لَمْ يَلِدْ وَلَمْ يُولَدْ ﴿٣﴾ وَلَمْ يَكُن لَّهُۥ كُفُوًا أَحَدٌۢ ﴿٤﴾",
+                  "translitteration": "",
+                  "svensk_text": "",
+                  "kallhanvisning": "",
+                  "qcf_page": 604,
+                  "qcf_glyphs": "ﱁ ﱂ ﱃ ﱄ ﱅ ﱆ ﱇ ﱈ ﱉ ﱊ ﱋ ﱌ ﱍ ﱎ ﱏ ﱐ ﱑ ﱒ ﱓ",
+                  "qcf_bismillah": true
+                },
+                {
+                  "titel": "al-Falaq",
+                  "arabisk_text": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ قُلْ أَعُوذُ بِرَبِّ ٱلْفَلَقِ ﴿١﴾ مِن شَرِّ مَا خَلَقَ ﴿٢﴾ وَمِن شَرِّ غَاسِقٍ إِذَا وَقَبَ ﴿٣﴾ وَمِن شَرِّ ٱلنَّفَّـٰثَـٰتِ فِى ٱلْعُقَدِ ﴿٤﴾ وَمِن شَرِّ حَاسِدٍ إِذَا حَسَدَ ﴿٥﴾",
+                  "translitteration": "",
+                  "svensk_text": "",
+                  "kallhanvisning": "",
+                  "qcf_page": 604,
+                  "qcf_glyphs": "ﱔ ﱕ ﱖ ﱗ ﱘ ﱙ ﱚ ﱛ ﱜ ﱝ ﱞ ﱟ ﱠ ﱡ ﱢ ﱣ ﱤ ﱥ ﱦ ﱧ ﱨ ﱩ ﱪ ﱫ ﱬ ﱭ ﱮ ﱯ",
+                  "qcf_bismillah": true
+                },
+                {
+                  "titel": "an-Nâs",
+                  "arabisk_text": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ قُلْ أَعُوذُ بِرَبِّ ٱلنَّاسِ ﴿١﴾ مَلِكِ ٱلنَّاسِ ﴿٢﴾ إِلَـٰهِ ٱلنَّاسِ ﴿٣﴾ مِن شَرِّ ٱلْوَسْوَاسِ ٱلْخَنَّاسِ ﴿٤﴾ ٱلَّذِى يُوَسْوِسُ فِى صُدُورِ ٱلنَّاسِ ﴿٥﴾ مِنَ ٱلْجِنَّةِ وَٱلنَّاسِ ﴿٦﴾",
+                  "translitteration": "",
+                  "svensk_text": "",
+                  "kallhanvisning": "",
+                  "qcf_page": 604,
+                  "qcf_glyphs": "ﱰ ﱱ ﱲ ﱳ ﱴ ﱵ ﱶ ﱷ ﱸ ﱹ ﱺ ﱻ ﱼ ﱽ ﱾ ﱿ ﲀ ﲁ ﲂ ﲃ ﲄ ﲅ ﲆ ﲇ ﲈ ﲉ",
+                  "qcf_bismillah": true
+                },
+                {
+                  "titel": "",
+                  "arabisk_text": "",
+                  "translitteration": "Bismillâhir-Rahmânir-Rahîm.\nQul HuwAllahu Ahad. Allahus-Samad. Lam yalid wa lam yûlad. Wa lam yakun lahu kufuwan Ahad.\n\nBismillâhir-Rahmânir-Rahîm.\nQul a’ûthu birabbil-falaq. Min sharri mâ khalaq. Wa min sharri ghâsiqin ithâ waqab. Wa min sharrin-naffâthâti fil-‘uqad. Wa min sharri hâsidin ithâ hasad.\n\nBismillâhir-Rahmânir-Rahîm.\nQul a’ûthu birabbin-nâs. Malikin-nâs. Ilâhin-nâs. Min sharril-waswâsil-khannâs. Allathî yuwaswisu fî sudûrin-nâs. Minal-djinnati wannâs.",
+                  "svensk_text": "Håll ihop händerna med handflatorna uppåt, blås i dem mjukt och läs:\n\n„I Allahs Namn, Den Nåderike, Den Barmhärtige.\nSäg Han är Allah, [Han är] En. Allah - Den av skapelsen oberoende, av vilken alla beror. Han har inte avlat och inte heller är Han född, och ingen finns som kan liknas vid Honom.”\n\n„I Allahs Namn, Den Nåderike Den Barmhärtige.\nSäg: Jag tar skydd hos gryningens Herre. Mot ondskan i det som Han har skapat. Och mot ondskan i natten när den mörknar. Och mot ondskan hos de [magiker] som blåser på knutarna. Och mot den avundsammes ondska när han avundas.”\n\n„I Allahs Namn, Den Nåderike Den Barmhärtige.\nSäg: Jag tar skydd hos människornas Herre. Människornas Konung. Människornas Gud. Mot den förrädiske frestarens ondska. Han som viskar inom människornas bröst. Bland både djinnerna och människorna.”\n\n- stryk sedan med händerna över kroppen. Börja med huvudet och ansiktet och sedan [framdelen av] kroppen.\n[Detta görs tre gånger].",
+                  "kallhanvisning": "Al-Bukhârî med Fath-ul-Bârî 9/62 nr 5017, Muslim 4/1723 nr 2192."
+                }
+              ],
+              "lases_info": "Görs tre gånger."
             },
             {
               "titel": "Kursi-versen",
@@ -11545,10 +11589,16 @@
               "titel": "Subhân Allah, Al-Hamdu lillâh, Allahu Akbar",
               "url": "https://islam.nu/dhikr/vad-man-sager-innan-man-gar-och-lagger-sig/subhan-allah-al-hamdu-lillah-allahu-akbar/",
               "arabisk_text": "سُبْحَانَ اللَّهِ وَالـحَمْدُ للَّهِ وَاللَّهُ أكْبَرُ",
-              "translitteration": "Fri är Allah från alla brister (Subhân Allah 33 gånger). Alla lovprisningar tillkommer Allah. (Al-Hamdu lillâh 33 gånger). Allah är störst (Allahu Akbar 34 gånger).",
-              "svensk_text": "",
+              "translitteration": "SubhânAllah, walhamdu lillâh, wAllahu Akbar.",
+              "svensk_text": "Fri är Allah från alla brister (Subhân Allah 33 gånger). Alla lovprisningar tillkommer Allah. (Al-Hamdu lillâh 33 gånger). Allah är störst (Allahu Akbar 34 gånger).",
               "kallhanvisning": "Al-Bukhârî med Fath-ul-Bârî 11/113 nr 6312 och Muslim 4/2983 nr 2711.",
               "mp3_url": "https://fra1.digitaloceanspaces.com/islamnu/dhikr/remembrance/audio/106.mp3",
+              "hadiths": [
+                {
+                  "text": "Profeten ﷺ sade: \"Ska jag inte lära er något som är bättre än att jag ger er en tjänare?\" De svarade ja, så Profeten ﷺ sade: \"När ni lägger er på kvällen för att sova, säg 'Allahu Akbar' 34 gånger, 'Subhanallah' 33 gånger, 'Alhamdulillah' 33 gånger, eftersom denna åminnelse av Allah är bättre för er än att ha en tjänare.\"",
+                  "kalla": "Al-Bukhârî med Fath-ul-Bârî 11/113 nr 6312 och Muslim 4/2983 nr 2711."
+                }
+              ],
               "source_integrity": {
                 "original_post_index": 7,
                 "source_url_present": true
@@ -11578,8 +11628,8 @@
               "titel": "Allah! De sju himlarna och Den väldiga tronens Herre!",
               "url": "https://islam.nu/dhikr/vad-man-sager-innan-man-gar-och-lagger-sig/allah-de-sju-himlarna-och-den-valdiga-tronens-herre/",
               "arabisk_text": "اللَّهُمَّ رَبَّ السَّمَـوَاتِ السَّبْعِ، ورَبَّ الأرْضِ، ورَبَّ العَرْشِ العَظِيمِ، رَبَّنَا ورَبَّ كُلِّ شَيءٍ، فالِقَ الحَبِّ والنَّوَى، وَمُنْزِلَ التَّوْرَاةِ والإنْجِيلِ والفُرْقَانِ، أعُوذُ بِكَ مِنْ شَرِّ كُلِّ شَيءٍ أنْتَ آخِذٌ بِنَاصِيتهِ، اللَّهُمَّ أنْتَ الأوَّلُ فَلَيْسَ قَبْلَكَ شَيءٌ، وأنْتَ الآخِرُ فَلَيْسَ بَعْدَكَ شَيءٌ، وأنْتَ الظَّاهِرُ فَلَيْسَ فَوْقَكَ شَيءٌ، وأنْتَ البَاطِنُ فَلَيْسَ دُونَكَ شَيءٌ، اقْضِ عَنَّا الدَّيْنَ، وَأَغْنِنَا مِنَ الفَقْرِ",
-              "translitteration": "Allah! De sju himlarna och Den väldiga tronens Herre! Vår Herre och alltings Herre. Du som låter fröna och fruktkärnorna klyvas och som har uppenbarat Torah, Evangeliet och al-Furqân . Jag söker skydd hos Dig från allt det onda vars lugg Du har fattat i ett fast grepp . Allah! Du är den Förste; det finns inget före Dig och Du är den Siste; det finns inget efter Dig. Du är adh-Dhâhir; det finns inget ovanför Dig och Du är al-Bâtin; det finns inget närmre än Dig. Låt våra skulder betalas och skona oss från fattigdom.",
-              "svensk_text": "",
+              "translitteration": "Allahumma Rabbas-samâwâtis-sab'i wa Rabbal-'arshil-'adhîm, Rabbanâ wa Rabba kulli shay, fâliqal-habbi wannawâ, wa munzilat-Tawrâti wal-Indjîli, wal-Furqân, a'ûthu bika min sharri kulli shay´in Anta âkhithun binâsiyatih. Allahumma Antal-Awwalu falaysa qablaka shay, wa Antal-Âkhiru falaysa ba'daka shay, wa Antadh-Dhâhiru falaysa fawqaka shay, wa Antal-Bâtinu falaysa dûnaka shay, iqdhi 'annad-dayna wa aghninâ minal-faqr.",
+              "svensk_text": "Allah! De sju himlarna och Den väldiga tronens Herre! Vår Herre och alltings Herre. Du som låter fröna och fruktkärnorna klyvas och som har uppenbarat Torah, Evangeliet och al-Furqân . Jag söker skydd hos Dig från allt det onda vars lugg Du har fattat i ett fast grepp . Allah! Du är den Förste; det finns inget före Dig och Du är den Siste; det finns inget efter Dig. Du är adh-Dhâhir; det finns inget ovanför Dig och Du är al-Bâtin; det finns inget närmre än Dig. Låt våra skulder betalas och skona oss från fattigdom.",
               "kallhanvisning": "Muslim 4/2084 nr 2713.",
               "mp3_url": "https://fra1.digitaloceanspaces.com/islamnu/dhikr/remembrance/audio/107.mp3",
               "source_integrity": {

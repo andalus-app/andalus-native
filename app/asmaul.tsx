@@ -45,6 +45,20 @@ const SEARCH_INDEX = names.map(n => ({
 
 const FAV_KEY = 'asmaul_husna_favorites';
 
+// Font size persistence keys + step arrays for the detail view
+const ASMAUL_FS_ARABIC    = 'asmaul-arabic-font-size-v1';
+const ASMAUL_FS_UTTAL     = 'asmaul-uttal-font-size-v1';
+const ASMAUL_FS_FORKLARING = 'asmaul-forklaring-font-size-v1';
+const ASMAUL_FS_KORANVERS  = 'asmaul-koranvers-font-size-v1';
+// Hero Arabic name steps — default index 3 (= 58px, matches current hardcoded value)
+const ASMAUL_ARABIC_STEPS     = [32, 40, 50, 58, 70, 82, 96] as const;
+// Transliteration steps — default index 2 (= 22px)
+const ASMAUL_UTTAL_STEPS      = [14, 18, 22, 26, 30, 36, 42] as const;
+// Förklaring text steps — default index 2 (= 15px)
+const ASMAUL_FORKLARING_STEPS = [11, 13, 15, 18, 22, 27, 32] as const;
+// Koranvers text steps — default index 1 (= 14px)
+const ASMAUL_KORANVERS_STEPS  = [11, 14, 16, 18, 22, 27, 32] as const;
+
 // Global stopper — ensures only one audio plays at a time across the whole screen.
 let _stopActiveNameAudio: (() => void) | null = null;
 
@@ -309,6 +323,44 @@ function ListRow({ name, onPress, isFav, onToggleFav, T }: { name: Name; onPress
 }
 
 /* ─────────────────────────────────────────────────────────────
+   FONT SIZE PANEL
+───────────────────────────────────────────────────────────── */
+function AsmaulFontSizeRow({ label, index, steps, onDecrease, onIncrease, T, last }: {
+  label: string; index: number; steps: readonly number[];
+  onDecrease: () => void; onIncrease: () => void;
+  T: any; last?: boolean;
+}) {
+  const atMin = index === 0;
+  const atMax = index === steps.length - 1;
+  return (
+    <View style={{
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+      paddingHorizontal: 16, paddingVertical: 9,
+      borderBottomWidth: last ? 0 : 1, borderBottomColor: T.border,
+    }}>
+      <Text style={{ fontSize: 12, fontWeight: '600', color: T.textMuted, width: 72 }}>{label}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <TouchableOpacity onPress={onDecrease} disabled={atMin} activeOpacity={0.7}
+          style={{ width: 28, height: 28, borderRadius: 7, borderWidth: 1, borderColor: T.border, backgroundColor: T.card, alignItems: 'center', justifyContent: 'center' }}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+          <Text style={{ fontSize: 12, fontWeight: '700', color: atMin ? T.textMuted : T.text }}>A</Text>
+        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 4 }}>
+          {steps.map((_, i) => (
+            <View key={i} style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: i <= index ? T.accent : T.border }} />
+          ))}
+        </View>
+        <TouchableOpacity onPress={onIncrease} disabled={atMax} activeOpacity={0.7}
+          style={{ width: 28, height: 28, borderRadius: 7, borderWidth: 1, borderColor: T.border, backgroundColor: T.card, alignItems: 'center', justifyContent: 'center' }}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+          <Text style={{ fontSize: 17, fontWeight: '700', color: atMax ? T.textMuted : T.text }}>A</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────
    DETAIL SCREEN
 ───────────────────────────────────────────────────────────── */
 function DetailScreen({ name, onBack, isFav, onToggleFav, T }: { name: Name; onBack: () => void; isFav: boolean; onToggleFav: () => void; T: any }) {
@@ -318,6 +370,41 @@ function DetailScreen({ name, onBack, isFav, onToggleFav, T }: { name: Name; onB
   const SCREEN_W = Dimensions.get('window').width;
   const [verseLoading, setVerseLoading] = useState(false);
   const [tooltipVisible, setTooltipVisible] = useState(false);
+
+  // Font size state
+  const [arabicIdx,     setArabicIdx]     = useState(3); // default 58px
+  const [uttalIdx,      setUttalIdx]      = useState(2); // default 22px
+  const [forklaringIdx, setForklaringIdx] = useState(2); // default 15px
+  const [koranversIdx,  setKoranversIdx]  = useState(1); // default 14px
+  const [showFontPanel, setShowFontPanel] = useState(false);
+
+  useEffect(() => {
+    Promise.all([
+      AsyncStorage.getItem(ASMAUL_FS_ARABIC),
+      AsyncStorage.getItem(ASMAUL_FS_UTTAL),
+      AsyncStorage.getItem(ASMAUL_FS_FORKLARING),
+      AsyncStorage.getItem(ASMAUL_FS_KORANVERS),
+    ]).then(([a, u, f, k]) => {
+      if (a !== null) { const n = parseInt(a, 10); if (!isNaN(n) && n >= 0 && n < ASMAUL_ARABIC_STEPS.length) setArabicIdx(n); }
+      if (u !== null) { const n = parseInt(u, 10); if (!isNaN(n) && n >= 0 && n < ASMAUL_UTTAL_STEPS.length) setUttalIdx(n); }
+      if (f !== null) { const n = parseInt(f, 10); if (!isNaN(n) && n >= 0 && n < ASMAUL_FORKLARING_STEPS.length) setForklaringIdx(n); }
+      if (k !== null) { const n = parseInt(k, 10); if (!isNaN(n) && n >= 0 && n < ASMAUL_KORANVERS_STEPS.length) setKoranversIdx(n); }
+    });
+  }, []);
+
+  const decArabic     = useCallback(() => setArabicIdx(i => { const n = Math.max(0, i-1); AsyncStorage.setItem(ASMAUL_FS_ARABIC, String(n)); return n; }), []);
+  const incArabic     = useCallback(() => setArabicIdx(i => { const n = Math.min(ASMAUL_ARABIC_STEPS.length-1, i+1); AsyncStorage.setItem(ASMAUL_FS_ARABIC, String(n)); return n; }), []);
+  const decUttal      = useCallback(() => setUttalIdx(i => { const n = Math.max(0, i-1); AsyncStorage.setItem(ASMAUL_FS_UTTAL, String(n)); return n; }), []);
+  const incUttal      = useCallback(() => setUttalIdx(i => { const n = Math.min(ASMAUL_UTTAL_STEPS.length-1, i+1); AsyncStorage.setItem(ASMAUL_FS_UTTAL, String(n)); return n; }), []);
+  const decForklaring = useCallback(() => setForklaringIdx(i => { const n = Math.max(0, i-1); AsyncStorage.setItem(ASMAUL_FS_FORKLARING, String(n)); return n; }), []);
+  const incForklaring = useCallback(() => setForklaringIdx(i => { const n = Math.min(ASMAUL_FORKLARING_STEPS.length-1, i+1); AsyncStorage.setItem(ASMAUL_FS_FORKLARING, String(n)); return n; }), []);
+  const decKoranvers  = useCallback(() => setKoranversIdx(i => { const n = Math.max(0, i-1); AsyncStorage.setItem(ASMAUL_FS_KORANVERS, String(n)); return n; }), []);
+  const incKoranvers  = useCallback(() => setKoranversIdx(i => { const n = Math.min(ASMAUL_KORANVERS_STEPS.length-1, i+1); AsyncStorage.setItem(ASMAUL_FS_KORANVERS, String(n)); return n; }), []);
+
+  const arabicFs     = ASMAUL_ARABIC_STEPS[arabicIdx];
+  const uttalFs      = ASMAUL_UTTAL_STEPS[uttalIdx];
+  const forklaringFs = ASMAUL_FORKLARING_STEPS[forklaringIdx];
+  const koranversFs  = ASMAUL_KORANVERS_STEPS[koranversIdx];
   const verseAbortRef = useRef<AbortController | null>(null);
   const tooltipOpacity = useRef(new Animated.Value(0)).current;
   const tooltipSlide   = useRef(new Animated.Value(-6)).current;
@@ -426,6 +513,24 @@ function DetailScreen({ name, onBack, isFav, onToggleFav, T }: { name: Name; onB
         <Text style={{ fontSize: 18, color: T.text, marginTop: -2 }}>‹</Text>
       </TouchableOpacity>
 
+      {/* Floating gear — font size toggle */}
+      <TouchableOpacity
+        onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowFontPanel(p => !p); }}
+        style={[styles.floatingBtn, {
+          top: insets.top + 12, right: 54,
+          backgroundColor: T.isDark ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.75)',
+          borderColor: showFontPanel ? T.accent : T.border,
+        }]}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+      >
+        <Svg width={18} height={18} viewBox="0 0 24 24" fill="none"
+          stroke={showFontPanel ? T.accent : T.textMuted}
+          strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+          <Path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" />
+          <Path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+        </Svg>
+      </TouchableOpacity>
+
       {/* Floating heart */}
       <TouchableOpacity
         onPress={onToggleFav}
@@ -438,19 +543,33 @@ function DetailScreen({ name, onBack, isFav, onToggleFav, T }: { name: Name; onB
         <HeartIcon filled={isFav} size={20} color={T.textMuted} />
       </TouchableOpacity>
 
+      {/* Font size panel overlay */}
+      {showFontPanel && (
+        <View style={{
+          position: 'absolute', top: insets.top + 56, left: 0, right: 0, zIndex: 25,
+          backgroundColor: T.bg, borderBottomWidth: 1, borderBottomColor: T.border,
+          shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 8,
+        }}>
+          <AsmaulFontSizeRow label="Arabisk" index={arabicIdx} steps={ASMAUL_ARABIC_STEPS} onDecrease={decArabic} onIncrease={incArabic} T={T} />
+          <AsmaulFontSizeRow label="Uttal" index={uttalIdx} steps={ASMAUL_UTTAL_STEPS} onDecrease={decUttal} onIncrease={incUttal} T={T} />
+          <AsmaulFontSizeRow label="Förklaring" index={forklaringIdx} steps={ASMAUL_FORKLARING_STEPS} onDecrease={decForklaring} onIncrease={incForklaring} T={T} />
+          <AsmaulFontSizeRow label="Koranvers" index={koranversIdx} steps={ASMAUL_KORANVERS_STEPS} onDecrease={decKoranvers} onIncrease={incKoranvers} T={T} last />
+        </View>
+      )}
+
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: insets.bottom + 130 }} showsVerticalScrollIndicator={false}>
         {/* Hero */}
         <View style={{ alignItems: 'center', paddingTop: insets.top + 56, paddingHorizontal: 24, paddingBottom: 20 }}>
           <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: T.accent, alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
             <Text style={{ fontSize: 16, fontWeight: '700', color: '#fff' }}>{name.nr}</Text>
           </View>
-          <Text style={{ fontSize: 58, lineHeight: 82, color: T.text, textAlign: 'center', writingDirection: 'rtl', marginBottom: 14 }}>
+          <Text style={{ fontSize: arabicFs, lineHeight: Math.round(arabicFs * 1.41), color: T.text, textAlign: 'center', writingDirection: 'rtl', marginBottom: 14 }}>
             {name.arabic}
           </Text>
-          <Text style={{ fontSize: 22, fontWeight: '700', color: T.text, letterSpacing: -0.2, marginBottom: 4, textAlign: 'center' }}>
+          <Text style={{ fontSize: uttalFs, fontWeight: '700', color: T.text, letterSpacing: -0.2, marginBottom: 4, textAlign: 'center', lineHeight: Math.round(uttalFs * 1.35) }}>
             {name.transliteration}
           </Text>
-          <Text style={{ fontSize: 15, color: T.textMuted, textAlign: 'center', marginBottom: 20 }}>
+          <Text style={{ fontSize: 15, color: T.textMuted, textAlign: 'center', marginBottom: 20, lineHeight: 23 }}>
             {name.swedish}
           </Text>
 
@@ -481,7 +600,7 @@ function DetailScreen({ name, onBack, isFav, onToggleFav, T }: { name: Name; onB
         {!!name.forklaring && (
           <View style={{ paddingHorizontal: 18, marginBottom: 20 }}>
             <Text style={[styles.sectionLabel, { color: T.accent }]}>Förklaring</Text>
-            <Text style={{ fontSize: 15, lineHeight: 26, color: T.textSecondary }}>{name.forklaring}</Text>
+            <Text style={{ fontSize: forklaringFs, lineHeight: Math.round(forklaringFs * 1.73), color: T.textSecondary }}>{name.forklaring}</Text>
           </View>
         )}
 
@@ -493,11 +612,11 @@ function DetailScreen({ name, onBack, isFav, onToggleFav, T }: { name: Name; onB
               backgroundColor: T.isDark ? 'rgba(45,139,120,0.1)' : 'rgba(36,100,93,0.06)',
               borderWidth: 1, borderColor: T.accent + '30', borderRadius: 16, padding: 16,
             }}>
-              <Text style={{ fontSize: 24, lineHeight: 44, textAlign: 'center', color: T.text, writingDirection: 'rtl', marginBottom: 14 }}>
+              <Text style={{ fontSize: Math.round(koranversFs * 1.7), lineHeight: Math.round(koranversFs * 1.7 * 1.7), textAlign: 'center', color: T.text, writingDirection: 'rtl', marginBottom: 14 }}>
                 {name.koranvers_arabiska}
               </Text>
               <View style={{ height: 1, backgroundColor: T.accent + '25', marginBottom: 12 }} />
-              <Text style={{ fontSize: 14, color: T.textMuted, lineHeight: 23 }}>{name.koranvers_svenska}</Text>
+              <Text style={{ fontSize: koranversFs, color: T.textMuted, lineHeight: Math.round(koranversFs * 1.64) }}>{name.koranvers_svenska}</Text>
               {!!name.sura_ayat && (
                 <View style={{ marginTop: 12 }}>
                   {/* Verse badge — number only */}

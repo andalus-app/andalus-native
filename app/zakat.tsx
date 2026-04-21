@@ -17,17 +17,25 @@
  * Loans given: included if expected to be repaid.
  */
 
+import React, { useState, useCallback, useMemo, useEffect, useRef, useContext, createContext } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, TextInput,
   StyleSheet, KeyboardAvoidingView, Platform, Alert, ActivityIndicator,
 } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import BackButton from '../components/BackButton';
 import ZakatReminderCard from '../components/ZakatReminderCard';
-import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../context/ThemeContext';
 import SvgIcon from '../components/SvgIcon';
+
+// Font size context — lets all sub-components read the current text size
+// without threading props through every layer.
+const ZakatFontCtx = createContext(14);
+
+const ZAKAT_FS_KEY   = 'zakat-text-font-size-v1';
+const ZAKAT_FS_STEPS = [11, 14, 16, 18, 22, 27, 32] as const; // default idx 1 (14px)
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -421,13 +429,14 @@ function ProgressBar({ step, total }: { step: number; total: number }) {
 
 function SectionTitle({ title, subtitle }: { title: string; subtitle?: string }) {
   const { theme: T } = useTheme();
+  const fs = useContext(ZakatFontCtx);
   return (
     <View style={{ marginBottom: 16 }}>
-      <Text style={{ fontSize: 20, fontWeight: '700', color: T.text, marginBottom: subtitle ? 4 : 0 }}>
+      <Text style={{ fontSize: Math.max(16, fs + 4), fontWeight: '700', color: T.text, marginBottom: subtitle ? 4 : 0 }}>
         {title}
       </Text>
       {subtitle && (
-        <Text style={{ fontSize: 13, color: T.textMuted, lineHeight: 18 }}>{subtitle}</Text>
+        <Text style={{ fontSize: Math.max(11, fs - 2), color: T.textMuted, lineHeight: Math.round((fs - 2) * 1.5) }}>{subtitle}</Text>
       )}
     </View>
   );
@@ -435,13 +444,14 @@ function SectionTitle({ title, subtitle }: { title: string; subtitle?: string })
 
 function InfoBox({ text }: { text: string }) {
   const { theme: T } = useTheme();
+  const fs = useContext(ZakatFontCtx);
   return (
     <View style={{
       backgroundColor: T.accentGlow,
       borderRadius: 10, padding: 12,
       marginBottom: 12,
     }}>
-      <Text style={{ fontSize: 12, color: T.accent, lineHeight: 17 }}>{text}</Text>
+      <Text style={{ fontSize: Math.max(11, fs - 2), color: T.accent, lineHeight: Math.round((fs - 2) * 1.5) }}>{text}</Text>
     </View>
   );
 }
@@ -1259,6 +1269,19 @@ export default function ZakatScreen() {
   const [tab, setTab] = useState<'annual' | 'fitr'>('annual');
   const { annual, setAnnual, fitr, setFitr } = useZakatStorage();
 
+  const [fsIdx, setFsIdx] = useState(1);
+  const [showFontPanel, setShowFontPanel] = useState(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem(ZAKAT_FS_KEY).then(v => {
+      if (v !== null) { const n = parseInt(v, 10); if (!isNaN(n) && n >= 0 && n < ZAKAT_FS_STEPS.length) setFsIdx(n); }
+    });
+  }, []);
+
+  const decFs = useCallback(() => setFsIdx(i => { const n = Math.max(0, i - 1); AsyncStorage.setItem(ZAKAT_FS_KEY, String(n)); return n; }), []);
+  const incFs = useCallback(() => setFsIdx(i => { const n = Math.min(ZAKAT_FS_STEPS.length - 1, i + 1); AsyncStorage.setItem(ZAKAT_FS_KEY, String(n)); return n; }), []);
+  const bodyFs = ZAKAT_FS_STEPS[fsIdx];
+
   // Support deep-link navigation from Zakat reminder notification:
   // /zakat?step=result → wizard opens directly on the result step (step 6).
   const { step: stepParam } = useLocalSearchParams<{ step?: string }>();
@@ -1276,7 +1299,43 @@ export default function ZakatScreen() {
           <SvgIcon name="zakat" size={24} color={T.accent} />
           <Text style={{ fontSize: 22, fontWeight: '700', color: T.text }}>Zakatkalkylator</Text>
         </View>
+        <TouchableOpacity
+          onPress={() => setShowFontPanel(p => !p)}
+          style={{ width: 36, alignItems: 'flex-end' }}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Svg width={20} height={20} viewBox="0 0 24 24" fill="none"
+            stroke={showFontPanel ? T.accent : T.textMuted}
+            strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+            <Path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" />
+            <Path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+          </Svg>
+        </TouchableOpacity>
       </View>
+
+      {/* Font size panel */}
+      {showFontPanel && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: T.border, backgroundColor: T.bg }}>
+          <Text style={{ fontSize: 12, fontWeight: '600', color: T.textMuted }}>Textstorlek</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <TouchableOpacity onPress={decFs} disabled={fsIdx === 0} activeOpacity={0.7}
+              style={{ width: 28, height: 28, borderRadius: 7, borderWidth: 1, borderColor: T.border, backgroundColor: T.card, alignItems: 'center', justifyContent: 'center' }}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: fsIdx === 0 ? T.textMuted : T.text }}>A</Text>
+            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', gap: 4 }}>
+              {ZAKAT_FS_STEPS.map((_, i) => (
+                <View key={i} style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: i <= fsIdx ? T.accent : T.border }} />
+              ))}
+            </View>
+            <TouchableOpacity onPress={incFs} disabled={fsIdx === ZAKAT_FS_STEPS.length - 1} activeOpacity={0.7}
+              style={{ width: 28, height: 28, borderRadius: 7, borderWidth: 1, borderColor: T.border, backgroundColor: T.card, alignItems: 'center', justifyContent: 'center' }}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+              <Text style={{ fontSize: 17, fontWeight: '700', color: fsIdx === ZAKAT_FS_STEPS.length - 1 ? T.textMuted : T.text }}>A</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
 
       {/* Tab switcher */}
       <View style={{
@@ -1306,23 +1365,25 @@ export default function ZakatScreen() {
       </View>
 
       {/* Content */}
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        <ScrollView
-          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 120 }}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
+      <ZakatFontCtx.Provider value={bodyFs}>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
-          <View style={{ paddingTop: 8 }}>
-            {tab === 'annual'
-              ? <AnnualZakatWizard state={annual} setState={setAnnual} initialStep={initialStep} />
-              : <ZakatAlFitrCalc state={fitr} setState={setFitr} />
-            }
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+          <ScrollView
+            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 120 }}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={{ paddingTop: 8 }}>
+              {tab === 'annual'
+                ? <AnnualZakatWizard state={annual} setState={setAnnual} initialStep={initialStep} />
+                : <ZakatAlFitrCalc state={fitr} setState={setFitr} />
+              }
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </ZakatFontCtx.Provider>
     </View>
   );
 }

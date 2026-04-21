@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, TouchableOpacity, RefreshControl, Linking, Image, useWindowDimensions, Animated, PanResponder, Modal, StyleSheet, AppState, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, RefreshControl, Linking, Image, useWindowDimensions, Animated, Easing, PanResponder, Modal, StyleSheet, AppState, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Svg, { Path } from 'react-native-svg';
@@ -599,6 +599,13 @@ export default function HomeScreen() {
   const [popupQueue,          setPopupQueue]          = useState<Announcement[]>([]);
   // ID of the announcement banner that should pulse (set when user taps push notification)
   const [pulsingId,           setPulsingId]           = useState<string | null>(null);
+  // Active home_top banner (alternates with greeting every 5 s) — stored in AsyncStorage only
+  const [homeTopBanner, setHomeTopBanner] = useState<{ text: string; url: string; active: boolean } | null>(null);
+  // 0 = greeting visible, 1 = banner visible
+  const homeTopPhase  = useRef<0 | 1>(0);
+  const greetingX     = useRef(new Animated.Value(0)).current;
+  const bannerX       = useRef(new Animated.Value(400)).current;
+  const homeTopTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Preferred name (greeting) ─────────────────────────────────────────────
   const [preferredName,    setPreferredName]    = useState<string | null>(null);
@@ -628,6 +635,14 @@ export default function HomeScreen() {
     refreshBookingNotif();
     // Reload name on every focus so edits made in Settings are reflected instantly.
     AsyncStorage.getItem('andalus_preferred_name').then(n => setPreferredName(n || null));
+    // Reload home-top banner from AsyncStorage (set by admin in admin-announcements screen).
+    AsyncStorage.getItem('andalus_home_top_banner_v1').then(raw => {
+      if (!raw) { setHomeTopBanner(null); return; }
+      try {
+        const parsed = JSON.parse(raw);
+        setHomeTopBanner(parsed.active && parsed.text ? parsed : null);
+      } catch { setHomeTopBanner(null); }
+    });
     // If the user tapped a YouTube LIVE notification, scroll to the YouTube card.
     AsyncStorage.getItem('islamnu_live_notif_tap').then(tap => {
       if (!tap) return;
@@ -727,9 +742,9 @@ export default function HomeScreen() {
 
   // ── Fetch active announcements ────────────────────────────────────────────
   const loadAnnouncements = useCallback(async () => {
-    const all    = await fetchActiveAnnouncements();
-    const bList  = all.filter(a => a.display_type === 'banner');
-    const pList  = all.filter(a => a.display_type === 'popup');
+    const all   = await fetchActiveAnnouncements();
+    const bList = all.filter(a => a.display_type === 'banner');
+    const pList = all.filter(a => a.display_type === 'popup');
 
     setBannerAnnouncements(bList);
 
@@ -769,6 +784,60 @@ export default function HomeScreen() {
 
   // Load on tab focus (initial load + tab-switch refresh)
   useFocusEffect(useCallback(() => { loadAnnouncements(); }, [loadAnnouncements]));
+
+  // ── Home-top banner crossfade cycle (greeting ↔ banner every 5 s) ──────────
+  useEffect(() => {
+    if (!homeTopBanner) {
+      // No active home_top banner — ensure greeting is visible, clear any timer
+      if (homeTopTimer.current) clearTimeout(homeTopTimer.current);
+      greetingX.setValue(0);
+      bannerX.setValue(400);
+      homeTopPhase.current = 0;
+      return;
+    }
+
+    const OUT_MS  = 280;
+    const IN_MS   = 320;
+    const HOLD_MS = 5000;
+    const easeIn  = Easing.in(Easing.cubic);
+    const easeOut = Easing.out(Easing.cubic);
+
+    function scheduleNext() {
+      homeTopTimer.current = setTimeout(() => {
+        if (homeTopPhase.current === 0) {
+          // 1. Greeting flies out to the left
+          Animated.timing(greetingX, { toValue: -400, duration: OUT_MS, easing: easeIn, useNativeDriver: true }).start(() => {
+            // 2. Banner enters from the right, decelerates to rest
+            bannerX.setValue(400);
+            Animated.timing(bannerX, { toValue: 0, duration: IN_MS, easing: easeOut, useNativeDriver: true }).start(() => {
+              homeTopPhase.current = 1;
+              scheduleNext();
+            });
+          });
+        } else {
+          // 1. Banner flies out to the left
+          Animated.timing(bannerX, { toValue: -400, duration: OUT_MS, easing: easeIn, useNativeDriver: true }).start(() => {
+            // 2. Greeting enters from the right, decelerates to rest
+            greetingX.setValue(400);
+            Animated.timing(greetingX, { toValue: 0, duration: IN_MS, easing: easeOut, useNativeDriver: true }).start(() => {
+              homeTopPhase.current = 0;
+              scheduleNext();
+            });
+          });
+        }
+      }, HOLD_MS);
+    }
+
+    // Start from greeting-visible state
+    greetingX.setValue(0);
+    bannerX.setValue(400);
+    homeTopPhase.current = 0;
+    scheduleNext();
+
+    return () => {
+      if (homeTopTimer.current) clearTimeout(homeTopTimer.current);
+    };
+  }, [homeTopBanner?.text]); // re-run when the active banner changes
 
   // ── Real-time: instant update when admin creates/activates an announcement ─
   useEffect(() => {
@@ -880,24 +949,59 @@ export default function HomeScreen() {
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 120, flexGrow: 1 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={T.accent} />}
       >
-        {/* ── Greeting ── */}
-        <View style={{ marginBottom: 20 }}>
-          <Text style={{ fontSize: 22, fontWeight: '700', color: T.text, letterSpacing: -0.2 }} numberOfLines={1} adjustsFontSizeToFit>
-            {preferredName
-              ? `As-salāmo ʿalaykom, ${preferredName}`
-              : 'As-salāmo ʿalaykom'
-            }
-          </Text>
-          {!preferredName && (
-            <TouchableOpacity
-              activeOpacity={0.6}
-              onPress={openNameModal}
-              hitSlop={{ top: 4, bottom: 8, left: 0, right: 16 }}
-            >
-              <Text style={{ fontSize: 13, color: T.textMuted, marginTop: 5 }}>
-                Vad vill du att vi ska kalla dig? ›
+        {/* ── Greeting / Home-top banner (crossfade) ── */}
+        <View style={{ marginBottom: 20, alignSelf: 'stretch' }}>
+          {homeTopBanner ? (
+            // When a home-top banner is active: slide out left, new slides in from right
+            <View style={{ position: 'relative', overflow: 'hidden' }}>
+              {/* Greeting layer */}
+              <Animated.View style={{ transform: [{ translateX: greetingX }], alignItems: 'center' }} pointerEvents="none">
+                <Text style={{ fontSize: 22, fontWeight: '700', color: T.text, letterSpacing: -0.2, textAlign: 'center', alignSelf: 'stretch' }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+                  {preferredName ? `As-salāmo ʿalaykom, ${preferredName}` : 'As-salāmo ʿalaykom'}
+                </Text>
+                {!preferredName && (
+                  <Text style={{ fontSize: 13, color: T.textMuted, marginTop: 5, textAlign: 'center' }}>
+                    Vad vill du att vi ska kalla dig? ›
+                  </Text>
+                )}
+              </Animated.View>
+
+              {/* Banner layer */}
+              <Animated.View style={{ position: 'absolute', left: 0, right: 0, top: -2, transform: [{ translateX: bannerX }], alignItems: 'center' }}>
+                <TouchableOpacity
+                  activeOpacity={homeTopBanner.url ? 0.75 : 1}
+                  onPress={() => { if (homeTopBanner.url) Linking.openURL(homeTopBanner.url); }}
+                  style={{ width: '100%', alignItems: 'center' }}
+                >
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: T.text, textAlign: 'center', width: '100%', letterSpacing: -0.1, flexWrap: 'wrap' }}>
+                    {homeTopBanner.text}
+                  </Text>
+                  {!!homeTopBanner.url && (
+                    <Text style={{ fontSize: 12, color: T.accent, textAlign: 'center', fontWeight: '600', marginTop: 3 }}>
+                      Läs mer ›
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </Animated.View>
+            </View>
+          ) : (
+            // No banner — plain greeting
+            <View style={{ alignItems: 'center' }}>
+              <Text style={{ fontSize: 22, fontWeight: '700', color: T.text, letterSpacing: -0.2, textAlign: 'center', alignSelf: 'stretch' }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+                {preferredName ? `As-salāmo ʿalaykom, ${preferredName}` : 'As-salāmo ʿalaykom'}
               </Text>
-            </TouchableOpacity>
+              {!preferredName && (
+                <TouchableOpacity
+                  activeOpacity={0.6}
+                  onPress={openNameModal}
+                  hitSlop={{ top: 4, bottom: 8, left: 0, right: 16 }}
+                >
+                  <Text style={{ fontSize: 13, color: T.textMuted, marginTop: 5, textAlign: 'center' }}>
+                    Vad vill du att vi ska kalla dig? ›
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
           )}
         </View>
 
@@ -916,11 +1020,27 @@ export default function HomeScreen() {
           // marginHorizontal: -16 breaks out of the parent ScrollView's paddingHorizontal.
           const CARD_W = Math.floor((screenWidth - 72) / 2); // ~159 px on 390 w
           const GAP    = 8;
-          const ITEMS  = [
-            { title: 'Läs Koranen',         subtitle: 'Öppna Koranen',   icon: 'quran'       as const, route: '/quran'  },
-            { title: 'Läs åminnelser',      subtitle: 'Hisnul Muslim',    icon: 'dhikr'       as const, route: '/dhikr'  },
-            { title: 'Lär dig Allahs namn', subtitle: 'Asma ul-Husna',   icon: 'allahs-namn' as const, route: '/asmaul' },
-          ] as const;
+
+          // Show Umrah Guide from Aug 25 until Apr 7 the following year.
+          // Outside that window, show Koranen.
+          const _now   = new Date();
+          const _month = _now.getMonth() + 1; // 1-based
+          const _day   = _now.getDate();
+          const _showUmrah =
+            (_month > 8) ||
+            (_month === 8 && _day >= 25) ||
+            (_month < 4) ||
+            (_month === 4 && _day < 7);
+
+          const _firstCard = _showUmrah
+            ? { title: 'Läs Umrah Guide', subtitle: 'Förbered din Umrah', icon: 'umrah' as const, route: '/umrah' as const }
+            : { title: 'Läs Koranen',     subtitle: 'Öppna Koranen',      icon: 'quran' as const, route: '/quran' as const };
+
+          const ITEMS = [
+            _firstCard,
+            { title: 'Läs åminnelser',      subtitle: 'Hisnul Muslim',    icon: 'dhikr'       as const, route: '/dhikr'  as const },
+            { title: 'Lär dig Allahs namn', subtitle: 'Asma ul-Husna',   icon: 'allahs-namn' as const, route: '/asmaul' as const },
+          ];
 
           return (
             <View style={{ marginTop: 4, marginBottom: 4 }}>

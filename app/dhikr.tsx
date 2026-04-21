@@ -31,8 +31,16 @@ import QCFVerseText from '../components/QCFVerseText';
 // When a player starts, it registers its stop function here. Any subsequent play call
 // first invokes the registered stopper before creating a new player.
 let _stopActiveAudio: (() => void) | null = null;
-const STORAGE_FAV = 'dhikr-favorites-v1';
-const SCREEN_W    = Dimensions.get('window').width;
+const STORAGE_FAV       = 'dhikr-favorites-v1';
+const STORAGE_ARABIC_FS = 'dhikr-arabic-font-size-v1';
+const STORAGE_UTTAL_FS  = 'dhikr-uttal-font-size-v1';
+const STORAGE_SVENSKA_FS = 'dhikr-svenska-font-size-v1';
+const SCREEN_W          = Dimensions.get('window').width;
+
+// Arabic font size steps — index 1 (18px) is the default
+const ARABIC_FS_STEPS  = [14, 18, 22, 26, 32, 40, 50] as const;
+// Uttal / Svenska font size steps — index 1 (14px) is the default
+const TEXT_FS_STEPS    = [11, 14, 16, 18, 22, 27, 32] as const;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const fmtTime = (s: number) => (!s || isNaN(s)) ? '0:00' : `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
@@ -270,7 +278,7 @@ function RepetitionBadge({ text, T, isDark }: { text: string; T: any; isDark: bo
 
   const iconRotate = rotation.interpolate({
     inputRange:  [0, 360],
-    outputRange: ['0deg', '360deg'],
+    outputRange: ['0deg', '-360deg'],
     extrapolate: 'extend',
   });
 
@@ -297,10 +305,13 @@ function RepetitionBadge({ text, T, isDark }: { text: string; T: any; isDark: bo
 }
 
 // ─── Dhikr detail card ────────────────────────────────────────────────────────
-function DhikrCard({ d, T, isDark, favorites, onToggleFav }: {
+function DhikrCard({ d, T, isDark, favorites, onToggleFav, arabicFontSize = 18, uttalFontSize = 14, svenskaFontSize = 14 }: {
   d: DhikrPost; T: any; isDark: boolean;
   favorites: string[];
   onToggleFav: (k: string) => void;
+  arabicFontSize?: number;
+  uttalFontSize?: number;
+  svenskaFontSize?: number;
 }) {
   const key   = dhikrKey(d);
   const isFav = favorites.includes(key);
@@ -415,19 +426,20 @@ function DhikrCard({ d, T, isDark, favorites, onToggleFav }: {
                                 showBismillah={dp.qcf_bismillah}
                                 fallbackText={dp.arabisk_text}
                                 color={T.text}
+                                fontSize={arabicFontSize}
                               />
-                            : <ArabicText style={{ fontSize: 22, lineHeight: 46, color: T.text, textAlign: 'right', writingDirection: 'rtl' }}>{dp.arabisk_text}</ArabicText>
+                            : <ArabicText style={{ fontSize: arabicFontSize, lineHeight: Math.round(arabicFontSize * 2.1), color: T.text, textAlign: 'right', writingDirection: 'rtl' }}>{dp.arabisk_text}</ArabicText>
                           }
                         </ContentRow>
                       )}
                       {row === 'tra' && (
                         <ContentRow chip="Uttal">
-                          <Text style={{ fontSize: 14, lineHeight: 26, color: T.text }}>{dp.translitteration}</Text>
+                          <Text style={{ fontSize: uttalFontSize, lineHeight: Math.round(uttalFontSize * 1.85), color: T.text }}>{dp.translitteration}</Text>
                         </ContentRow>
                       )}
                       {row === 'swe' && (
                         <ContentRow chip="Svenska">
-                          <Text style={{ fontSize: 14, lineHeight: 26, color: T.text, fontStyle: 'italic' }}>{dp.svensk_text}</Text>
+                          <Text style={{ fontSize: svenskaFontSize, lineHeight: Math.round(svenskaFontSize * 1.85), color: T.text, fontStyle: 'italic' }}>{dp.svensk_text}</Text>
                         </ContentRow>
                       )}
                     </View>
@@ -460,19 +472,20 @@ function DhikrCard({ d, T, isDark, favorites, onToggleFav }: {
                           showBismillah={d.qcf_bismillah}
                           fallbackText={d.arabisk_text}
                           color={T.text}
+                          fontSize={arabicFontSize}
                         />
-                      : <ArabicText style={{ fontSize: 22, lineHeight: 46, color: T.text, textAlign: 'right', writingDirection: 'rtl' }}>{d.arabisk_text}</ArabicText>
+                      : <ArabicText style={{ fontSize: arabicFontSize, lineHeight: Math.round(arabicFontSize * 2.1), color: T.text, textAlign: 'right', writingDirection: 'rtl' }}>{d.arabisk_text}</ArabicText>
                     }
                   </ContentRow>
                 )}
                 {row === 'tra' && (
                   <ContentRow chip="Uttal">
-                    <Text style={{ fontSize: 14, lineHeight: 26, color: T.text }}>{d.translitteration}</Text>
+                    <Text style={{ fontSize: uttalFontSize, lineHeight: Math.round(uttalFontSize * 1.85), color: T.text }}>{d.translitteration}</Text>
                   </ContentRow>
                 )}
                 {row === 'swe' && (
                   <ContentRow chip="Svenska">
-                    <Text style={{ fontSize: 14, lineHeight: 26, color: T.text, fontStyle: 'italic' }}>{d.svensk_text}</Text>
+                    <Text style={{ fontSize: svenskaFontSize, lineHeight: Math.round(svenskaFontSize * 1.85), color: T.text, fontStyle: 'italic' }}>{d.svensk_text}</Text>
                   </ContentRow>
                 )}
               </View>
@@ -483,7 +496,7 @@ function DhikrCard({ d, T, isDark, favorites, onToggleFav }: {
               <View key={i}>
                 <View style={{ height: 1, backgroundColor: dividerCol, marginHorizontal: 16 }} />
                 <ContentRow chip="Hadith">
-                  <Text style={{ fontSize: 13, lineHeight: 22, color: T.text }}>{h.text}</Text>
+                  <Text style={{ fontSize: svenskaFontSize, lineHeight: Math.round(svenskaFontSize * 1.85), color: T.text }}>{h.text}</Text>
                 </ContentRow>
                 <View style={{ height: 1, backgroundColor: dividerCol, marginHorizontal: 16 }} />
                 <ContentRow chip="Källa">
@@ -685,6 +698,58 @@ function CatDetailView({ g, onClose, onSelectDhikr, favorites, T, isDark }: {
   );
 }
 
+// ─── Font size panel (Arabic + Uttal + Svenska) ───────────────────────────────
+function FontSizeRow({ label, index, steps, onDecrease, onIncrease, T, last }: {
+  label: string; index: number; steps: readonly number[];
+  onDecrease: () => void; onIncrease: () => void;
+  T: any; last?: boolean;
+}) {
+  const atMin = index === 0;
+  const atMax = index === steps.length - 1;
+  return (
+    <View style={{
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+      paddingHorizontal: 16, paddingVertical: 9,
+      borderBottomWidth: last ? 0 : 1, borderBottomColor: T.border,
+    }}>
+      <Text style={{ fontSize: 12, fontWeight: '600', color: T.textMuted, width: 72 }}>{label}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <TouchableOpacity onPress={onDecrease} disabled={atMin} activeOpacity={0.7}
+          style={{ width: 28, height: 28, borderRadius: 7, borderWidth: 1, borderColor: T.border, backgroundColor: T.card, alignItems: 'center', justifyContent: 'center' }}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+          <Text style={{ fontSize: 12, fontWeight: '700', color: atMin ? T.textMuted : T.text }}>A</Text>
+        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 4 }}>
+          {steps.map((_, i) => (
+            <View key={i} style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: i <= index ? T.accent : T.border }} />
+          ))}
+        </View>
+        <TouchableOpacity onPress={onIncrease} disabled={atMax} activeOpacity={0.7}
+          style={{ width: 28, height: 28, borderRadius: 7, borderWidth: 1, borderColor: T.border, backgroundColor: T.card, alignItems: 'center', justifyContent: 'center' }}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+          <Text style={{ fontSize: 17, fontWeight: '700', color: atMax ? T.textMuted : T.text }}>A</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+function ArabicFontPanel({ arabicIdx, uttalIdx, svenskaIdx, onArabicDecrease, onArabicIncrease, onUttalDecrease, onUttalIncrease, onSvenskaDecrease, onSvenskaIncrease, T, isDark }: {
+  arabicIdx: number; uttalIdx: number; svenskaIdx: number;
+  onArabicDecrease: () => void; onArabicIncrease: () => void;
+  onUttalDecrease: () => void; onUttalIncrease: () => void;
+  onSvenskaDecrease: () => void; onSvenskaIncrease: () => void;
+  T: any; isDark: boolean;
+}) {
+  return (
+    <View style={{ borderBottomWidth: 1, borderBottomColor: T.border, backgroundColor: T.bg }}>
+      <FontSizeRow label="Arabisk" index={arabicIdx} steps={ARABIC_FS_STEPS} onDecrease={onArabicDecrease} onIncrease={onArabicIncrease} T={T} />
+      <FontSizeRow label="Uttal" index={uttalIdx} steps={TEXT_FS_STEPS} onDecrease={onUttalDecrease} onIncrease={onUttalIncrease} T={T} />
+      <FontSizeRow label="Svenska" index={svenskaIdx} steps={TEXT_FS_STEPS} onDecrease={onSvenskaDecrease} onIncrease={onSvenskaIncrease} T={T} last />
+    </View>
+  );
+}
+
 // ─── Dhikr detail view (slides over cat) ─────────────────────────────────────
 function DhikrDetailView({ selDhikr, setSelDhikr, siblings, onClose, favorites, onToggleFav, T, isDark }: {
   selDhikr: DhikrPost; setSelDhikr: (d: DhikrPost) => void; siblings: DhikrPost[];
@@ -695,6 +760,47 @@ function DhikrDetailView({ selDhikr, setSelDhikr, siblings, onClose, favorites, 
   const insets  = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
   const { translateX, edgePan, shadowOpacity, goBack } = useSlideIn(onClose);
+
+  const [fontIdx,      setFontIdx]      = useState(1);
+  const [uttalIdx,     setUttalIdx]     = useState(1);
+  const [svenskaIdx,   setSvenskaIdx]   = useState(1);
+  const [showFontPanel, setShowFontPanel] = useState(false);
+
+  // Load persisted font sizes
+  useEffect(() => {
+    Promise.all([
+      AsyncStorage.getItem(STORAGE_ARABIC_FS),
+      AsyncStorage.getItem(STORAGE_UTTAL_FS),
+      AsyncStorage.getItem(STORAGE_SVENSKA_FS),
+    ]).then(([a, u, s]) => {
+      if (a !== null) { const n = parseInt(a, 10); if (!isNaN(n) && n >= 0 && n < ARABIC_FS_STEPS.length) setFontIdx(n); }
+      if (u !== null) { const n = parseInt(u, 10); if (!isNaN(n) && n >= 0 && n < TEXT_FS_STEPS.length) setUttalIdx(n); }
+      if (s !== null) { const n = parseInt(s, 10); if (!isNaN(n) && n >= 0 && n < TEXT_FS_STEPS.length) setSvenskaIdx(n); }
+    });
+  }, []);
+
+  const decreaseFont = useCallback(() => {
+    setFontIdx(i => { const next = Math.max(0, i - 1); AsyncStorage.setItem(STORAGE_ARABIC_FS, String(next)); return next; });
+  }, []);
+  const increaseFont = useCallback(() => {
+    setFontIdx(i => { const next = Math.min(ARABIC_FS_STEPS.length - 1, i + 1); AsyncStorage.setItem(STORAGE_ARABIC_FS, String(next)); return next; });
+  }, []);
+  const decreaseUttal = useCallback(() => {
+    setUttalIdx(i => { const next = Math.max(0, i - 1); AsyncStorage.setItem(STORAGE_UTTAL_FS, String(next)); return next; });
+  }, []);
+  const increaseUttal = useCallback(() => {
+    setUttalIdx(i => { const next = Math.min(TEXT_FS_STEPS.length - 1, i + 1); AsyncStorage.setItem(STORAGE_UTTAL_FS, String(next)); return next; });
+  }, []);
+  const decreaseSvenska = useCallback(() => {
+    setSvenskaIdx(i => { const next = Math.max(0, i - 1); AsyncStorage.setItem(STORAGE_SVENSKA_FS, String(next)); return next; });
+  }, []);
+  const increaseSvenska = useCallback(() => {
+    setSvenskaIdx(i => { const next = Math.min(TEXT_FS_STEPS.length - 1, i + 1); AsyncStorage.setItem(STORAGE_SVENSKA_FS, String(next)); return next; });
+  }, []);
+
+  const arabicFontSize  = ARABIC_FS_STEPS[fontIdx];
+  const uttalFontSize   = TEXT_FS_STEPS[uttalIdx];
+  const svenskaFontSize = TEXT_FS_STEPS[svenskaIdx];
   const currIdx = siblings.findIndex(d => d === selDhikr || (d.titel === selDhikr.titel && d._undersida === selDhikr._undersida));
   const hasPrev = siblings.length > 1 && currIdx > 0;
   const hasNext = siblings.length > 1 && currIdx < siblings.length - 1;
@@ -714,17 +820,23 @@ function DhikrDetailView({ selDhikr, setSelDhikr, siblings, onClose, favorites, 
   navigateRef.current = navigate;
 
   // Horizontal swipe for prev/next navigation.
-  // Activates only for pageX > 32 (right after the 30 px edge-swipe zone)
-  // and only when the gesture is strongly horizontal (|dx| > 2.5 × |dy|).
-  // The ScrollView beneath only claims vertical gestures, so a horizontal
-  // swipe bubbles up to this responder cleanly.
+  //
+  // Key invariant: use `gs.moveX - gs.dx` as the gesture's ORIGIN X, not
+  // `evt.nativeEvent.pageX`. The latter is the *current* finger position —
+  // an edge swipe that started at x=20 and moved to x=80 would report
+  // pageX=80, bypassing the guard and stealing the gesture from edgePan.
+  // `gs.moveX - gs.dx` is always the screen X where the touch first landed.
+  //
+  // The nav zone starts at 50 px — a generous buffer past the 30 px edge zone
+  // so the two gestures never compete, even on fast or slightly imprecise starts.
   const navPan = useRef(PanResponder.create({
-    onMoveShouldSetPanResponder: (evt, gs) => {
-      if (evt.nativeEvent.pageX <= 32) return false;          // leave edge zone alone
+    onMoveShouldSetPanResponder: (_, gs) => {
+      const startX = gs.moveX - gs.dx;                         // true gesture origin
+      if (startX <= 50) return false;                          // started in/near edge zone
       const horiz = Math.abs(gs.dx) > Math.abs(gs.dy) * 2.5 && Math.abs(gs.dx) > 12;
       if (!horiz) return false;
-      if (gs.dx > 0 && !hasPrevRef.current) return false;    // can't go back on first
-      if (gs.dx < 0 && !hasNextRef.current) return false;    // can't go forward on last
+      if (gs.dx > 0 && !hasPrevRef.current) return false;     // can't go back on first
+      if (gs.dx < 0 && !hasNextRef.current) return false;     // can't go forward on last
       return true;
     },
     onPanResponderRelease: (_, gs) => {
@@ -750,8 +862,38 @@ function DhikrDetailView({ selDhikr, setSelDhikr, siblings, onClose, favorites, 
           <Text style={{ flex: 1, fontSize: 16, fontWeight: '700', color: T.text }} numberOfLines={1}>
             {selDhikr._kategori}
           </Text>
+          {/* Gear icon — toggle Arabic font size panel */}
+          <TouchableOpacity
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowFontPanel(p => !p); }}
+            activeOpacity={0.7}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none"
+              stroke={showFontPanel ? T.accent : T.textMuted}
+              strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+              <Path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" />
+              <Path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </Svg>
+          </TouchableOpacity>
         </View>
       </View>
+
+      {/* Font size panel — shown when gear is active */}
+      {showFontPanel && (
+        <ArabicFontPanel
+          arabicIdx={fontIdx}
+          uttalIdx={uttalIdx}
+          svenskaIdx={svenskaIdx}
+          onArabicDecrease={decreaseFont}
+          onArabicIncrease={increaseFont}
+          onUttalDecrease={decreaseUttal}
+          onUttalIncrease={increaseUttal}
+          onSvenskaDecrease={decreaseSvenska}
+          onSvenskaIncrease={increaseSvenska}
+          T={T}
+          isDark={isDark}
+        />
+      )}
 
       <ScrollView ref={scrollRef} style={{ flex: 1 }} contentContainerStyle={{ padding: 14, paddingBottom: 120 }}>
         {/* Prev / Next */}
@@ -775,7 +917,7 @@ function DhikrDetailView({ selDhikr, setSelDhikr, siblings, onClose, favorites, 
           </View>
         )}
 
-        <DhikrCard key={dhikrKey(selDhikr)} d={selDhikr} T={T} isDark={isDark} favorites={favorites} onToggleFav={onToggleFav} />
+        <DhikrCard key={dhikrKey(selDhikr)} d={selDhikr} T={T} isDark={isDark} favorites={favorites} onToggleFav={onToggleFav} arabicFontSize={arabicFontSize} uttalFontSize={uttalFontSize} svenskaFontSize={svenskaFontSize} />
       </ScrollView>
     </Animated.View>
   );

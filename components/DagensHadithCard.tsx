@@ -6,7 +6,7 @@
  * Tapping navigates to the Hadithsamling detail screen for that exact hadith.
  */
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/context/ThemeContext';
@@ -16,6 +16,8 @@ export default function DagensHadithCard() {
   const { theme: T, isDark } = useTheme();
   const router = useRouter();
   const hadith = useMemo(() => getDailyHadith(new Date()), []);
+  const [expanded,  setExpanded]  = useState(false);
+  const [truncated, setTruncated] = useState(false);
 
   return (
     <TouchableOpacity
@@ -33,9 +35,18 @@ export default function DagensHadithCard() {
       <Text style={[styles.title, { color: T.text }]}>Dagens Hadith</Text>
 
       {/* Swedish hadith text */}
-      <Text style={[styles.swedish, { color: T.text }]} numberOfLines={4}>
+      <Text
+        style={[styles.swedish, { color: T.text }]}
+        numberOfLines={expanded ? undefined : 4}
+        onTextLayout={e => { if (!expanded) setTruncated(e.nativeEvent.lines.length >= 4); }}
+      >
         {hadith.svenska}
       </Text>
+      {!expanded && truncated && (
+        <TouchableOpacity onPress={e => { e.stopPropagation?.(); setExpanded(true); }} activeOpacity={0.7} style={{ alignSelf: 'center', marginTop: -5 }}>
+          <Text style={{ fontSize: 12, color: T.accent }}>Visa mer</Text>
+        </TouchableOpacity>
+      )}
 
       {/* Source */}
       <Text style={[styles.source, { color: T.textMuted }]}>
@@ -49,20 +60,22 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: 16,
     borderWidth: 0.5,
-    padding: 18,
-    marginBottom: 12,
+    paddingHorizontal: 18,
+paddingTop: 12,
+paddingBottom: 12,
+    marginBottom: 11,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.10,
     shadowRadius: 18,
     elevation: 3,
   },
-  title: {
-    fontSize: 15,
-    fontWeight: '700',
-    letterSpacing: 0.1,
-    textAlign: 'center',
-    marginBottom: 14,
-  },
+ title: {
+  fontSize: 15,
+  fontWeight: '700',
+  letterSpacing: 0.1,
+  textAlign: 'center',
+  marginBottom: 6,
+},
   swedish: {
     fontSize: 14,
     lineHeight: 22,
