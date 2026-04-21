@@ -704,8 +704,42 @@ function DhikrDetailView({ selDhikr, setSelDhikr, siblings, onClose, favorites, 
     if (next) { Haptics.selectionAsync(); setSelDhikr(next); scrollRef.current?.scrollTo({ y: 0, animated: false }); }
   };
 
+  // Refs keep the PanResponder closure up-to-date without recreating it every render.
+  // (PanResponder is created once via useRef — stale closures are the standard pitfall here.)
+  const hasPrevRef   = useRef(false);
+  const hasNextRef   = useRef(false);
+  const navigateRef  = useRef<(delta: number) => void>(() => {});
+  hasPrevRef.current  = hasPrev;
+  hasNextRef.current  = hasNext;
+  navigateRef.current = navigate;
+
+  // Horizontal swipe for prev/next navigation.
+  // Activates only for pageX > 32 (right after the 30 px edge-swipe zone)
+  // and only when the gesture is strongly horizontal (|dx| > 2.5 × |dy|).
+  // The ScrollView beneath only claims vertical gestures, so a horizontal
+  // swipe bubbles up to this responder cleanly.
+  const navPan = useRef(PanResponder.create({
+    onMoveShouldSetPanResponder: (evt, gs) => {
+      if (evt.nativeEvent.pageX <= 32) return false;          // leave edge zone alone
+      const horiz = Math.abs(gs.dx) > Math.abs(gs.dy) * 2.5 && Math.abs(gs.dx) > 12;
+      if (!horiz) return false;
+      if (gs.dx > 0 && !hasPrevRef.current) return false;    // can't go back on first
+      if (gs.dx < 0 && !hasNextRef.current) return false;    // can't go forward on last
+      return true;
+    },
+    onPanResponderRelease: (_, gs) => {
+      const enoughDist = Math.abs(gs.dx) > SCREEN_W * 0.25;
+      const enoughVel  = Math.abs(gs.vx) > 0.5;
+      if (!enoughDist && !enoughVel) return;
+      if (gs.dx < 0 && hasNextRef.current) navigateRef.current(1);
+      else if (gs.dx > 0 && hasPrevRef.current) navigateRef.current(-1);
+    },
+    // Don't let native gesture system steal the responder mid-swipe.
+    onPanResponderTerminationRequest: () => false,
+  })).current;
+
   return (
-    <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: T.bg, zIndex: 20, transform: [{ translateX }] }]}>
+    <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: T.bg, zIndex: 20, transform: [{ translateX }] }]} {...navPan.panHandlers}>
       <Animated.View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 16, zIndex: 1, opacity: shadowOpacity, shadowColor: '#000', shadowOffset: { width: -8, height: 0 }, shadowOpacity: 1, shadowRadius: 16 }} />
       <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 30, zIndex: 20 }} {...edgePan.panHandlers} />
 

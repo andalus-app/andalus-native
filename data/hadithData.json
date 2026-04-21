@@ -1,0 +1,974 @@
+[
+  {
+    "hadith_nr": 1,
+    "arabiska": "إِنَّمَا الْأَعْمَالُ بِالنِّيَّاتِ وَإِنَّمَا لِكُلِّ امْرِئٍ مَا نَوَى",
+    "svenska": "Profeten ﷺ sade: \"Varje handling bedöms efter dess avsikt och varje människa ska få det hon avsåg med den.\"",
+    "källa": "Sahih ul-Bukhari 1"
+  },
+  {
+    "hadith_nr": 2,
+    "arabiska": "إِنَّ اللَّهَ لَا يَنْظُرُ إِلَى صُوَرِكُمْ وَأَمْوَالِكُمْ وَلَكِنْ يَنْظُرُ إِلَى قُلُوبِكُمْ وَأَعْمَالِكُمْ",
+    "svenska": "Profeten ﷺ sade: \"Allah ser inte till ert yttre eller till era ägodelar, utan Han ser till era hjärtan och era handlingar.\"",
+    "källa": "Sahih Muslim 2564"
+  },
+  {
+    "hadith_nr": 3,
+    "arabiska": "التَّائِبُ مِنْ الذَّنْبِ كَمَنْ لَا ذَنْبَ لَهُ",
+    "svenska": "Profeten ﷺ sade: \"Den som gör tawbah (ber om förlåtelse och vänder om) för sin synd är som en person som inte har begått någon synd alls.\"",
+    "källa": "Sunan Ibn Majah 4250"
+  },
+  {
+    "hadith_nr": 4,
+    "arabiska": "إِنَّ اللَّهَ يَقْبَلُ تَوْبَةَ الْعَبْدِ مَا لَمْ يُغَرْغِرْ",
+    "svenska": "Profeten ﷺ sade: \"Allah accepterar en tjänares tawbah ända tills hans sista stund är inne.\"",
+    "källa": "Jami’ ut-Tirmidhi 3537"
+  },
+  {
+    "hadith_nr": 5,
+    "arabiska": "الْبِرُّ حُسْنُ الْخُلُقِ",
+    "svenska": "Profeten ﷺ sade: \"Gott uppförande är kärnan i godhet.\"",
+    "källa": "Sahih Muslim 2553"
+  },
+  {
+    "hadith_nr": 6,
+    "arabiska": "إِنَّمَا الصَّبْرُ عِنْدَ الصَّدْمَةِ الْأُولَى",
+    "svenska": "Profeten ﷺ sade: \"Sann tålmodighet är den som visas vid den första chocken.\"",
+    "källa": "Sahih ul-Bukhari 1283"
+  },
+  {
+    "hadith_nr": 7,
+    "arabiska": "عَجَبًا لِأَمْرِ الْمُؤْمِنِ، إِنَّ أَمْرَهُ كُلَّهُ خَيْرٌ، وَلَيْسَ ذَاكَ لِأَحَدٍ إِلَّا لِلْمُؤْمِنِ، إِنْ أَصَابَتْهُ سَرَّاءُ شَكرَ فَكَانَ خَيْرًا لَهُ، وَإِنْ أَصَابَتْهُ ضَرَّاءُ صَبَرَ فَكَانَ خَيْرًا لَهُ",
+    "svenska": "Profeten ﷺ sade: \"Den troendes tillstånd är förundransvärt. Oavsett vad som händer honom så gynnas han av det, och det gäller endast den troende. När något bra händer så är han tacksam och det är gott för honom. När han tvärtom drabbas av svårigheter så är han tålmodig med det, vilket också är bra för honom.\"",
+    "källa": "Sahih Muslim 2999"
+  },
+  {
+    "hadith_nr": 8,
+    "arabiska": "لَيْسَ الشَّدِيدُ بِالصُّرَعَةِ إِنَّمَا الشَّدِيدُ الَّذِي يَمْلِكُ نَفْسَهُ عِنْدَ الْغَضَبِ",
+    "svenska": "Profeten ﷺ sade: \"Den starke är inte den som brottar ner andra, utan den starke är den som kontrollerar sig själv vid vrede.\"",
+    "källa": "Sahih ul-Bukhari 6114"
+  },
+  {
+    "hadith_nr": 9,
+    "arabiska": "لَا تَغْضَبْ",
+    "svenska": "Profeten ﷺ sade: \"Bli inte arg.\"",
+    "källa": "Sahih ul-Bukhari 6116"
+  },
+  {
+    "hadith_nr": 10,
+    "arabiska": "دَعْ مَا يَرِيبُكَ إِلَى مَا لَا يَرِيبُكَ",
+    "svenska": "Profeten ﷺ sade: \"Lämna allting vars goda du tvivlar på och gör istället sådant som inte får dig att tvivla.\"",
+    "källa": "Jami’ ut-Tirmidhi 2518"
+  },
+  {
+    "hadith_nr": 11,
+    "arabiska": "اتَّقِ اللَّهَ حَيْثُمَا كُنْتَ، وَأَتْبِعِ السَّيِّئَةَ الْحَسَنَةَ تَمْحُهَا، وَخَالِقِ النَّاسَ بِخُلُقٍ حَسَنٍ",
+    "svenska": "Profeten ﷺ sade: \"Var gudfruktig vart du än befinner dig! Följ upp dina dåliga handlingar med goda och uppför dig väl mot andra!\"",
+    "källa": "Jami’ ut-Tirmidhi 1987"
+  },
+  {
+    "hadith_nr": 12,
+    "arabiska": "أَنْ تَصَدَّقَ وَأَنْتَ صَحِيحٌ شَحِيحٌ تَخْشَى الْفَقْرَ وَتَأْمُلُ الْغِنَى، وَلاَ تُمْهِلْ حَتَّى إِذَا بَلَغَتِ الْحُلْقُومَ قُلْتَ لِفُلاَنٍ كَذَا وَلِفُلاَنٍ كَذَا",
+    "svenska": "Profeten ﷺ sade: \"Det är när du skänker till andra medan du är frisk, som mest sparsam, samtidigt som du fruktar fattigdom och längtar efter att bli rik. Skjut inte upp givmildheten så att du först på din dödsbädd säger: 'Det här ska den och den få och det här ska den och den få.'\"",
+    "källa": "Sahih ul-Bukhari 1419"
+  },
+  {
+    "hadith_nr": 13,
+    "arabiska": "مِنْ حُسْنِ إِسْلَامِ الْمَرْءِ تَرْكُهُ مَا لَا يَعْنِيهِ",
+    "svenska": "Profeten ﷺ sade: \"Det hör till en god muslim att han låter bli sådant som inte angår honom.\"",
+    "källa": "Jami’ ut-Tirmidhi 2317"
+  },
+  {
+    "hadith_nr": 14,
+    "arabiska": "نِعْمَتَانِ مَغْبُونٌ فِيهِمَا كَثِيرٌ مِنَ النَّاسِ الصِّحَّةُ وَالْفَرَاغُ",
+    "svenska": "Profeten ﷺ sade: \"Det finns två gåvor som många människor underskattar värdet av: god hälsa och fritid.\"",
+    "källa": "Sahih ul-Bukhari 6412"
+  },
+  {
+    "hadith_nr": 15,
+    "arabiska": "لاَ يُؤْمِنُ أَحَدُكُمْ حَتَّى يُحِبَّ لأَخِيهِ مَا يُحِبُّ لِنَفْسِهِ",
+    "svenska": "Profeten ﷺ sade: \"Ingen av er har en fullständig tro förrän han önskar för sin broder det han önskar för sig själv.\"",
+    "källa": "Sahih ul-Bukhari 13"
+  },
+  {
+    "hadith_nr": 16,
+    "arabiska": "مَا مِنْ مُسْلِمٍ يَغْرِسُ غَرْسًا إِلَّا كَانَ مَا أُكِلَ مِنْهُ لَهُ صَدَقَةً",
+    "svenska": "Profeten ﷺ sade: \"Om en muslim planterar något så kommer han att belönas så fort någon äter från det... Han blir belönad för var och en som tar av det han planterat.\"",
+    "källa": "Sahih Muslim 1552"
+  },
+  {
+    "hadith_nr": 17,
+    "arabiska": "كُلُّ سُلامَى مِنَ النَّاسِ عَلَيْهِ صَدَقَةٌ، كُلَّ يَوْمٍ تَطْلُعُ فِيهِ الشَّمْسُ",
+    "svenska": "Profeten ﷺ sade: \"Varje dag som solen går upp bör man ge allmosor för var och en av kroppens alla leder.\"",
+    "källa": "Sahih ul-Bukhari 2989"
+  },
+  {
+    "hadith_nr": 18,
+    "arabiska": "تَبَسُّمُكَ فِي وَجْهِ أَخِيكَ لَكَ صَدَقَةٌ",
+    "svenska": "Profeten ﷺ sade: \"Att du ler mot din broder räknas som välgörenhet.\"",
+    "källa": "Jami’ ut-Tirmidhi 1956"
+  },
+  {
+    "hadith_nr": 19,
+    "arabiska": "اتَّقُوا النَّارَ وَلَوْ بِشِقِّ تَمْرَةٍ",
+    "svenska": "Profeten ﷺ sade: \"Skydda er från Elden, om än bara genom att ge bort en halv dadel [i välgörenhet]!\"",
+    "källa": "Sahih ul-Bukhari 1417"
+  },
+  {
+    "hadith_nr": 20,
+    "arabiska": "أَنَا سَيِّدُ وَلَدِ آدَمَ يَوْمَ الْقِيَامَةِ",
+    "svenska": "Profeten ﷺ sade: \"Jag är alla människors ledare på Domedagen.\"",
+    "källa": "Sahih Muslim 2278"
+  },
+  {
+    "hadith_nr": 21,
+    "arabiska": "عَلَيْكُمْ بِسُنَّتِي وَسُنَّةِ الْخُلَفَاءِ الرَّاشِدِينَ الْمَهْدِيِّينَ بَعْدِي عَضُّوا عَلَيْهَا بِالنَّوَاجِذِ",
+    "svenska": "Profeten ﷺ sade: \"Håll fast vid min och mina vägledda kalifers sunnah. Bit tag i det med era kindtänder!\"",
+    "källa": "Jami’ ut-Tirmidhi 2676"
+  },
+  {
+    "hadith_nr": 22,
+    "arabiska": "مَثَلُ الْمُؤْمِنِينَ فِي تَوَادِّهِمْ وَتَرَاحُمِهِمْ وَتَعَاطُفِهِمْ مَثَلُ الْجَسَدِ",
+    "svenska": "Profeten ﷺ sade: \"Muslimerna i deras ömsesidiga kärlek, barmhärtighet och empati är precis som vår egen kropp.\"",
+    "källa": "Sahih ul-Bukhari 6011"
+  },
+  {
+    "hadith_nr": 23,
+    "arabiska": "ارْحَمُوا مَنْ فِي الْأَرْضِ يَرْحَمْكُمْ مَنْ فِي السَّمَاءِ",
+    "svenska": "Profeten ﷺ sade: \"Visa barmhärtighet mot dem som finns på jorden, så kommer Han som är i himlen att visa barmhärtighet mot er.\"",
+    "källa": "Jami’ ut-Tirmidhi 1924"
+  },
+  {
+    "hadith_nr": 24,
+    "arabiska": "الْمُسْلِمُ مَنْ سَلِمَ الْمُسْلِمُونَ مِنْ لِسَانِهِ وَيَدِهِ",
+    "svenska": "Profeten ﷺ sade: \"En sann muslim är den som andra muslimer är trygga ifrån, både vad gäller hans tunga och hans händer.\"",
+    "källa": "Sahih ul-Bukhari 10"
+  },
+  {
+    "hadith_nr": 25,
+    "arabiska": "الْمُسْلِمُ أَخُو الْمُسْلِمِ لَا يَظْلِمُهُ وَلَا يَخْذُلُهُ وَلَا يَحْقِرُهُ",
+    "svenska": "Profeten ﷺ sade: \"En muslim är en muslims broder; han förtrycker honom inte, han sviker honom inte och han ser inte ner på honom.\"",
+    "källa": "Sahih Muslim 2564"
+  },
+  {
+    "hadith_nr": 26,
+    "arabiska": "انْصُرْ أَخَاكَ ظَالِمًا أَوْ مَظْلُومًا",
+    "svenska": "Profeten ﷺ sade: \"Hjälp din broder oavsett om han förtrycker eller är förtryckt!\" (När man frågade hur man hjälper en förtryckare svarade han: \"Genom att hindra honom från att fortsätta med sitt förtryck\".)\"",
+    "källa": "Sahih ul-Bukhari 2444"
+  },
+  {
+    "hadith_nr": 27,
+    "arabiska": "حَقُّ الْمُسْلِمِ عَلَى الْمُسْلِمِ خَمْسٌ: رَدُّ السَّلاَمِ، وَعِيَادَةُ الْمَرِيضِ، وَاتِّبَاعُ الْجَنَائِزِ، وَإِجَابَةُ الدَّعْوَةِ، وَتَشْمِيتُ الْعَاطِسِ",
+    "svenska": "Profeten ﷺ sade: \"En muslim har fem skyldigheter gentemot en annan muslim: att besvara hälsningen (salam), att besöka den sjuke, att följa med vid begravningar, att tacka ja till en inbjudan och att säga 'yarhamukAllah' till den som nyser.\"",
+    "källa": "Sahih ul-Bukhari 1240"
+  },
+  {
+    "hadith_nr": 28,
+    "arabiska": "مَنْ سَتَرَ مُسْلِمًا سَتَرَهُ اللَّهُ فِي الدُّنْيَا وَالْآخِرَةِ",
+    "svenska": "Profeten ﷺ sade: \"Allah kommer att dölja bristerna hos den person som döljer en muslims brister, både i detta liv och i nästa.\"",
+    "källa": "Sahih Muslim 2699"
+  },
+  {
+    "hadith_nr": 29,
+    "arabiska": "مَنْ كَانَ يُؤْمِنُ بِاللَّهِ وَالْيَوْمِ الآخِرِ فَلْيُكْرِمْ ضَيْفَهُ",
+    "svenska": "Profeten ﷺ sade: \"Den som tror på Allah och den Yttersta dagen ska visa sin gäst respekt och ära.\"",
+    "källa": "Sahih ul-Bukhari 6135"
+  },
+  {
+    "hadith_nr": 30,
+    "arabiska": "مَنْ كَانَ يُؤْمِنُ بِاللَّهِ وَالْيَوْمِ الآخِرِ فَلْيَقُلْ خَيْرًا أَوْ لِيَصْمُتْ",
+    "svenska": "Profeten ﷺ sade: \"Den som tror på Allah och den Yttersta dagen ska antingen säga något gott eller vara tyst.\"",
+    "källa": "Sahih ul-Bukhari 6018"
+  },
+  {
+    "hadith_nr": 31,
+    "arabiska": "مَنْ كَانَ يُؤْمِنُ بِاللَّهِ وَالْيَوْمِ الآخِرِ فَلاَ يُؤْذِ جَارَهُ",
+    "svenska": "Profeten ﷺ sade: \"Den som tror på Allah och den Yttersta dagen får inte skada eller störa sin granne.\"",
+    "källa": "Sahih ul-Bukhari 6018"
+  },
+  {
+    "hadith_nr": 32,
+    "arabiska": "الْيَدُ الْعُلْيَا خَيْرٌ مِنْ الْيَدِ السُّفْلَى",
+    "svenska": "Profeten ﷺ sade: \"Den givande handen är bättre än den tagande.\"",
+    "källa": "Sahih ul-Bukhari 1429"
+  },
+  {
+    "hadith_nr": 34,
+    "arabiska": "مَا مِنْ مُسْلِمٍ يَغْرِسُ غَرْسًا أَوْ يَزْرَعُ زَرْعًا فَيَأْكُلُ مِنْهُ طَيْرٌ أَوْ إِنْسَانٌ أَوْ بَهِيمَةٌ إِلَّا كَانَ لَهُ بِهِ صَدَقَةٌ",
+    "svenska": "Profeten ﷺ sade: \"Om en muslim planterar något så kommer han att belönas så fort någon äter från det. Ja, även om någon skulle äta av det olovligt, eller om djur och fåglar äter av det. Han blir belönad för var och en som tar av det han planterat.\"",
+    "källa": "Sahih Muslim 1552"
+  },
+  {
+    "hadith_nr": 35,
+    "arabiska": "كُلُّ مَعْرُوفٍ صَدَقَةٌ",
+    "svenska": "Profeten ﷺ sade: \"Varje god gärning räknas som välgörenhet.\"",
+    "källa": "Sahih Muslim 1005"
+  },
+  {
+    "hadith_nr": 36,
+    "arabiska": "أَحِبَّ لِلنَّاسِ مَا تُحِبُّ لِنَفْسِكَ تَكُنْ مُسْلِمًا",
+    "svenska": "Profeten ﷺ sade: \"Önska andra människor det du önskar dig själv, så kommer du att vara en sann muslim.\"",
+    "källa": "Sunan Ibn Majah 4214"
+  },
+  {
+    "hadith_nr": 37,
+    "arabiska": "فَإِنَّهُ مَنْ يَعِشْ مِنْكُمْ بَعْدِي فَسَيَرَى اخْتِلافًا كَثِيرًا، فَعَلَيْكُمْ بِسُنَّتِي وَسُنَّةِ الْخُلَفَاءِ الْمَهْدِيِّينَ الرَّاشِدِينَ، تَمَسَّكُوا بِهَا وَعَضُّوا عَلَيْهَا بِالنَّوَاجِذِ، وَإِيَّاكُمْ وَمُحْدَثَاتِ الأُمُورِ، فَإِنَّ كُلَّ مُحْدَثَةٍ بِدْعَةٌ",
+    "svenska": "Profeten ﷺ sade: \"De av er som får leva länge kommer att bevittna mycket oenighet. Akta er för allt nyinfört [i religionen] för det är ingenting annat än villfarelse. De av er som får uppleva detta ska hålla fast vid min och mina vägledda kalifers sunnah. Bit tag i det med era kindtänder!\"",
+    "källa": "Jami’ ut-Tirmidhi 2676"
+  },
+  {
+    "hadith_nr": 38,
+    "arabiska": "مَثَلُ الْمُؤْمِنِينَ فِي تَوَادِّهِمْ وَتَرَاحُمِهِمْ وَتَعَاطُفِهِمْ مَثَلُ الْجَسَدِ إِذَا اشْتَكَى مِنْهُ عُضْوٌ تَدَاعَى لَهُ سَائِرُ الْجَسَدِ بِالسَّهَرِ وَالْحُمَّى",
+    "svenska": "Profeten ﷺ sade: \"Muslimerna i deras ömsesidiga kärlek, barmhärtighet och empati är precis som vår egen kropp. Det räcker med att en kroppsdel smärtar för att resten av kroppen ska drabbas av sömnlöshet och feber.\"",
+    "källa": "Sahih ul-Bukhari 6011"
+  },
+  {
+    "hadith_nr": 39,
+    "arabiska": "يَتْبَعُ الْمَيِّتَ ثَلَاثَةٌ فَيَرْجِعُ اثْنَانِ وَيَبْقَى مَعَهُ وَاحِدٌ",
+    "svenska": "Profeten ﷺ sade: \"Tre saker följer den döde [till graven]: hans familj, hans egendom och hans handlingar. Två av dem återvänder hem medan en stannar kvar hos honom.\"",
+    "källa": "Sahih ul-Bukhari 6514"
+  },
+  {
+    "hadith_nr": 40,
+    "arabiska": "الدُّنْيَا سِجْنُ الْمُؤْمِنِ وَجَنَّةُ الْكَافِرِ",
+    "svenska": "Profeten ﷺ sade: \"Detta liv är som ett fängelse för den troende men som ett paradis för den som inte tror.\"",
+    "källa": "Sahih Muslim 2956"
+  },
+  {
+    "hadith_nr": 41,
+    "arabiska": "انْظُرُوا إِلَى مَنْ هُوَ أَسْفَلَ مِنْكُمْ وَلَا تَنْظُرُوا إِلَى مَنْ هُوَ فَوْقَكُمْ",
+    "svenska": "Profeten ﷺ sade: \"Titta på dem som har det sämre än er och inte på dem som har det bättre.\"",
+    "källa": "Sahih Muslim 2963"
+  },
+  {
+    "hadith_nr": 42,
+    "arabiska": "مَنْ أَحَبَّ أَنْ يُبْسَطَ لَهُ فِي رِزْقِهِ، وَيُنْسَأَ لَهُ فِي أَثَرِهِ، فَلْيَصِلْ رَحِمَهُ",
+    "svenska": "Profeten ﷺ sade: \"Den som vill få sin försörjning ökad och sitt liv förlängt ska vårda sina släktband.\"",
+    "källa": "Sahih ul-Bukhari 5986"
+  },
+  {
+    "hadith_nr": 43,
+    "arabiska": "اشْفَعُوا تُؤْجَرُوا",
+    "svenska": "Profeten ﷺ sade: \"Medla [för andra] så kommer ni att belönas!\"",
+    "källa": "Sahih ul-Bukhari 1432"
+  },
+  {
+    "hadith_nr": 44,
+    "arabiska": "الْمَرْءُ عَلَى دِينِ خَلِيلِهِ فَلْيَنْظُرْ أَحَدُكُمْ مَنْ يُخَالِلُ",
+    "svenska": "Profeten ﷺ sade: \"En människa influeras av sina närmaste vänner. Se därför till att ni väljer era vänner med omsorg!\"",
+    "källa": "Sunan Abi Dawud 4833"
+  },
+  {
+    "hadith_nr": 45,
+    "arabiska": "ثَلاثٌ مَنْ كُنَّ فِيهِ وَجَدَ حَلاوَةَ الإِيمَانِ: أَنْ يَكُونَ اللَّهُ وَرَسُولُهُ أَحَبَّ إِلَيْهِ مِمَّا سِوَاهُمَا...",
+    "svenska": "Profeten ﷺ sade: \"Det finns tre egenskaper som får en person att känna trons sötma: att Allah och Hans sändebud är mer älskade för honom än någonting annat...\"",
+    "källa": "Sahih ul-Bukhari 16"
+  },
+  {
+    "hadith_nr": 46,
+    "arabiska": "أَفْشُوا السَّلَامَ بَيْنَكُمْ",
+    "svenska": "Profeten ﷺ sade: \"Hälsa både på dem du känner och inte känner med hälsningen salam.\"",
+    "källa": "Sahih ul-Bukhari 12"
+  },
+  {
+    "hadith_nr": 47,
+    "arabiska": "مَا نَقَصَتْ صَدَقَةٌ مِنْ مَالٍ",
+    "svenska": "Profeten ﷺ sade: \"En persons allmosegivande har aldrig fått hans pengar att minska.\"",
+    "källa": "Sahih Muslim 2588"
+  },
+  {
+    "hadith_nr": 48,
+    "arabiska": "إِنَّ مِنْ أَشْرَاطِ السَّاعَةِ أَنْ يُرْفَعَ الْعِلْمُ وَيَثْبُتَ الْجَهْلُ",
+    "svenska": "Profeten ﷺ sade: \"Att kunskapen upphör och att okunskapen sprids... hör alltsammans till Domedagens tecken.\"",
+    "källa": "Sahih ul-Bukhari 80"
+  },
+  {
+    "hadith_nr": 49,
+    "arabiska": "قَالَ اللَّهُ عَزَّ وَجَلَّ أَنْفِقْ يَا ابْنَ آدَمَ أُنْفِقْ عَلَيْكَ",
+    "svenska": "Profeten ﷺ sade: \"Allah säger: 'Adams avkomma! Spendera era pengar på det som är gott så kommer ni få tillbaka det ni spenderar.'\"",
+    "källa": "Sahih ul-Bukhari 5352"
+  },
+  {
+    "hadith_nr": 50,
+    "arabiska": "اتَّقُوا الظُّلْمَ فَإِنَّ الظُّلْمَ ظُلُمَاتٌ يَوْمَ الْقِيَامَةِ",
+    "svenska": "Profeten ﷺ sade: \"Akta er för att förtrycka [någon], ty förtryck är mörker på Domedagen!\"",
+    "källa": "Sahih Muslim 2587"
+  },
+  {
+    "hadith_nr": 51,
+    "arabiska": "أَكْثِرُوا ذِكْرَ هَاذِمِ اللَّذَّاتِ",
+    "svenska": "Profeten ﷺ sade: \"Nämn ofta njutningarnas förstörare (döden)!\"",
+    "källa": "Jami’ ut-Tirmidhi 2307"
+  },
+  {
+    "hadith_nr": 52,
+    "arabiska": "الْبِرُّ حُسْنُ الْخُلُقِ وَالإِثْمُ مَا حَاكَ فِي صَدْرِكَ وَكَرِهْتَ أَنْ يَطَّلِعَ عَلَيْهِ النَّاسُ",
+    "svenska": "Profeten ﷺ sade: \"Att ha ett gott uppförande hör till de allra främsta former av al-Birr. Synden är det du känner tveksamheter av i bröstet och det du inte tycker om att folk ska se dig göra.\"",
+    "källa": "Sahih Muslim 2553"
+  },
+  {
+    "hadith_nr": 53,
+    "arabiska": "إِنَّ اللَّهَ يُحِبُّ الْعَبْدَ التَّقِيَّ الْغَنِيَّ الْخَفِيَّ",
+    "svenska": "Profeten ﷺ sade: \"Allah älskar sannerligen den gudfruktige slaven - den vars rikedom finns i själen, han koncentrerar sig på sig själv och sin egen dyrkan samtidigt som han håller sig undan.\"",
+    "källa": "Sahih Muslim 2965"
+  },
+  {
+    "hadith_nr": 56,
+    "arabiska": "الْحَيَاءُ لاَ يَأْتِي إِلاَّ بِخَيْرٍ",
+    "svenska": "Profeten ﷺ sade: \"Blyghet för bara med sig gott.\"",
+    "källa": "Sahih ul-Bukhari 6117"
+  },
+  {
+    "hadith_nr": 57,
+    "arabiska": "يَسِّرُوا وَلاَ تُعَسِّرُوا، وَبَشِّرُوا وَلاَ تُنَفِّرُوا",
+    "svenska": "Profeten ﷺ sade: \"Gör saker och ting lätta [för andra] och gör dem inte svåra! Kom med glada nyheter och skräm inte iväg folk!\"",
+    "källa": "Sahih ul-Bukhari 69"
+  },
+  {
+    "hadith_nr": 58,
+    "arabiska": "لاَ يَدْخُلُ الْجَنَّةَ قَاطِعٌ",
+    "svenska": "Profeten ﷺ sade: \"Den som bryter sina släktband kommer inte att få träda in i Paradiset.\"",
+    "källa": "Sahih ul-Bukhari 5984"
+  },
+  {
+    "hadith_nr": 59,
+    "arabiska": "أَنَا وَكَافِلُ الْيَتِيمِ فِي الْجَنَّةِ هَكَذَا",
+    "svenska": "Profeten ﷺ sade: \"Jag och den som tar hand om den faderslöse kommer att vara i Paradiset så här (och han visade det genom att hålla ihop sitt pek- och långfinger).\"",
+    "källa": "Sahih ul-Bukhari 6005"
+  },
+  {
+    "hadith_nr": 60,
+    "arabiska": "كُلُّ أُمَّتِي يَدْخُلُونَ الْجَنَّةَ إِلاَّ مَنْ أَبَى. قَالُوا يَا رَسُولَ اللَّهِ وَمَنْ يَأْبَى؟ قَالَ: مَنْ أَطَاعَنِي دَخَلَ الْجَنَّةَ، وَمَنْ عَصَانِي فَقَدْ أَبَى",
+    "svenska": "Profeten ﷺ sade: \"Hela min församling (ummah) kommer att träda in i Paradiset utom den som vägrar. De frågade: \"Vem är det som vägrar, O Allahs sändebud?\". Han svarade: \"Den som lyder mig träder in i Paradiset och den som är olydig mot mig har själv vägrat.\"\"",
+    "källa": "Sahih ul-Bukhari 7280"
+  },
+  {
+    "hadith_nr": 61,
+    "arabiska": "مَنْ دَلَّ عَلَى خَيْرٍ فَلَهُ مِثْلُ أَجْرِ فَاعِلِهِ",
+    "svenska": "Profeten ﷺ sade: \"Den som påbjuder [andra] att göra goda handlingar kommer att få samma belöning som den som utför handlingen.\"",
+    "källa": "Sahih Muslim 1893"
+  },
+  {
+    "hadith_nr": 63,
+    "arabiska": "كُلُّ أُمَّتِي يَدْخُلُونَ الْجَنَّةَ إِلاَّ مَنْ أَبَى. قَالُوا يَا رَسُولَ اللَّهِ وَمَنْ يَأْبَى قَالَ مَنْ أَطَاعَنِي دَخَلَ الْجَنَّةَ وَمَنْ عَصَانِي فَقَدْ أَبَى",
+    "svenska": "Profeten ﷺ sade: \"Den som lyder mig träder in i Paradiset och den som är olydig mot mig har själv vägrat.\"",
+    "källa": "Sahih ul-Bukhari 7280"
+  },
+  {
+    "hadith_nr": 64,
+    "arabiska": "مَنْ أَحْدَثَ فِي أَمْرِنَا هَذَا مَا لَيْسَ فِيهِ فَهُوَ رَدٌّ",
+    "svenska": "Profeten ﷺ sade: \"Den som försöker lägga till något i vår sak (dvs. i islam) som inte finner grund däri kommer att få det tillbakavisat.\"",
+    "källa": "Sahih ul-Bukhari 2697"
+  },
+  {
+    "hadith_nr": 66,
+    "arabiska": "مَنْ شَهِدَ أَنْ لاَ إِلَهَ إِلاَّ اللَّهُ وَأَنَّ مُحَمَّدًا رَسُولُ اللَّهِ حَرَّمَ اللَّهُ عَلَيْهِ النَّارَ",
+    "svenska": "Profeten ﷺ sade: \"Helvetet kommer att förbjudas för alla som vittnar om att ingen gudom dyrkas i sanning förutom Allah och att Muhammad (ﷺ) är hans sändebud.\"",
+    "källa": "Sahih Muslim 29"
+  },
+  {
+    "hadith_nr": 68,
+    "arabiska": "ابْغُونِي فِي ضُعَفَائِكُمْ فَإِنَّمَا تُرْزَقُونَ وَتُنْصَرُونَ بِضُعَفَائِكُمْ",
+    "svenska": "Profeten ﷺ sade: \"Behaga mig genom att ta hand om era svaga. Ty det är endast genom era svaga som er försörjning och seger når er.\"",
+    "källa": "Jami’ ut-Tirmidhi 1702"
+  },
+  {
+    "hadith_nr": 69,
+    "arabiska": "الدُّنْيَا مَتَاعٌ وَخَيْرُ مَتَاعِ الدُّنْيَا الْمَرْأَةُ الصَّالِحَةُ",
+    "svenska": "Profeten ﷺ sade: \"Det finns olika fröjder i detta jordiska liv. Den främsta av dem är en rättfärdig fru.\"",
+    "källa": "Sahih Muslim 1469"
+  },
+  {
+    "hadith_nr": 70,
+    "arabiska": "مَنْ صَلَّتْ خَمْسَهَا وَصَامَتْ شَهْرَهَا وَأَحْصَنَتْ فَرْجَهَا وَأَطَاعَتْ بَعْلَهَا دَخَلَتْ مِنْ أَيِّ أَبْوَابِ الْجَنَّةِ شَاءَتْ",
+    "svenska": "Profeten ﷺ sade: \"Den kvinna som ber sina fem dagliga böner, fastar sin månad (Ramadan), håller sig kysk och lyder sin make kommer att få träda in genom vilken av Paradisets portar hon än vill.\"",
+    "källa": "Miskat ul-Masabih 3254"
+  },
+  {
+    "hadith_nr": 71,
+    "arabiska": "مَا زَالَ جِبْرِيلُ يُوصِينِي بِالْجَارِ حَتَّى ظَنَنْتُ أَنَّهُ سَيُوَرِّثُهُ",
+    "svenska": "Profeten ﷺ sade: \"Så mycket förmanade Jibril mig att vara god mot min granne att jag tillslut trodde att han (grannen) skulle ha rätt att ärva mig.\"",
+    "källa": "Sahih ul-Bukhari 6014"
+  },
+  {
+    "hadith_nr": 72,
+    "arabiska": "رَغِمَ أَنْفُهُ ثُمَّ رَغِمَ أَنْفُهُ ثُمَّ رَغِمَ أَنْفُهُ مَنْ أَدْرَكَ وَالِدَيْهِ عِنْدَ الْكِبَرِ أَحَدَهُمَا أَوْ كِلَيْهِمَا ثُمَّ لَمْ يَدْخُلِ الْجَنَّةَ",
+    "svenska": "Profeten ﷺ sade: \"Må han förödmjukas, må han därefter förödmjukas och låt han därefter förödmjukas. Det sades: \"Vem då, O Allahs sändebud?\" Han sade: \"Den som lever samtidigt som en eller båda av hans föräldrar åldras, sedan får han inte träda in i Paradiset (pga. att han inte behandlat dem väl).\"",
+    "källa": "Sahih Muslim 2551"
+  },
+  {
+    "hadith_nr": 73,
+    "arabiska": "لَيْسَ مِنَّا مَنْ لَمْ يَرْحَمْ صَغِيرَنَا وَيَعْرِفْ حَقَّ كَبِيرَنَا",
+    "svenska": "Profeten ﷺ sade: \"Den som inte är barmhärtig mot våra små barn och inte känner till våra äldres rättigheter räknas inte som en av oss.\"",
+    "källa": "Jami’ ut-Tirmidhi 1920"
+  },
+  {
+    "hadith_nr": 74,
+    "arabiska": "تُنْكَحُ الْمَرْأَةُ لِأَرْبَعٍ... فَاظْفَرْ بِذَاتِ الدِّينِ",
+    "svenska": "Profeten ﷺ sade: \"Det finns fyra saker som får en man att gifta sig med en viss kvinna: hennes pengar, anor, skönhet eller religion. Se till att välja kvinnan som praktiserar sin religion bra.\"",
+    "källa": "Sahih ul-Bukhari 5090"
+  },
+  {
+    "hadith_nr": 75,
+    "arabiska": "لَا تَدْخُلُونَ الْجَنَّةَ حَتَّى تُؤْمِنُوا وَلَا تُؤْمِنُوا حَتَّى تَحَابُّوا أَوَلَا أَدُلُّكُمْ عَلَى شَيْءٍ إِذَا فَعَلْتُمُوهُ تَحَابَبْتُمْ أَفْشُوا السَّلَامَ بَيْنَكُمْ",
+    "svenska": "Profeten ﷺ sade: \"Ni kommer inte att träda in i Paradiset förrän ni tror, och er tro blir inte fulländad förrän ni älskar varandra. Ska jag inte berätta för er vad ni ska göra för att börja älska varandra? Sprid fredshälsningen (as-salamu \"alaykum) mellan er.\"",
+    "källa": "Sahih Muslim 54"
+  },
+  {
+    "hadith_nr": 76,
+    "arabiska": "سَبْعَةٌ يُظِلُّهُمُ اللَّهُ فِي ظِلِّهِ يَوْمَ لا ظِلَّ إِلا ظِلُّهُ: الإِمَامُ الْعَادِلُ، وَشَابٌّ نَشَأَ فِي عِبَادَةِ رَبِّهِ، وَرَجُلٌ قَلْبُهُ مُعَلَّقٌ فِي الْمَسَاجِدِ، وَرَجُلانِ تَحَابَّا فِي اللَّهِ اجْتَمَعَا عَلَيْهِ وَتَفَرَّقَا عَلَيْهِ، وَرَجُلٌ طَلَبَتْهُ امْرَأَةٌ ذَاتُ مَنْصِبٍ وَجَمَالٍ فَقَالَ إِنِّي أَخَافُ اللَّهَ، وَرَجُلٌ تَصَدَّقَ أَخْفَى حَتَّى لا تَعْلَمَ شِمَالُهُ مَا تُنْفِقُ يَمِينُهُ، وَرَجُلٌ ذَكَرَ اللَّهَ خَالِيًا فَفَاضَتْ عَيْنَاهُ",
+    "svenska": "Profeten ﷺ sade: \"Sju personer står under Allahs skugga den dag då ingen annan skugga finns: Den rättvise ledaren. En ung man som under sin uppväxt ägnat sig åt sin Herres dyrkan. En man vars hjärta är fäst vid moskéerna. Två personer som älskar varandra för Allahs skull, de både träffas och skiljs åt av den anledningen. En man som när en vacker kvinna med hög status försöker förföra honom svarar: 'Jag fruktar Allah'. En person som när han ger välgörenhet gör det så pass i smyg att inte ens hans egen vänsterhand känner till vad hans högra hand har gett. En person som i avskildhet ägnar sig åt Allahs dhikr tills hans ögon fylls av tårar.\"",
+    "källa": "Sahih ul-Bukhari 660"
+  },
+  {
+    "hadith_nr": 77,
+    "arabiska": "أَتَانِي جِبْرِيلُ فَبَشَّرَنِي أَنَّهُ مَنْ مَاتَ مِنْ أُمَّتِي لا يُشْرِكُ بِاللَّهِ شَيْئًا دَخَلَ الْجَنَّةَ",
+    "svenska": "Profeten ﷺ sade: \"Jibril kom och gav mig de goda nyheterna att den som när han dör inte begått någon form av månggudadyrkan kommer att träda in i Paradiset.\"",
+    "källa": "Sahih ul-Bukhari 1237 (återfinns även i boken under nr 77)"
+  },
+  {
+    "hadith_nr": 78,
+    "arabiska": "لَيْسَ مِنَّا مَنْ لَطَمَ الْخُدُودَ وَشَقَّ الْجُيُوبَ وَدَعَا بِدَعْوَى الْجَاهِلِيَّةِ",
+    "svenska": "Profeten ﷺ sade: \"De som slår sig själva i ansiktet, river sönder sin krage och använder sig av de uttryck som hör förislamisk tid till [när någon har dött] ska inte räknas som en av oss.\"",
+    "källa": "Sahih ul-Bukhari 1294"
+  },
+  {
+    "hadith_nr": 80,
+    "arabiska": "مَا مِنْ أَيَّامٍ الْعَمَلُ الصَّالِحُ فِيهَا أَحَبُّ إِلَى اللَّهِ مِنْ هَذِهِ الأَيَّامِ - يَعْنِي أَيَّامَ الْعَشْرِ. قَالُوا يَا رَسُولَ اللَّهِ وَلا الْجِهَادُ فِي سَبِيلِ اللَّهِ؟ قَالَ وَلا الْجِهَادُ فِي سَبِيلِ اللَّهِ إِلا رَجُلٌ خَرَجَ بِنَفْسِهِ وَمَالِهِ فَلَمْ يَرْجِعْ مِنْ ذَلِكَ بِشَيْءٍ",
+    "svenska": "Profeten ﷺ sade: \"Inga goda gärningar är så älskade hos Allah som de som görs under de tio första dagarna i dhul-hijjah. De sade: 'Allahs sändebud! Inte ens jihad för Allahs sak?' Han sade: 'Inte ens jihad för Allahs sak. Förutom, en man som med egna medel och med sitt eget liv på spel beger sig iväg för att kriga och sedan inte lyckas återvända varken med livet eller pengarna i behåll.'\"",
+    "källa": "Sunan Abi Dawud 2438"
+  },
+  {
+    "hadith_nr": 81,
+    "arabiska": "مَنْ حَجَّ لِلَّهِ فَلَمْ يَرْفُثْ وَلَمْ يَفْسُقْ رَجَعَ كَيَوْمِ وَلَدَتْهُ أُمُّهُ",
+    "svenska": "Profeten ﷺ sade: \"Den som utför pilgrimsfärden för Allahs skull och under tiden inte syndar och inte har varken samlag eller förspel, kommer att återvända hem i samma tillstånd som dagen han föddes (dvs. utan synder).\"",
+    "källa": "Sahih ul-Bukhari 1521"
+  },
+  {
+    "hadith_nr": 82,
+    "arabiska": "مَا مِنْ يَوْمٍ أَكْثَرَ مِنْ أَنْ يُعْتِقَ اللَّهُ فِيهِ عَبْدًا مِنَ النَّارِ مِنْ يَوْمِ عَرَفَةَ",
+    "svenska": "Profeten ﷺ sade: \"Det finns ingen dag under vilken Allah frigör fler [av sina] tjänare från eldens straff än 'Arafahdagen.\"",
+    "källa": "Sahih Muslim 1348"
+  },
+  {
+    "hadith_nr": 83,
+    "arabiska": "عَيْنَانِ لا تَمَسُّهُمَا النَّارُ: عَيْنٌ بَكَتْ مِنْ خَشْيَةِ اللَّهِ وَعَيْنٌ بَاتَتْ تَحْرُسُ فِي سَبِيلِ اللَّهِ",
+    "svenska": "Profeten ﷺ sade: \"Det finns två sorters ögon som Elden inte rör: Det ena är ögat som gråter i fruktan för Allah och det andra är det öga som bevakar [frontlinjerna i krig] för Allahs skull.\"",
+    "källa": "Jami’ ut-Tirmidhi 1639"
+  },
+  {
+    "hadith_nr": 84,
+    "arabiska": "مَنْ أَتَى عَرَّافًا فَسَأَلَهُ عَنْ شَيْءٍ لَمْ تُقْبَلْ لَهُ صَلاةٌ أَرْبَعِينَ لَيْلَةً",
+    "svenska": "Profeten ﷺ sade: \"Den som går till en \"arraf (spåman, medium, teckentydare, astrolog osv.) och frågar honom om någonting kommer inte få sin bön accepterad under fyrtio nätter.\"",
+    "källa": "Sahih Muslim 2230"
+  },
+  {
+    "hadith_nr": 85,
+    "arabiska": "مَنْ بَدَّلَ دِينَهُ فَاقْتُلُوهُ",
+    "svenska": "Profeten ﷺ sade: \"Den som byter sin religion [från islam] ska straffas med döden.\"",
+    "källa": "Sahih ul-Bukhari 3017"
+  },
+  {
+    "hadith_nr": 86,
+    "arabiska": "اتَّقِ اللَّهَ حَيْثُمَا كُنْتَ",
+    "svenska": "Profeten ﷺ sade: \"Frukta Allah var du än befinner dig. Låt en god handling följa en dålig, så kommer den att utplåna den dåliga. Och behandla människor med ett gott uppförande.\"",
+    "källa": "Jami’ ut-Tirmidhi 1987"
+  },
+  {
+    "hadith_nr": 87,
+    "arabiska": "لَا يَرْحَمُ اللَّهُ مَنْ لَا يَرْحَمُ النَّاسَ",
+    "svenska": "Profeten ﷺ sade: \"Allah visar inte barmhärtighet mot den som inte visar barmhärtighet mot människor.\"",
+    "källa": "Sahih ul-Bukhari 7376"
+  },
+  {
+    "hadith_nr": 89,
+    "arabiska": "مَنْ لَمْ يَدَعْ قَوْلَ الزُّورِ وَالْعَمَلَ بِهِ فَلَيْسَ لِلَّهِ حَاجَةٌ فِي أَنْ يَدَعَ طَعَامَهُ وَشَرَابَهُ",
+    "svenska": "Profeten ﷺ sade: \"Allah är inte i behov av att en person ska lämna sin mat och dryck om han inte lämnar lögnaktigt tal och lögnaktiga handlingar.\"",
+    "källa": "Sahih ul-Bukhari 1903"
+  },
+  {
+    "hadith_nr": 90,
+    "arabiska": "رَحِمَ اللَّهُ رَجُلاً سَمْحًا إِذَا بَاعَ وَإِذَا اشْتَرَى وَإِذَا اقْتَضَى",
+    "svenska": "Profeten ﷺ sade: \"Må Allah vara barmhärtig mot en person som är enkel att ha att göra med när han köper och säljer och när han begär sina rättigheter.\"",
+    "källa": "Sahih ul-Bukhari 2076"
+  },
+  {
+    "hadith_nr": 91,
+    "arabiska": "أَعْطُوا الأَجِيرَ أَجْرَهُ قَبْلَ أَنْ يَجِفَّ عَرَقُهُ",
+    "svenska": "Profeten ﷺ sade: \"Ge den anställde hans lön innan hans svett hunnit torka.\"",
+    "källa": "Sunan Ibn Majah 2443"
+  },
+  {
+    "hadith_nr": 92,
+    "arabiska": "إِنَّ اللَّهَ يُحِبُّ إِذَا عَمِلَ أَحَدُكُمْ عَمَلاً أَنْ يُتْقِنَهُ",
+    "svenska": "Profeten ﷺ sade: \"Allah älskar sannerligen att ni, när ni tar er för något, också gör det på bästa möjliga sätt.\"",
+    "källa": "Al-Mu’jam al-Awsat lit-Tabarani (1/ 427)"
+  },
+  {
+    "hadith_nr": 93,
+    "arabiska": "بِحَسْبِ امْرِئٍ مِنَ الشَّرِّ أَنْ يَحْقِرَ أَخَاهُ الْمُسْلِمَ، كُلُّ الْمُسْلِمِ عَلَى الْمُسْلِمِ حَرَامٌ، دَمُهُ، وَمَالُهُ، وَعِرْضُهُ",
+    "svenska": "Profeten ﷺ sade: \"Det räcker för att en person skall anses vara ond att han ser ned på sin muslimske broder. Det är förbjudet för varje muslim att kränka sin muslimska broder. Han får varken spilla hans blod, ta hans pengar eller vanära honom.\"",
+    "källa": "Sahih Muslim 2564"
+  },
+  {
+    "hadith_nr": 94,
+    "arabiska": "أَحَبُّ النَّاسِ إِلَى اللَّهِ أَنْفَعُهُمْ لِلنَّاسِ وَأَحَبُّ الأَعْمَالِ إِلَى اللَّهِ سُرُورٌ تُدْخِلُهُ عَلَى مُسْلِمٍ أَوْ تَكْشِفُ عَنْهُ كُرْبَةً أَوْ تَقْضِي عَنْهُ دَيْنًا أَوْ تَطْرُدُ عَنْهُ جُوعًا",
+    "svenska": "Profeten ﷺ sade: \"De mest älskade av människor för Allah är de som mest gagnar andra, och de mest älskade handlingarna är att skapa lycka för en muslim, lösa hans problem, betala hans skulder eller se till att han inte går hungrig.\"",
+    "källa": "Silsilat ul-Ahadith as-Sahihah nr. 906"
+  },
+  {
+    "hadith_nr": 95,
+    "arabiska": "السَّاعِي عَلَى الأَرْمَلَةِ وَالْمِسْكِينِ كَالْمُجَاهِدِ فِي سَبِيلِ اللَّهِ",
+    "svenska": "Profeten ﷺ sade: \"Den som hjälper änkor och behövande är att likna vid den som kämpar för Allahs sak (mujahid).\"",
+    "källa": "Sahih ul-Bukhari 5353"
+  },
+  {
+    "hadith_nr": 96,
+    "arabiska": "خَيْرُكُمْ مَنْ تَعَلَّمَ الْقُرْآنَ وَعَلَّمَهُ",
+    "svenska": "Profeten ﷺ sade: \"Den bäste bland er är den som lär sig Koranen och sedan lär ut den till andra.\"",
+    "källa": "Sahih ul-Bukhari 5027"
+  },
+  {
+    "hadith_nr": 97,
+    "arabiska": "مَنْ قَرَأَ حَرْفًا مِنْ كِتَابِ اللَّهِ فَلَهُ بِهِ حَسَنَةٌ، وَالْحَسَنَةُ بِعَشْرِ أَمْثَالِهَا",
+    "svenska": "Profeten ﷺ sade: \"Den som läser en enda bokstav ur Allahs bok kommer att få en belöning för det, och varje belöning multipliceras med tio.\"",
+    "källa": "Jami’ ut-Tirmidhi 2910"
+  },
+  {
+    "hadith_nr": 98,
+    "arabiska": "مَنْ نَسِيَ صَلاةً فَلْيُصَلِّهَا إِذَا ذَكَرَهَا، لا كَفَّارَةَ لَهَا إِلا ذَلِكَ",
+    "svenska": "Profeten ﷺ sade: \"Den som glömmer bort en bön ska be den så fort han kommer på det. Det finns ingen annan gottgörelse för det än att be bönen.\"",
+    "källa": "Sahih ul-Bukhari 597"
+  },
+  {
+    "hadith_nr": 99,
+    "arabiska": "مَنْ فَاتَتْهُ صَلاةُ الْعَصْرِ فَكَأَنَّمَا وُتِرَ أَهْلَهُ وَمَالَهُ",
+    "svenska": "Profeten ﷺ sade: \"Missar man \"asrbönen är det som om man har blivit av med både familj och egendom.\"",
+    "källa": "Sahih ul-Bukhari 3602"
+  },
+  {
+    "hadith_nr": 100,
+    "arabiska": "صِيَامُ يَوْمِ عَرَفَةَ أَحْتَسِبُ عَلَى اللَّهِ أَنْ يُكَفِّرَ السَّنَةَ الَّتِي قَبْلَهُ وَالسَّنَةَ الَّتِي بَعْدَهُ",
+    "svenska": "Profeten ﷺ sade: \"Jag hyser hopp om att Allah kommer att ta bort synderna från det förra och kommande året för den som fastar \"Arafahdagen.\"",
+    "källa": "Sunan at-Tirmidhi 749"
+  },
+  {
+    "hadith_nr": 101,
+    "arabiska": "مَا مِنْ مُسْلِمٍ يَمُوتُ يَوْمَ الْجُمُعَةِ أَوْ لَيْلَةَ الْجُمُعَةِ إِلا وَقَاهُ اللَّهُ فِتْنَةَ الْقَبْرِ",
+    "svenska": "Profeten ﷺ sade: \"Varje muslim som dör på en fredag (dagen eller natten mot fredag) kommer Allah att skydda från gravens prövning.\"",
+    "källa": "Jami’ ut-Tirmidhi 1074"
+  },
+  {
+    "hadith_nr": 102,
+    "arabiska": "عَيْنَانِ لَا تَمَسُّهُمَا النَّارُ عَيْنٌ بَكَتْ مِنْ خَشْيَةِ اللَّهِ",
+    "svenska": "Profeten ﷺ sade: \"Det finns två sorters ögon som Elden inte rör: Det ena är ögat som gråter i fruktan för Allah och det andra är det öga som bevakar [frontlinjerna] för Allahs skull.\"",
+    "källa": "Jami’ ut-Tirmidhi 1639"
+  },
+  {
+    "hadith_nr": 104,
+    "arabiska": "اتَّقِ دَعْوَةَ الْمَظْلُومِ فَإِنَّهُ لَيْسَ بَيْنَهَا وَبَيْنَ اللَّهِ حِجابٌ",
+    "svenska": "Profeten ﷺ sade: \"Akta er för den förtrycktes åkallan, det finns nämligen ingenting mellan den och Allah (som hindrar att den besvaras).\"",
+    "källa": "Sahih Muslim 19"
+  },
+  {
+    "hadith_nr": 105,
+    "arabiska": "بِسْمِ اللَّهِ الَّذِي لَا يَضُرُّ مَعَ اسْمِهِ شَيْءٌ فِي الْأَرْضِ وَلَا فِي السَّمَاءِ",
+    "svenska": "Profeten ﷺ sade: \"Den tjänare som morgon och kväll säger följande ord tre gånger kommer inte att skadas av någonting alls: \"I Allahs namn, med vars namn ingenting på jorden eller i himlen kan skada...\"\"",
+    "källa": "Jami’ ut-Tirmidhi 3388"
+  },
+  {
+    "hadith_nr": 106,
+    "arabiska": "مَنْ بَنَى لِلَّهِ مَسْجِدًا بَنَى اللَّهُ لَهُ بَيْتًا فِي الْجَنَّةِ",
+    "svenska": "Profeten ﷺ sade: \"Allah bygger ett hus i Paradiset till den som bygger en moské för Hans skull.\"",
+    "källa": "Sahih Muslim 533"
+  },
+  {
+    "hadith_nr": 107,
+    "arabiska": "بُنِيَ الْإِسْلَامُ عَلَى خَمْسٍ: شَهَادَةِ أَنْ لَا إِلَهَ إِلَّا اللَّهُ وَأَنَّ مُحَمَّدًا رَسُولُ اللَّهِ، وَإِقَامِ الصَّلَاةِ، وَإِيتَاءِ الزَّكَاةِ، وَالْحَجِّ، وَصَوْمِ رَمَضَانَ",
+    "svenska": "Profeten ﷺ sade: \"Islam är byggt på fem [pelare]: vittnesbörden att ingen gudom har rätt att dyrkas förutom Allah och att Muhammad är Allahs sändebud, etablerandet av böner, den obligatoriska allmosan (zakat), pilgrimsfärden (hajj) och fastan i månaden Ramadan.\"",
+    "källa": "Sahih ul-Bukhari 8"
+  },
+  {
+    "hadith_nr": 108,
+    "arabiska": "مَنْ رَغِبَ عَنْ سُنَّتِي فَلَيْسَ مِنِّي",
+    "svenska": "Profeten ﷺ sade: \"De som vänder sig bort från min sunnah ska inte räknas som mina sanna efterföljare.\"",
+    "källa": "Sahih ul-Bukhari 5063"
+  },
+  {
+    "hadith_nr": 110,
+    "arabiska": "نَضَّرَ اللَّهُ امْرَأً سَمِعَ مِنَّا شَيْئًا فَبَلَّغَهُ كَمَا سَمِعَهُ فَرُبَّ مُبَلَّغٍ أَوْعَى مِنْ سَامِعٍ",
+    "svenska": "Profeten ﷺ sade: \"Må Allah förgylla den person som hör mig säga något och sedan för det vidare exakt så som han hörde det. Det är ju möjligt att den som det förs vidare till memorerar och förstår det bättre än den som hörde det först.\"",
+    "källa": "Jami’ ut-Tirmidhi 2657"
+  },
+  {
+    "hadith_nr": 111,
+    "arabiska": "مَنْ سَلَكَ طَرِيقًا يَلْتَمِسُ فِيهِ عِلْمًا سَهَّلَ اللَّهُ لَهُ بِهِ طَرِيقًا إِلَى الْجَنَّةِ",
+    "svenska": "Profeten ﷺ sade: \"Allah kommer att göra vägen till Paradiset lätt för den som färdas på en väg där han söker kunskap.\"",
+    "källa": "Sahih Muslim 2699"
+  },
+  {
+    "hadith_nr": 112,
+    "arabiska": "مَنْ صَلَّى عَلَيَّ وَاحِدَةً صَلَّى اللَّهُ عَلَيْهِ عَشْرًا",
+    "svenska": "Profeten ﷺ sade: \"Den som ber för mig (genom att säga: \"Sallallahu \"alayhi wa sallam\") en gång, kommer Allah att nämna för Sina änglar tio gånger.\"",
+    "källa": "Sahih Muslim 408"
+  },
+  {
+    "hadith_nr": 113,
+    "arabiska": "مَنْ صَلَّى الْغَدَاةَ فِي جَمَاعَةٍ ثُمَّ قَعَدَ يَذْكُرُ اللَّهَ حَتَّى تَطُلُعَ الشَّمْسُ، ثُمَّ صَلَّى رَكْعَتَيْنِ كَانَتْ لَهُ كَأَجْرِ حَجَّةٍ وَعُمْرَةٍ، تَامَّةٍ تَامَّةٍ تَامَّةٍ",
+    "svenska": "Profeten ﷺ sade: \"Den som ber fajr i församling och därefter sitter kvar och gör dhikr tills solen går upp och sedan ber två raka\"at (duha), kommer att få en belöning motsvarande en fulländad hajj och en fulländad \"umrah.\"",
+    "källa": "Jami’ ut-Tirmidhi 586"
+  },
+  {
+    "hadith_nr": 115,
+    "arabiska": "لَيْسَ شَيْءٌ أَكْرَمَ عَلَى اللَّهِ مِنْ الدُّعَاءِ",
+    "svenska": "Profeten ﷺ sade: \"Ingen handling är bättre i Allahs ögon än åkallan.\"",
+    "källa": "Jami’ ut-Tirmidhi 3370"
+  },
+  {
+    "hadith_nr": 116,
+    "arabiska": "ذَاقَ طَعْمَ الْإِيمَانِ مَنْ رَضِيَ بِاللَّهِ رَبًّا وَبِالْإِسْلَامِ دِينًا وَبِمُحَمَّدٍ رَسُولًا",
+    "svenska": "Profeten ﷺ sade: \"Den som är nöjd med Allah som sin Herre, Islam som sin Religion och Muhammad (U) som sitt sändebud har verkligen fått smaka trons sötma.\"",
+    "källa": "Sahih Muslim 34"
+  },
+  {
+    "hadith_nr": 117,
+    "arabiska": "إِنَّ اللَّهَ حَرَّمَ عَلَيْكُمْ عُقُوقَ الْأُمَّهَاتِ",
+    "svenska": "Profeten ﷺ sade: \"Allah har sannerligen förbjudit er från att visa olydnad mot era mödrar.\"",
+    "källa": "Sahih ul-Bukhari 5975"
+  },
+  {
+    "hadith_nr": 118,
+    "arabiska": "رِضَا الرَّبِّ فِي رِضَا الْوَالِدِ، وَسَخَطُ الرَّبِّ فِي سَخَطِ الْوَالِدِ",
+    "svenska": "Profeten ﷺ sade: \"Herrens välbehag finner man genom att uppnå sin faders välbehag, och Herrens vrede kommer över den som gör sin fader arg.\"",
+    "källa": "Jami’ ut-Tirmidhi 1899"
+  },
+  {
+    "hadith_nr": 119,
+    "arabiska": "مَنْ يَضْمَنْ لِي مَا بَيْنَ لَحْيَيْهِ وَمَا بَيْنَ رِجْلَيْهِ أَضْمَنْ لَهُ الْجَنَّةَ",
+    "svenska": "Profeten ﷺ sade: \"Den som lovar mig att betvinga det som finns mellan käkarna (dvs. tungan och därmed talet) och mellan benen (och därefter håller sitt löfte) kan jag lova inträde till Paradiset.\"",
+    "källa": "Sahih ul-Bukhari 6474"
+  },
+  {
+    "hadith_nr": 120,
+    "arabiska": "إِذَا كَانُوا ثَلَاثَةً فَلَا يَتَنَاجَى اثْنَانِ دُونَ الثَّالِثِ",
+    "svenska": "Profeten ﷺ sade: \"När tre personer umgås tillsammans ska inte två av dem tala så att den tredje inte hör (eller förstår).\"",
+    "källa": "Sahih ul-Bukhari 6288"
+  },
+  {
+    "hadith_nr": 121,
+    "arabiska": "يُسَلِّمُ الرَّاكِبُ عَلَى الْمَاشِي، وَالْمَاشِي عَلَى الْقَاعِدِ، وَالْقَلِيلُ عَلَى الْكَثِيرِ، وَالصَّغِيرُ عَلَى الْكَبِيرِ",
+    "svenska": "Profeten ﷺ sade: \"Den ridandes hälsning ska föregå den gåendes och den gåendes hälsning ska föregå den sittandes. Det färre antalets hälsning ska föregå den större gruppens och den unges hälsning ska föregå den äldres.\"",
+    "källa": "Sahih ul-Bukhari 6231"
+  },
+  {
+    "hadith_nr": 122,
+    "arabiska": "الدُّعَاءُ هُوَ الْعِبَادَةُ",
+    "svenska": "Profeten ﷺ sade: \"Åkallan. Det är det som är dyrkan!\"",
+    "källa": "Jami’ ut-Tirmidhi 2969"
+  },
+  {
+    "hadith_nr": 123,
+    "arabiska": "مَنْ قَالَ سُبْحَانَ اللَّهِ الْعَظِيمِ وَبِحَمْدِهِ غُرِسَتْ لَهُ نَخْلَةٌ فِي الْجَنَّةِ",
+    "svenska": "Profeten ﷺ sade: \"Den som säger: \"Subhanallahil-\"adhim wa bihamdi\" kommer att få ett dadelträd planterat åt sig i Paradiset.\"",
+    "källa": "Sunan at-Tirmidhi 3242"
+  },
+  {
+    "hadith_nr": 124,
+    "arabiska": "أَحَبُّ الْكَلَامِ إِلَى اللَّهِ أَرْبَعٌ: سُبْحَانَ اللَّهِ وَالْحَمْدُ لِلَّهِ وَلَا إِلَهَ إِلَّا اللَّهُ وَاللَّهُ أَكْبَرُ",
+    "svenska": "Profeten ﷺ sade: \"De fyra [lovprisade] uttalanden som Allah älskar allra mest är: \"Subhanallah, Alhamdulillah, La ilaha ill-Allah och Allahu Akbar\".\"",
+    "källa": "Sahih Muslim 1237"
+  },
+  {
+    "hadith_nr": 126,
+    "arabiska": "التَّثَاؤُبُ مِنَ الشَّيْطَانِ، فَإِذَا تَثَاءَبَ أَحَدُكُمْ فَلْيَرُدَّهُ مَا اسْتَطَاعَ",
+    "svenska": "Profeten ﷺ sade: \"Gäspningar kommer från Satan. Om någon av er gäspar bör han försöka hålla emot så gott han kan.\"",
+    "källa": "Sahih ul-Bukhari 3289"
+  },
+  {
+    "hadith_nr": 127,
+    "arabiska": "مَنْ غَشَّنَا فَلَيْسَ مِنَّا",
+    "svenska": "Profeten ﷺ sade: \"Den som lurar oss är inte ifrån oss.\"",
+    "källa": "Sahih Muslim 3383"
+  },
+  {
+    "hadith_nr": 129,
+    "arabiska": "أَحَبُّ الأَعْمَالِ إِلَى اللَّهِ أَدْوَمُهَا وَإِنْ قَلَّ",
+    "svenska": "Profeten ﷺ sade: \"De handlingar som Allah älskar mest är de som utförs regelbundet, även om de är få.\"",
+    "källa": "Sahih ul-Bukhari 5861"
+  },
+  {
+    "hadith_nr": 130,
+    "arabiska": "خَيْرُ الأَصْحَابِ عِنْدَ اللَّهِ خَيْرُهُمْ لِصَاحِبِهِ، وَخَيْرُ الْجِيرَانِ عِنْدَ اللَّهِ خَيْرُهُمْ لِجَارِهِ",
+    "svenska": "Profeten ﷺ sade: \"Den bäste vännen i Allahs ögon är den som är bäst mot sin vän, och den bäste grannen i Allahs ögon är den som är bäst mot sin granne.\"",
+    "källa": "Jami’ ut-Tirmidhi 1944"
+  },
+  {
+    "hadith_nr": 132,
+    "arabiska": "كَلِمَتَانِ خَفِيفَتَانِ عَلَى اللِّسَانِ، ثَقِيلَتَانِ فِي الْمِيزَانِ، حَبِيبَتَانِ إِلَى الرَّحْمَنِ: سُبْحَانَ اللَّهِ وَبِحَمْدِهِ، سُبْحَانَ اللَّهِ الْعَظِيمِ",
+    "svenska": "Profeten ﷺ sade: \"Det finns två uttryck som är lätta för tungan att uttala, tunga på vågskålen (på Domedagen) och älskade av den Barmhärtige: 'Subhanallahi wa bihamdihi' och 'Subhanallahil-'adhim'.\"",
+    "källa": "Sahih ul-Bukhari 6406"
+  },
+  {
+    "hadith_nr": 133,
+    "arabiska": "مَنْ قَالَ: سُبْحَانَ اللَّهِ الْعَظِيمِ وَبِحَمْدِهِ، غُرِسَتْ لَهُ نَخْلَةٌ فِي الْجَنَّةِ",
+    "svenska": "Profeten ﷺ sade: \"Den som säger: 'Subhanallahil-\"adhim wa bihamdi' kommer att få ett dadelträd planterat åt sig i Paradiset.\"",
+    "källa": "Jami’ ut-Tirmidhi 3464"
+  },
+  {
+    "hadith_nr": 135,
+    "arabiska": "أَوْلَى النَّاسِ بِي يَوْمَ الْقِيَامَةِ أَكْثَرُهُمْ عَلَيَّ صَلَاةً",
+    "svenska": "Profeten ﷺ sade: \"Närmast mig på Domedagen kommer de vara som ber för mig mest.\"",
+    "källa": "Jami’ ut-Tirmidhi 484"
+  },
+  {
+    "hadith_nr": 138,
+    "arabiska": "مَنْ أَدْرَكَ رَكْعَةً مِنَ الصَّلَاةِ فَقَدْ أَدْرَكَ الصَّلَاةَ",
+    "svenska": "Profeten ﷺ sade: \"Den som hinner med en rak'ah (bönerörelse) har hunnit med bönen.\"",
+    "källa": "Sahih ul-Bukhari 580"
+  },
+  {
+    "hadith_nr": 139,
+    "arabiska": "مَا مِنْ عَبْدٍ يَصُومُ يَوْمًا فِي سَبِيلِ اللَّهِ إِلَّا بَاعَدَ اللَّهُ... وَجْهَهُ عَنْ النَّارِ سَبْعِينَ خَرِيفًا",
+    "svenska": "Profeten ﷺ sade: \"En tjänare fastar inte en enda dag för Allahs skull förutom att Allah för hans ansikte 70 höstar (år) längre bort från Helvetet.\"",
+    "källa": "Sahih ul-Bukhari 2840"
+  },
+  {
+    "hadith_nr": 140,
+    "arabiska": "مَنْ قَامَ لَيْلَةَ الْقَدْرِ إِيمَانًا وَاحْتِسَابًا غُفِرَ لَهُ مَا تَقَدَّمَ مِنْ ذَنْبِهِ",
+    "svenska": "Profeten ﷺ sade: \"Den som ber nattbönen under Laylat ul-Qadr med Iman och hopp [på belöning] kommer att bli förlåten för sina tidiga synder.\"",
+    "källa": "Sahih ul-Bukhari 1901"
+  },
+  {
+    "hadith_nr": 141,
+    "arabiska": "مَنْ صَامَ رَمَضَانَ إِيمَانًا وَاحْتِسَابًا غُفِرَ لَهُ مَا تَقَدَّمَ مِنْ ذَنْبِهِ",
+    "svenska": "Profeten ﷺ sade: \"Den som fastar under hela [månaden] Ramadan med Iman och hopp om belöning kommer att bli förlåten sina tidigare synder.\"",
+    "källa": "Sahih ul-Bukhari 38"
+  },
+  {
+    "hadith_nr": 142,
+    "arabiska": "لا ضَرَرَ وَلا ضِرَارَ",
+    "svenska": "Profeten ﷺ sade: \"Ingen form av skada eller åverkan får ske.\"",
+    "källa": "Musnad Ahmad 2845"
+  },
+  {
+    "hadith_nr": 143,
+    "arabiska": "صِيَامُ يَوْمِ عَاُشُورَاءَ أَحْتَسِبُ عَلَى اللَّهِ أَنْ يُكَفِّرَ السَّنَةَ الَّتِي قَبْلَهُ",
+    "svenska": "Allahs sändebud ﷺ frågades om att fasta på \"Ashoradagen och han svarade då: \"Det tar bort [synderna från] det tidigare året.\"",
+    "källa": "Sahih Muslim 1142"
+  },
+  {
+    "hadith_nr": 145,
+    "arabiska": "مَنْ صَلَّى الْبَرْدَيْنِ دَخَلَ الْجَنَّةَ",
+    "svenska": "Profeten ﷺ sade: \"Den som ber de två svala bönerna (fajr och \"asr) kommer att träda in i Paradiset.\"",
+    "källa": "Sahih ul-Bukhari 574"
+  },
+  {
+    "hadith_nr": 147,
+    "arabiska": "مَا مَنَعَ قَوْمٌ الزَّكَاةَ إِلَّا ابْتَلَاهُمْ اللَّهُ بِالسِّنِينَ",
+    "svenska": "Profeten ﷺ sade: \"Aldrig har ett folk vägrat att betala den obligatoriska allmosan (zakat) förutom att Allah straffat dem med torka.\"",
+    "källa": "Al-Mu’jam al-Awsat"
+  },
+  {
+    "hadith_nr": 148,
+    "arabiska": "إِنَّ اللَّهَ يُحِبُّ الرِّفْقَ فِي الأَمْرِ كُلِّهِ",
+    "svenska": "Profeten ﷺ sade: \"Allah älskar sannerligen mildhet i alla angelägenheter.\"",
+    "källa": "Sahih ul-Bukhari 6927"
+  },
+  {
+    "hadith_nr": 149,
+    "arabiska": "الدَّالُّ عَلَى الْخَيْرِ كَفَاعِلِهِ",
+    "svenska": "Profeten ﷺ sade: \"Den som vägleder någon till att göra något gott får samma belöning som den som utför handlingen.\"",
+    "källa": "Jami’ ut-Tirmidhi 2670"
+  },
+  {
+    "hadith_nr": 151,
+    "arabiska": "لَيْسَ الْمِسْكِينُ الَّذِي تَرُدُّهُ التَّمْرَةُ وَالتَّمْرَتَانِ، وَلَا اللُّقْمَةُ وَاللُّقْمَتَانِ، إِنَّمَا الْمِسْكِينُ الَّذِي يَتَعَفَّفُ",
+    "svenska": "Profeten ﷺ sade: \"Den behövande är inte den som går runt bland folk och nöjer sig med en eller två dadlar, eller en eller två munsbitar mat. Den verkligt behövande är den som inte har tillräckligt men som ändå avhåller sig från att be andra om hjälp.\"",
+    "källa": "Sahih ul-Bukhari 1479"
+  },
+  {
+    "hadith_nr": 152,
+    "arabiska": "إِذَا أَرَادَ اللَّهُ بِعَبْدِهِ الْخَيْرَ عَجَّلَ لَهُ الْعُقُوبَةَ فِي الدُّنْيَا",
+    "svenska": "Profeten ﷺ sade: \"När Allah vill Sin tjänare väl låter Han honom få sitt straff redan i detta liv.\"",
+    "källa": "Jami’ ut-Tirmidhi 2396"
+  },
+  {
+    "hadith_nr": 153,
+    "arabiska": "عَجَبًا لأَمْرِ الْمُؤْمِنِ إِنَّ أَمْرَهُ كُلَّهُ خَيْرٌ",
+    "svenska": "Profeten ﷺ sade: \"Det är förunderligt med den troendes situation! Allt som sker honom är till hans fördel.\"",
+    "källa": "Sahih Muslim 2999"
+  },
+  {
+    "hadith_nr": 154,
+    "arabiska": "الْمُؤْمِنُ الْقَوِيُّ خَيْرٌ وَأَحَبُّ إِلَى اللَّهِ مِنَ الْمُؤْمِنِ الضَّعِيفِ",
+    "svenska": "Profeten ﷺ sade: \"En stark troende är bättre och mer älskad av Allah än en svag troende.\"",
+    "källa": "Sahih Muslim 2664"
+  },
+  {
+    "hadith_nr": 155,
+    "arabiska": "احْرِصْ عَلَى مَا يَنْفَعُكَ، وَاسْتَعِنْ بِاللَّهِ وَلَا تَعْجِزْ",
+    "svenska": "Profeten ﷺ sade: \"Sträva efter det som gagnar dig, sök hjälp hos Allah och ge inte upp!\"",
+    "källa": "Sahih Muslim 2664"
+  },
+  {
+    "hadith_nr": 156,
+    "arabiska": "لَوْ أَنَّكُمْ تَوَكَّلْتُمْ عَلَى اللَّهِ حَقَّ تَوَكُّلِهِ لَرَزَقَكُمْ كَمَا يَرْزُقُ الطَّيْرَ",
+    "svenska": "Profeten ﷺ sade: \"Om ni förlitade er på Allah på det sätt som man bör förlita sig på Honom, skulle Han förse er med uppehälle precis som Han förser fåglarna.\"",
+    "källa": "Jami’ ut-Tirmidhi 2344"
+  },
+  {
+    "hadith_nr": 158,
+    "arabiska": "الْمَرْءُ مَعَ مَنْ أَحَبَّ",
+    "svenska": "Profeten ﷺ sade: \"Man kommer att vara tillsammans med dem man älskar [på Domedagen].\"",
+    "källa": "Sahih ul-Bukhari 6168"
+  },
+  {
+    "hadith_nr": 159,
+    "arabiska": "مَنْ لَا يَرْحَمِ النَّاسَ لَا يَرْحَمْهُ اللَّهُ",
+    "svenska": "Profeten ﷺ sade: \"Allah kommer inte att vara barmhärtig mot den som inte är barmhärtig mot människor.\"",
+    "källa": "Sahih Muslim 2319"
+  },
+  {
+    "hadith_nr": 160,
+    "arabiska": "إِنَّ اللَّهَ رَفِيقٌ يُحِبُّ الرِّفْقَ",
+    "svenska": "Profeten ﷺ sade: \"Allah är sannerligen mild och Han älskar mildhet.\"",
+    "källa": "Sahih Muslim 2593"
+  },
+  {
+    "hadith_nr": 161,
+    "arabiska": "أَشْهَدُ أَنْ لَا إِلَهَ إِلَّا اللَّهُ وَحْدَهُ لَا شَرِيكَ لَهُ وَأَشْهَدُ أَنَّ مُحَمَّدًا عَبْدُهُ وَرَسُولُهُ",
+    "svenska": "Profeten ﷺ sade: \"Alla Paradisets portar kommer att öppnas för den som tvagar sig på ett korrekt sätt och därefter säger: \"Jag bevittnar att ingen gudom har rätt att dyrkas förutom Allah...\"\"",
+    "källa": "Sahih Muslim 234"
+  },
+  {
+    "hadith_nr": 162,
+    "arabiska": "الصَّلَاةُ مِفْتَاحُ الْجَنَّةِ",
+    "svenska": "Profeten ﷺ sade: \"Bönen är Paradisets nyckel.\"",
+    "källa": "Jami’ ut-Tirmidhi 4"
+  },
+  {
+    "hadith_nr": 163,
+    "arabiska": "سِبَابُ الْمُسْلِمِ فُسُوقٌ، وَقِتَالُهُ كُفْرٌ",
+    "svenska": "Profeten ﷺ sade: \"Att förolämpa en muslim är en försyndelse, och att föra krig mot honom är otro.\"",
+    "källa": "Sahih ul-Bukhari 48"
+  },
+  {
+    "hadith_nr": 165,
+    "arabiska": "لَا يَدْخُلُ الْجَنَّةَ مَنْ لَا يَأْمَنُ جَارُهُ بَوَائِقَهُ",
+    "svenska": "Profeten ﷺ sade: \"Den vars granne inte är trygg från hans ofog kommer inte att träda in i Paradiset.\"",
+    "källa": "Sahih Muslim 46"
+  },
+  {
+    "hadith_nr": 166,
+    "arabiska": "لَا تَزُولُ قَدَمَا عَبْدٍ يَوْمَ الْقِيَامَةِ حَتَّى يُسْأَلَ عَنْ أَرْبَعٍ: عَنْ عُمُرِهِ فِيمَا أَفْنَاهُ، وَعَنْ جَسَدِهِ فِيمَا أَبْلَاهُ، وَعَنْ مَالِهِ مِنْ أَيْنَ اكْتَسَبَهُ وَفِيمَا أَنْفَقَهُ، وَعَنْ عِلْمِهِ مَاذَا عَمِلَ فِيهِ",
+    "svenska": "Profeten ﷺ sade: \"På Domedagen kommer en tjänare inte att kunna röra på fötterna förrän han utfrågats om fyra [saker]: om hur han spenderade sin tid, hur han använde sin kropp, hur han införskaffade sig och spenderade sina pengar samt hur mycket av hans kunskap han omsatte i handling.\"",
+    "källa": "Sunan ad-Darimi 539"
+  },
+  {
+    "hadith_nr": 167,
+    "arabiska": "أَوَّلُ مَا يُحَاسَبُ بِهِ الْعَبْدُ يَوْمَ الْقِيَامَةِ الصَّلَاةُ",
+    "svenska": "Profeten ﷺ sade: \"Det första en tjänare förhörs om på Domedagen är bönen.\"",
+    "källa": "Jami’ ut-Tirmidhi 413"
+  },
+  {
+    "hadith_nr": 170,
+    "arabiska": "مَنْ كَذَبَ عَلَيَّ مُتَعَمِّدًا فَلْيَتَبَوَّأْ مَقْعَدَهُ مِنَ النَّارِ",
+    "svenska": "Profeten ﷺ sade: \"Den som medvetet ljuger om mig [genom att tillskriva mig något jag inte sagt] ska förbereda sig på sin plats i Helvetet.\"",
+    "källa": "Sahih ul-Bukhari 110"
+  },
+  {
+    "hadith_nr": 171,
+    "arabiska": "نَضَّرَ اللَّهُ امْرَأً سَمِعَ مِنَّا شَيْئًا فَبَلَّغَهُ كَمَا سَمِعَهُ",
+    "svenska": "Profeten ﷺ sade: \"Må Allah förgylla den person som hör mig säga något och sedan för det vidare exakt så som han hörde det.\"",
+    "källa": "Jami’ ut-Tirmidhi 2657"
+  },
+  {
+    "hadith_nr": 174,
+    "arabiska": "إِنَّ الدِّينَ يُسْرٌ",
+    "svenska": "Profeten ﷺ sade: \"Religionen är sannerligen enkel.\"",
+    "källa": "Sahih ul-Bukhari 39"
+  },
+  {
+    "hadith_nr": 175,
+    "arabiska": "مَنْ قَامَ رَمَضَانَ إِيمَانًا وَاحْتِسَابًا غُفِرَ لَهُ مَا تَقَدَّمَ مِنْ ذَنْبِهِ",
+    "svenska": "Profeten ﷺ sade: \"Den som ber nattbönen under [månaden] Ramadan med Iman och hopp om belöning kommer att bli förlåten sina tidigare synder.\"",
+    "källa": "Sahih ul-Bukhari 37"
+  },
+  {
+    "hadith_nr": 176,
+    "arabiska": "إِذَا سَمِعْتُمُ الْمُؤَذِّنَ فَقُولُوا مِثْلَ مَا يَقُولُ",
+    "svenska": "Profeten ﷺ sade: \"När ni hör böneutroparen (muadhin) ropa, ska ni upprepa det han säger.\"",
+    "källa": "Sahih Muslim 384"
+  },
+  {
+    "hadith_nr": 177,
+    "arabiska": "لَوْ يَعْلَمُ النَّاسُ مَا فِي النِّدَاءِ وَالصَّفِّ الْأَوَّلِ ثُمَّ لَمْ يَجِدُوا إِلَّا أَنْ يَسْتَهِمُوا عَلَيْهِ لَاسْتَهَمُوا",
+    "svenska": "Profeten ﷺ sade: \"Om folk visste vilken belöning det finns i att göra böneutropet och att stå i den första raden [i bönen], och de inte fann något annat sätt än att dra lott om det, skulle de sannerligen ha gjort det.\"",
+    "källa": "Sahih ul-Bukhari 615"
+  },
+  {
+    "hadith_nr": 178,
+    "arabiska": "مَنْ صَلَّى لِلَّهِ ثِنْتَيْ عَشْرَةَ رَكْعَةً تَطَوُّعًا بَنَى اللَّهُ لَهُ بَيْتًا فِي الْجَنَّةِ",
+    "svenska": "Profeten ﷺ sade: \"Allah kommer att bygga ett hus i Paradiset till den som ber tolv extra (frivilliga) rak'at under ett dygn.\"",
+    "källa": "Sahih Muslim 728"
+  },
+  {
+    "hadith_nr": 180,
+    "arabiska": "مَنْ نَسِيَ صَلَاةً فَلْيُصَلِّهَا إِذَا ذَكَرَهَا",
+    "svenska": "Profeten ﷺ sade: \"Glömmer man bort en bön ska man be den så fort man kommer på det.\"",
+    "källa": "Sahih ul-Bukhari 597"
+  },
+  {
+    "hadith_nr": 181,
+    "arabiska": "صَلُّوا كَمَا رَأَيْتُمُونِي أُصَلِّي",
+    "svenska": "Profeten ﷺ sade: \"Be så som ni har sett mig be!\"",
+    "källa": "Sahih ul-Bukhari 631"
+  },
+  {
+    "hadith_nr": 182,
+    "arabiska": "مَنْ سَجَدَ لِلَّهِ سَجْدَةً رَفَعَهُ اللَّهُ بِهَا دَرَجَةً، وَحَطَّ عَنْهُ بِهَا خَطِيئَةً",
+    "svenska": "Profeten ﷺ sade: \"För varje gång du gör en sajdah (bönerörelse då pannan nuddar marken) för Allahs skull, kommer Han att höja din rang med en nivå och förlåta dig för en synd.\"",
+    "källa": "Sahih Muslim 488"
+  },
+  {
+    "hadith_nr": 183,
+    "arabiska": "لَا تَدْعُوا عَلَى أَنْفُسِكُمْ، وَلَا تَدْعُوا عَلَى أَوْلَادِكُمْ، وَلَا تَدْعُوا عَلَى خَدَمِكُمْ، وَلَا تَدْعُوا عَلَى أَمْوَالِكُمْ",
+    "svenska": "Profeten ﷺ sade: \"Be inte att Allah ska låta något ont drabba era barn, tjänare eller egendomar. Tänk om det råkar vara ett av de tillfällen då era böner besvaras!\"",
+    "källa": "Sunan Abi Dawud 1532"
+  },
+  {
+    "hadith_nr": 184,
+    "arabiska": "كُلُّ ابْنِ آدَمَ خَطَّاءٌ وَخَيْرُ الْخَطَّائِينَ التَّوَّابُونَ",
+    "svenska": "Profeten ﷺ sade: \"Alla av Adams avkomma begår misstag, och den bästa av dem som begår misstag är de som gör tawbah.\"",
+    "källa": "Jami’ ut-Tirmidhi 2499"
+  },
+  {
+    "hadith_nr": 186,
+    "arabiska": "مَا تَرَكْتُ بَعْدِي فِتْنَةً أَضَرَّ عَلَى الرِّجَالِ مِنَ النِّسَاءِ",
+    "svenska": "Profeten ﷺ sade: \"Av de prövningar som ni män lämnas kvar med, är den som rör kvinnor den allra svåraste.\"",
+    "källa": "Sahih ul-Bukhari 5096"
+  },
+  {
+    "hadith_nr": 194,
+    "arabiska": "لَقَدْ رَأَيْتُ رَجُلاً يَتَقَلَّبُ فِي الْجَنَّةِ فِي شَجَرَةٍ قَطَعَهَا مِنْ ظَهْرِ الطَّرِيقِ كَانَتْ تُؤْذِي الْمُسْلِمِينَ",
+    "svenska": "Profeten ﷺ sade: \"Jag har sannerligen sett en man gå runt i Paradiset som belöning för att han bar bort ett träd som låg på vägen och störde muslimerna.\"",
+    "källa": "Sahih Muslim 1914"
+  },
+  {
+    "hadith_nr": 195,
+    "arabiska": "طَلَبُ الْعِلْمِ فَرِيضَةٌ عَلَى كُلِّ مُسْلِمٍ",
+    "svenska": "Profeten ﷺ sade: \"Att söka kunskap är obligatoriskt för varje muslim.\"",
+    "källa": "Sunan Ibn Majah 224"
+  },
+  {
+    "hadith_nr": 197,
+    "arabiska": "لَقِّنُوا مَوْتَاكُمْ لَا إِلَهَ إِلَّا اللَّهُ",
+    "svenska": "Profeten ﷺ sade: \"Uppmana era döende att säga: \"La ilaha ill-Allah\"!\"",
+    "källa": "Sahih Muslim 916"
+  },
+  {
+    "hadith_nr": 200,
+    "arabiska": "لَا تَأْكُلُوا بِالشِّمَالِ فَإِنَّ الشَّيْطَانَ يَأْكُلُ بِالشِّمَالِ",
+    "svenska": "Profeten ﷺ sade: \"Ät inte med vänster hand, för Satan äter med vänster hand!\"",
+    "källa": "Sahih Muslim 2020"
+  }
+]

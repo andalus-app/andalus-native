@@ -1,9 +1,12 @@
-import { View, Text, ScrollView, TouchableOpacity, RefreshControl, Linking, Image, useWindowDimensions, Animated, PanResponder, Modal, StyleSheet, AppState } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, RefreshControl, Linking, Image, useWindowDimensions, Animated, PanResponder, Modal, StyleSheet, AppState, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Svg, { Path } from 'react-native-svg';
 import HidayahLogo from '../../components/HidayahLogo';
-import DailyReminderCard from '../../components/DailyReminderCard';
+import DagensKoranversCard from '../../components/DagensKoranversCard';
+import NextPrayerCard from '../../components/NextPrayerCard';
+import DagensHadithCard from '../../components/DagensHadithCard';
+import SvgIcon from '../../components/SvgIcon';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ThemeToggle from '../../components/ThemeToggle';
@@ -177,6 +180,16 @@ function YoutubeCard({ stream, isLive, isUpcoming }: YoutubeCardProps) {
 
   // No stream — render nothing
   if (!stream) return null;
+
+  // Only show upcoming streams within 6 hours of scheduled start.
+  // Streams further away are noise — the card appears when it's actually relevant.
+  if (
+    stream.status === 'upcoming' &&
+    stream.scheduledStart &&
+    new Date(stream.scheduledStart).getTime() > Date.now() + 6 * 60 * 60_000
+  ) {
+    return null;
+  }
 
   // Hide upcoming streams whose scheduled time has passed by more than 90 minutes.
   if (
@@ -562,12 +575,16 @@ function BookingBellPanel({
 export default function HomeScreen() {
   const { theme: T, isDark } = useTheme();
   const router = useRouter();
+  const { width: screenWidth } = useWindowDimensions();
   const [refreshing, setRefreshing] = useState(false);
   const [bellOpen, setBellOpen] = useState(false);
+
   const { banners, dismissBanner, markAllRead, refresh } = useBanners();
   const { pendingCount, cancelledCount, pendingBookings, bookingNotifs, totalUnread: bookingUnread, isAdmin, isLoggedIn, dismissNotif, markAllSeen, refresh: refreshBookingNotif } = useBookingNotif();
   const { stream, isLive, isUpcoming, refresh: refreshYoutube } = useYoutubeLive();
-  const readTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const readTimerRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scrollRef        = useRef<ScrollView>(null);
+  const youtubeCardYRef  = useRef<number>(0);
 
   // ── Admin triple-tap state ─────────────────────────────────────────────────
   // Tap count and debounce timer live in refs so they never trigger a re-render.
@@ -583,6 +600,24 @@ export default function HomeScreen() {
   // ID of the announcement banner that should pulse (set when user taps push notification)
   const [pulsingId,           setPulsingId]           = useState<string | null>(null);
 
+  // ── Preferred name (greeting) ─────────────────────────────────────────────
+  const [preferredName,    setPreferredName]    = useState<string | null>(null);
+  const [nameModalVisible, setNameModalVisible] = useState(false);
+  const [nameInput,        setNameInput]        = useState('');
+
+  const handleSaveName = useCallback(async () => {
+    const trimmed = nameInput.trim();
+    if (!trimmed) return;
+    await AsyncStorage.setItem('andalus_preferred_name', trimmed);
+    setPreferredName(trimmed);
+    setNameModalVisible(false);
+  }, [nameInput]);
+
+  const openNameModal = useCallback(() => {
+    setNameInput(preferredName ?? '');
+    setNameModalVisible(true);
+  }, [preferredName]);
+
   // On focus: immediately refresh booking notifs (status updates need to be instant).
   // Banner refresh is NOT triggered on every focus — that was causing a storm of
   // network requests during rapid tab-switching, hitting different CDN edge servers
@@ -591,6 +626,17 @@ export default function HomeScreen() {
   // The initial load and app-foreground cases are handled in BannerContext itself.
   useFocusEffect(useCallback(() => {
     refreshBookingNotif();
+    // Reload name on every focus so edits made in Settings are reflected instantly.
+    AsyncStorage.getItem('andalus_preferred_name').then(n => setPreferredName(n || null));
+    // If the user tapped a YouTube LIVE notification, scroll to the YouTube card.
+    AsyncStorage.getItem('islamnu_live_notif_tap').then(tap => {
+      if (!tap) return;
+      AsyncStorage.removeItem('islamnu_live_notif_tap').catch(() => {});
+      // Delay lets the layout settle before scrolling.
+      setTimeout(() => {
+        scrollRef.current?.scrollTo({ y: youtubeCardYRef.current - 16, animated: true });
+      }, 350);
+    });
     const interval = setInterval(refresh, 30 * 1000);
     return () => clearInterval(interval);
   }, [refresh, refreshBookingNotif]));
@@ -830,10 +876,117 @@ export default function HomeScreen() {
         T={T}
       />
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 120, flexGrow: 1 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={T.accent} />}
       >
-        <YoutubeCard stream={stream} isLive={isLive} isUpcoming={isUpcoming} />
+        {/* ── Greeting ── */}
+        <View style={{ marginBottom: 20 }}>
+          <Text style={{ fontSize: 22, fontWeight: '700', color: T.text, letterSpacing: -0.2 }} numberOfLines={1} adjustsFontSizeToFit>
+            {preferredName
+              ? `As-salāmo ʿalaykom, ${preferredName}`
+              : 'As-salāmo ʿalaykom'
+            }
+          </Text>
+          {!preferredName && (
+            <TouchableOpacity
+              activeOpacity={0.6}
+              onPress={openNameModal}
+              hitSlop={{ top: 4, bottom: 8, left: 0, right: 16 }}
+            >
+              <Text style={{ fontSize: 13, color: T.textMuted, marginTop: 5 }}>
+                Vad vill du att vi ska kalla dig? ›
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Dagens Koranvers */}
+        <DagensKoranversCard />
+
+        {/* Nästa bön */}
+        <NextPrayerCard />
+
+        {/* Dagens Hadith */}
+        <DagensHadithCard />
+
+        {/* ── Fortsätt ── */}
+        {(() => {
+          // 2 full cards + ~40 px peek of third card, aligned to screen edge.
+          // marginHorizontal: -16 breaks out of the parent ScrollView's paddingHorizontal.
+          const CARD_W = Math.floor((screenWidth - 72) / 2); // ~159 px on 390 w
+          const GAP    = 8;
+          const ITEMS  = [
+            { title: 'Läs Koranen',         subtitle: 'Öppna Koranen',   icon: 'quran'       as const, route: '/quran'  },
+            { title: 'Läs åminnelser',      subtitle: 'Hisnul Muslim',    icon: 'dhikr'       as const, route: '/dhikr'  },
+            { title: 'Lär dig Allahs namn', subtitle: 'Asma ul-Husna',   icon: 'allahs-namn' as const, route: '/asmaul' },
+          ] as const;
+
+          return (
+            <View style={{ marginTop: 4, marginBottom: 4 }}>
+              <Text style={{
+                fontSize: 12, fontWeight: '600', color: T.textMuted,
+                letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 10,
+              }}>
+                Fortsätt
+              </Text>
+
+              {/* Negative margin lets the scroll row bleed to screen edges */}
+              <View style={{ marginHorizontal: -16 }}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  decelerationRate="fast"
+                  // Snap[0]: card 1+2 visible, card 3 peeks.
+                  // Snap[1]: iOS clamps to max offset → cards 2+3 fully visible.
+                  snapToOffsets={[0, CARD_W + GAP]}
+                  snapToAlignment="start"
+                  contentContainerStyle={{ paddingLeft: 16, paddingRight: 20 }}
+                >
+                  {ITEMS.map((item, index) => (
+                    <TouchableOpacity
+                      key={item.route}
+                      activeOpacity={0.7}
+                      onPress={() => router.push(item.route as any)}
+                      style={{
+                        width: CARD_W,
+                        backgroundColor: T.card,
+                        borderRadius: 14,
+                        borderWidth: 0.5,
+                        borderColor: T.border,
+                        padding: 14,
+                        marginRight: index < ITEMS.length - 1 ? GAP : 0,
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 3 },
+                        shadowOpacity: 0.08,
+                        shadowRadius: 10,
+                      }}
+                    >
+                      <View style={{
+                        width: 30, height: 30, borderRadius: 9,
+                        backgroundColor: T.accentGlow,
+                        alignItems: 'center', justifyContent: 'center',
+                        marginBottom: 9,
+                      }}>
+                        <SvgIcon name={item.icon} size={16} color={T.accent} />
+                      </View>
+                      <Text style={{ fontSize: 14, fontWeight: '600', color: T.text, lineHeight: 19 }}>
+                        {item.title}
+                      </Text>
+                      <Text style={{ fontSize: 12, fontWeight: '400', color: T.textMuted, marginTop: 3 }}>
+                        {item.subtitle}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            </View>
+          );
+        })()}
+
+        <View onLayout={e => { youtubeCardYRef.current = e.nativeEvent.layout.y; }}>
+          <YoutubeCard stream={stream} isLive={isLive} isUpcoming={isUpcoming} />
+        </View>
 
         {/* Admin — individual pending booking cards, one per booking */}
         {isAdmin && pendingBookings.map(pb => (
@@ -963,8 +1116,6 @@ export default function HomeScreen() {
           <BannerCard key={b.id} banner={b} onDismiss={() => dismissBanner(b.id)} theme={T} />
         ))}
 
-        {/* Dagens påminnelse — always visible on the home screen */}
-        <DailyReminderCard />
       </ScrollView>
 
       {/* ── Admin PIN modal ── */}
@@ -1103,6 +1254,82 @@ export default function HomeScreen() {
           </View>
         </Modal>
       )}
+
+      {/* ── Preferred name modal ── */}
+      <Modal
+        visible={nameModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setNameModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' }}
+          activeOpacity={1}
+          onPress={() => setNameModalVisible(false)}
+        />
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <View style={{
+            backgroundColor: T.card,
+            borderTopLeftRadius: 22, borderTopRightRadius: 22,
+            paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+            borderWidth: 0.5, borderBottomWidth: 0, borderColor: T.border,
+          }}>
+            {/* Drag handle */}
+            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: T.border, alignSelf: 'center', marginTop: 10, marginBottom: 14 }} />
+            {/* Header */}
+            <View style={{ paddingHorizontal: 20, marginBottom: 4, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={{ flex: 1, fontSize: 18, fontWeight: '700', color: T.text }}>
+                Vad vill du att vi ska kalla dig?
+              </Text>
+              <TouchableOpacity
+                onPress={() => setNameModalVisible(false)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: T.accentGlow, alignItems: 'center', justifyContent: 'center', marginLeft: 12 }}
+              >
+                <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
+                  <Path d="M18 6L6 18M6 6l12 12" stroke={T.textMuted} strokeWidth={2.2} strokeLinecap="round" />
+                </Svg>
+              </TouchableOpacity>
+            </View>
+            <View style={{ height: 0.5, backgroundColor: T.border, marginTop: 10, marginBottom: 16 }} />
+            {/* Input + action */}
+            <View style={{ paddingHorizontal: 20, gap: 12 }}>
+              <TextInput
+                value={nameInput}
+                onChangeText={setNameInput}
+                placeholder="Skriv ditt namn"
+                placeholderTextColor={T.textMuted}
+                autoFocus
+                autoCapitalize="words"
+                returnKeyType="done"
+                onSubmitEditing={handleSaveName}
+                style={{
+                  backgroundColor: T.bg,
+                  borderRadius: 12,
+                  borderWidth: 0.5,
+                  borderColor: T.border,
+                  paddingHorizontal: 14,
+                  paddingVertical: 13,
+                  fontSize: 16,
+                  color: T.text,
+                }}
+              />
+              <TouchableOpacity
+                onPress={handleSaveName}
+                activeOpacity={0.8}
+                style={{
+                  backgroundColor: nameInput.trim() ? T.accent : T.border,
+                  borderRadius: 12,
+                  paddingVertical: 14,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ fontSize: 15, fontWeight: '700', color: '#fff' }}>Spara</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }

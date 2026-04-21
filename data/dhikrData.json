@@ -15,8 +15,8 @@
     },
     "rebuilt_counts": {
       "categories": 26,
-      "subpages": 134,
-      "posts": 315
+      "subpages": 133,
+      "posts": 291
     },
     "counts_match_posts": true,
     "counts_match_categories": true,
@@ -1362,8 +1362,8 @@
               "titel": "I Allahs namn stiger vi in",
               "url": "https://islam.nu/dhikr/dhikr-nar-man-gar-in-i-hemmet/i-allahs-namn-stiger-vi-in/",
               "arabisk_text": "بِسْمِ اللهِ وَلَجْنَا، وَ بِسْمِ اللهِ خَرَجْنَا، وَعَلَى رَبِّنَا تَوَكَّلْنَا.",
-              "translitteration": "I Allahs namn stiger vi in och i Allahs namn lämnar vi [hemmet] och till Allah vår Herre har vi satt vår tillit.Säg därefter as-Salâmu ’alaykum till de närvarande.",
-              "svensk_text": "Abû Dâwûd 4/325 nr 5096 och Ibn Bâz ansåg dess kedja vara god (hasan) i Tuhfatul-Akhyâr s.28. I Muslim nr 2018 står det:  ”Om någon stiger in i hemmet och nämner Allahs namn vid inträdet samt när han skall äta, säger djävulen: ’Det finns ingen boplats för oss här i kväll och inte heller någon mat’.”",
+              "translitteration": "Bismillâhi waladjnâ, wa bismillâhi kharadjnâ, wa 'alâ-llâhi Rabbinâ tawakkalnâ.",
+              "svensk_text": "I Allahs namn stiger vi in och i Allahs namn lämnar vi [hemmet] och till Allah vår Herre har vi satt vår tillit.\n\nSäg därefter as-Salâmu 'alaykum till de närvarande.",
               "kallhanvisning": "Abû Dâwûd 4/325 nr 5096 och Ibn Bâz ansåg dess kedja vara god (hasan) i Tuhfatul-Akhyâr s.28. I Muslim nr 2018 står det: ”Om någon stiger in i hemmet och nämner Allahs namn vid inträdet samt när han skall äta, säger djävulen: ’Det finns ingen boplats för oss här i kväll och inte heller någon mat’.”",
               "mp3_url": "https://fra1.digitaloceanspaces.com/islamnu/dhikr/remembrance/audio/18.mp3",
               "source_integrity": {
@@ -7810,7 +7810,7 @@
                 "problem_tags": [],
                 "situation_tags": [],
                 "intent_tags": [],
-                "search_synonyms_sv": [],
+                "search_synonyms_sv": ["sex", "samlag", "intimitet"],
                 "priority_score": 40,
                 "wellbeing_description": "Främst situationsbaserad dhikr.",
                 "source_context": {
@@ -9393,748 +9393,6 @@
       "kategori_url": "https://islam.nu/dhikr/for-morgon-och-kvall/",
       "undersidor": [
         {
-          "titel": "Åminnelser under morgon och kväll",
-          "url": "https://islam.nu/dhikr/dhikr-for-morgon-och-kvall/",
-          "dhikr_poster": [
-            {
-              "titel": "Kursi-versen",
-              "url": "https://islam.nu/dhikr/dhikr-for-morgon-och-kvall/kursi-versen-3/",
-              "arabisk_text": "۞ ٱللَّهُ لَآ إِلَٰهَ إِلَّا هُوَ ٱلۡحَيُّ ٱلۡقَيُّومُۚ لَا تَأۡخُذُهُۥ سِنَةٞ وَلَا نَوۡمٞۚ لَّهُۥ مَا فِي ٱلسَّمَٰوَٰتِ وَمَا فِي ٱلۡأَرۡضِۗ مَن ذَا ٱلَّذِي يَشۡفَعُ عِندَهُۥٓ إِلَّا بِإِذۡنِهِۦۚ يَعۡلَمُ مَا بَيۡنَ أَيۡدِيهِمۡ وَمَا خَلۡفَهُمۡۖ وَلَا يُحِيطُونَ بِشَيۡءٖ مِّنۡ عِلۡمِهِۦٓ إِلَّا بِمَا شَآءَۚ وَسِعَ كُرۡسِيُّهُ ٱلسَّمَٰوَٰتِ وَٱلۡأَرۡضَۖ وَلَا يَ‍ُٔودُهُۥ حِفۡظُهُمَاۚ وَهُوَ ٱلۡعَلِيُّ ٱلۡعَظِيمُ ۞",
-              "translitteration": "Allahu lâ ilâha illâ Huwal-Hayyul-Qayyûm, lâ ta´khuthuhu sinatun wa lâ nawm, lahu mâ fis-samâwâti wa mâfil-ardh, man thal-lathî yashfa'u 'indahu illâ bi'ithnih, ya'lamu mâ bayna aydîhim wa mâ khalfahum, wa lâ yuhîtûna bishay´im-min 'ilmihi illâ bimâ shâ´a, wasi'a kursiyyuhus-samâwâti wal ardha, wa lâ ya'ûduhu hifdhuhumâ, wa Huwal-'Aliyyul-'Adhîm.",
-              "svensk_text": "\"Allah! - det finns ingen sann gud utom Han, den Levande, skapelsens evige Vidmakthållare. Slummer överraskar Honom inte och inte heller sömn. Honom tillhör allt det som himlarna rymmer och det som jorden bär. Vem är den som vågar tala [för någon] inför Honom utan Hans tillstånd? Han vet allt vad [människor] kan veta och allt som är dolt för dem och av Hans kunskap kan de inte omfatta mer än Han tillåter. Hans fotpall omsluter himlarna och jorden. Att värna och bevara dem är för Honom ingen börda. Han är den Höge, den Väldige.\" [Koranen 2: 255]",
-              "kallhanvisning": "Koranen 2:255 Al-Hâkim 1/562. al-Albânî ansåg den vara autentisk i Sahîh-ut-Targhîb wa Tarhîb 1/273 nr 655, at-Tabarânî i al-Kubrâ nr 541 vars kedja är god.",
-              "mp3_url": "https://fra1.digitaloceanspaces.com/islamnu/dhikr/remembrance/audio/75.mp3",
-              "source_integrity": {
-                "original_post_index": 0,
-                "source_url_present": true
-              },
-              "wellbeing_metadata": {
-                "id": "morgon-och-kvall-aminnelser-under-morgon-och-kvall-kursi-versen",
-                "mood_tags": [],
-                "problem_tags": [],
-                "situation_tags": [],
-                "intent_tags": [],
-                "search_synonyms_sv": [],
-                "priority_score": 40,
-                "wellbeing_description": "Främst situationsbaserad dhikr.",
-                "source_context": {
-                  "kategori": "Morgon och kväll",
-                  "undersida": "Åminnelser under morgon och kväll"
-                }
-              },
-              "qcf_page": 42,
-              "qcf_glyphs": "ﲓ ﲔ ﲕ ﲖ ﲗ ﲘ ﲙﲚ ﲛ ﲜ ﲝ ﲞ ﲟﲠ ﲡ ﲢ ﲣ ﲤ ﲥ ﲦ ﲧﲨ ﲩ ﲪ ﲫ ﲬ ﲭ ﲮ ﲯﲰ ﲱ ﲲ ﲳ ﲴ ﲵ ﲶﲷ ﲸ ﲹ ﲺ ﲻ ﲼ ﲽ ﲾ ﲿﳀ ﳁ ﳂ ﳃ ﳄﳅ ﳆ ﳇ ﳈﳉ ﳊ ﳋ ﳌ ﳍ",
-              "qcf_bismillah": false
-            },
-            {
-              "titel": "al-Ikhlas, al-Falaq och an-Nas",
-              "url": "https://islam.nu/dhikr/dhikr-for-morgon-och-kvall/al-ikhlas-al-falaq-och-an-nas/",
-              "arabisk_text": "",
-              "translitteration": "",
-              "svensk_text": "",
-              "kallhanvisning": "Abû Dâwûd 4/322 nr 5082, At-Tirmidhî 5/567 nr 3575. Se även Sahîh-ut-Tirmidhî 3/182.",
-              "mp3_url": "https://fra1.digitaloceanspaces.com/islamnu/dhikr/remembrance/audio/70.mp3",
-              "source_integrity": {
-                "original_post_index": 1,
-                "source_url_present": true
-              },
-              "wellbeing_metadata": {
-                "id": "morgon-och-kvall-aminnelser-under-morgon-och-kvall-al-ikhlas-al-falaq-och-an-nas",
-                "mood_tags": [],
-                "problem_tags": [],
-                "situation_tags": [],
-                "intent_tags": [],
-                "search_synonyms_sv": [],
-                "priority_score": 40,
-                "wellbeing_description": "Främst situationsbaserad dhikr.",
-                "source_context": {
-                  "kategori": "Morgon och kväll",
-                  "undersida": "Åminnelser under morgon och kväll"
-                }
-              },
-              "lases_info": "Läses tre gånger.",
-              "delposter": [
-                {
-                  "titel": "al-Ikhlâs",
-                  "arabisk_text": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ قُلْ هُوَ ٱللَّهُ أَحَدٌ ﴿١﴾ ٱللَّهُ ٱلصَّمَدُ ﴿٢﴾ لَمْ يَلِدْ وَلَمْ يُولَدْ ﴿٣﴾ وَلَمْ يَكُن لَّهُۥ كُفُوًا أَحَدٌۢ ﴿٤﴾",
-                  "translitteration": "Bismillâhir-Rahmânir-Rahîm. Qul Huwa-Allahu Ahad. Allahus-Samad. Lam yalid wa lam yûlad. Wa lam yakun lahu kufuwan Ahad.",
-                  "svensk_text": "I Allahs Namn, Den Nåderike, Den Barmhärtige. Säg Han är Allah, [Han är] En. Allah - Den av skapelsen oberoende, av vilken alla beror. Han har inte avlat och inte heller är Han född, och ingen finns som kan liknas vid Honom.",
-                  "kallhanvisning": "Koranen 112:1–4. Al-Hâkim 1/562. al-Albânî ansåg den vara autentisk i Sahîh-ut-Targhîb wa Tarhîb 1/273 nr 655, at-Tabarânî i al-Kubrâ nr 541 vars kedja är god.",
-                  "qcf_page": 604,
-                  "qcf_glyphs": "ﱁ ﱂ ﱃ ﱄ ﱅ ﱆ ﱇ ﱈ ﱉ ﱊ ﱋ ﱌ ﱍ ﱎ ﱏ ﱐ ﱑ ﱒ ﱓ",
-                  "qcf_bismillah": true
-                },
-                {
-                  "titel": "al-Falaq",
-                  "arabisk_text": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ قُلْ أَعُوذُ بِرَبِّ ٱلْفَلَقِ ﴿١﴾ مِن شَرِّ مَا خَلَقَ ﴿٢﴾ وَمِن شَرِّ غَاسِقٍ إِذَا وَقَبَ ﴿٣﴾ وَمِن شَرِّ ٱلنَّفَّـٰثَـٰتِ فِى ٱلْعُقَدِ ﴿٤﴾ وَمِن شَرِّ حَاسِدٍ إِذَا حَسَدَ ﴿٥﴾",
-                  "translitteration": "Bismillâhir-Rahmânir-Rahîm. Qul a'ûthu birabbil-falaq. Min sharri mâ khalaq. Wa min sharri ghâsiqin ithâ waqab. Wa min sharrin-naffâthâti fil-'uqad. Wa min sharri hâsidin ithâ hasad.",
-                  "svensk_text": "I Allahs Namn, Den Nåderike Den Barmhärtige. Säg: Jag tar skydd hos gryningens Herre. Mot ondskan i det som Han har skapat. Och mot ondskan i natten när den mörknar. Och mot ondskan hos de [magiker] som blåser på knutarna. Och mot den avundsammes ondska när han avundas.",
-                  "kallhanvisning": "Koranen 113:1–5. Abû Dâwûd 4/322 nr 5082, At-Tirmidhî 5/567 nr 3575. Se även Sahîh-ut-Tirmidhî 3/182.",
-                  "qcf_page": 604,
-                  "qcf_glyphs": "ﱔ ﱕ ﱖ ﱗ ﱘ ﱙ ﱚ ﱛ ﱜ ﱝ ﱞ ﱟ ﱠ ﱡ ﱢ ﱣ ﱤ ﱥ ﱦ ﱧ ﱨ ﱩ ﱪ ﱫ ﱬ ﱭ ﱮ ﱯ",
-                  "qcf_bismillah": true
-                },
-                {
-                  "titel": "an-Nâs",
-                  "arabisk_text": "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ قُلْ أَعُوذُ بِرَبِّ ٱلنَّاسِ ﴿١﴾ مَلِكِ ٱلنَّاسِ ﴿٢﴾ إِلَـٰهِ ٱلنَّاسِ ﴿٣﴾ مِن شَرِّ ٱلْوَسْوَاسِ ٱلْخَنَّاسِ ﴿٤﴾ ٱلَّذِى يُوَسْوِسُ فِى صُدُورِ ٱلنَّاسِ ﴿٥﴾ مِنَ ٱلْجِنَّةِ وَٱلنَّاسِ ﴿٦﴾",
-                  "translitteration": "Bismillâhir-Rahmânir-Rahîm. Qul a'ûthu birabbin-nâs. Malikin-nâs. Ilâhin-nâs. Min sharril-waswâsil-khannâs. Allathî yuwaswisu fî sudûrin-nâs. Minal-djinnati wannâs.",
-                  "svensk_text": "I Allahs Namn, Den Nåderike Den Barmhärtige. Säg: Jag tar skydd hos människornas Herre. Människornas Konung. Människornas Gud. Mot den förrädiske frestarens ondska. Han som viskar inom människornas bröst. Bland både djinnerna och människorna.",
-                  "kallhanvisning": "Koranen 114:1–6. Abû Dâwûd 4/322 nr 5082, At-Tirmidhî 5/567 nr 3575. Se även Sahîh-ut-Tirmidhî 3/182.",
-                  "qcf_page": 604,
-                  "qcf_glyphs": "ﱰ ﱱ ﱲ ﱳ ﱵ ﱶ ﱸ ﱹ ﱺ ﱻ ﱼ ﱽ ﱾ ﲀ ﲁ ﲂ ﲃ ﲄ ﲆ ﲇ ﲈ",
-                  "qcf_bismillah": true
-                }
-              ],
-              "presentation_type": "grouped_delposter",
-              "display_fields_from": "delposter"
-            },
-            {
-              "titel": "Vi har trätt in i en ny dag och Herraväldet och alla lovprisningar hör till Allah",
-              "url": "https://islam.nu/dhikr/dhikr-for-morgon-och-kvall/vi-har-tratt-in-i-en-ny-dag-och-herravaldet-och-alla-lovprisningar-hor-till-allah/",
-              "arabisk_text": "أصْبَحْنَا وَأصْبَحَ الـمُلْكُ لِلَّـهِ، وَالـحَمْدُ لِلَّـهِ، لا إلهَ إلاَّ اللهُ وَحْدَهُ لا شَرِيْكَ لَهُ، لَهُ الـمُلْكُ، ولَهُ الـحَمْدُ، وهُوَ عَلَى كُلِّ شَيءٍ قَدِيرٌ، رَبِّ أسْألُكَ خَيْرَ مَا في هَذَا اليَوْمِ وَخَيْرَ مَا بَعْدَهُ، وأَعُوذُ بِكَ مِنْ شَرِّ مَا فِي هَذَا اليَوْمِ وَشَرِّ مَا بَعْدَهُ، رَبِّ أعُوذُ بِكَ مِنَ الكَسَلِ، وسُوءِ الكِبَرِ، رَبِّ أعُوذُ بِكَ مِنْ عَذَابٍ فِي النَّارِ وعَذَابٍ فِي القَبْرِ",
-              "translitteration": "Asbahnâ wa asbahal-mulku lillâh walhamdu lillâh, lâ ilâha illallâhu wahdahu lâ sharîka lah, lahul-mulku wa lahul-hamdu wa Huwa 'alâ kulli shay´in qadîr. Rabbi as´aluka khayra mâ fî hâthal-yawm wa khayra mâ ba'da wa a'ûthu bika min sharri mâ fî hâthal-yawmi wa sharri mâ ba'da, Rabbi a'ûthu bika minal-kasal, wa sû´il-kibar, Rabbi a'ûthu bika min 'athâbin fin-nâri wa 'athâbin fil-qabr.",
-              "svensk_text": "\"Vi har trätt in i en ny dag och Herraväldet och alla lovprisningar hör till Allah. Ingen har rätt att dyrkas förutom Allah. Han är en och Han har ingen vid Sin sida. Till Honom hör Herraväldet och all pris och Han är kapabel till allting. O Herre! Jag ber om det goda [som finns] i denna dag och det goda efter den, och jag söker skydd från det onda [som finns] i denna dag och det onda efter den. Herre! Jag söker skydd från lathet och svag ålderdom. Herre! Jag söker skydd från straff i elden och straff i graven.\"\n\nNär det blir kväll säger man:\n\n\"Vi har trätt in i kvällen och Herraväldet och alla lovprisningar hör till Allah…\"\n\nOch man säger:\n\n\"O Herre! Jag ber om det goda som finns i denna kväll och det goda efter den. Och jag söker skydd från det onda som finns i denna kväll och det onda efter den…\"",
-              "kallhanvisning": "Muslim 4/2088 nr 2723.",
-              "mp3_url": "https://fra1.digitaloceanspaces.com/islamnu/dhikr/remembrance/audio/77.mp3",
-              "source_integrity": {
-                "original_post_index": 2,
-                "source_url_present": true
-              },
-              "wellbeing_metadata": {
-                "id": "morgon-och-kvall-aminnelser-under-morgon-och-kvall-vi-har-tratt-in-i-en-ny-dag-och-herravaldet-och-alla-lovprisningar-hor-till-allah",
-                "mood_tags": [],
-                "problem_tags": [],
-                "situation_tags": [],
-                "intent_tags": [
-                  "shukr"
-                ],
-                "search_synonyms_sv": [],
-                "priority_score": 43,
-                "wellbeing_description": "Främst situationsbaserad dhikr.",
-                "source_context": {
-                  "kategori": "Morgon och kväll",
-                  "undersida": "Åminnelser under morgon och kväll"
-                }
-              }
-            },
-            {
-              "titel": "Allah! Med Din välsignelse träder vi in i dagen",
-              "url": "https://islam.nu/dhikr/dhikr-for-morgon-och-kvall/allah-med-din-valsignelse-trader-vi-in-i-dagen/",
-              "arabisk_text": "اللَّهُمَّ بِكَ أصْبَحْنَا، وبِكَ أمْسَيْنَا، وَبِكَ نَحْيَا، وَبِكَ نَمُوتُ، وإلَيْكَ النُّشُورُاللَّهُمَّ بِكَ أمْسَيْنَا، وَبِكَ أصْبَحْنَا، وَبِكَ نَحْيَا، وَبِكَ نَمُوْتُ، وَإليْكَ الـمَصِيْرُ",
-              "translitteration": "Allahumma bika asbahnâ, wa bika amsaynâ, wa bika nahyâ, wa bika namût wa ilaykan-nushûr.",
-              "svensk_text": "Allah! Med Din välsignelse träder vi in i dagen, och med Din välsignelse träder vi in i kvällen. Med Din välsignelse lever vi och dör vi, och till Dig återuppstår vi på Domedagen.På kvällen säger man:Allah! Med Din välsignelse träder vi in i kvällen, och med Din välsignelse träder vi in i dagen. Med Din välsignelse lever vi och dör vi, och till Dig återvänder vi.",
-              "kallhanvisning": "At-Tirmidhî 5/466 nr 3391. Se även Sahîh ut-Tirmidhî 3/142.",
-              "mp3_url": "https://fra1.digitaloceanspaces.com/islamnu/dhikr/remembrance/audio/78-a.mp3",
-              "source_integrity": {
-                "original_post_index": 3,
-                "source_url_present": true
-              },
-              "wellbeing_metadata": {
-                "id": "morgon-och-kvall-aminnelser-under-morgon-och-kvall-allah-med-din-valsignelse-trader-vi-in-i-dagen",
-                "mood_tags": [],
-                "problem_tags": [],
-                "situation_tags": [],
-                "intent_tags": [],
-                "search_synonyms_sv": [],
-                "priority_score": 40,
-                "wellbeing_description": "Främst situationsbaserad dhikr.",
-                "source_context": {
-                  "kategori": "Morgon och kväll",
-                  "undersida": "Åminnelser under morgon och kväll"
-                }
-              }
-            },
-            {
-              "titel": "Allah! Du är min Herre",
-              "url": "https://islam.nu/dhikr/dhikr-for-morgon-och-kvall/allah-du-ar-min-herre/",
-              "arabisk_text": "اللَّهُمَّ أنْتَ رَبِّي لا إلَهَ إلاَّ أَنْتَ، خَلَقْتَنِي وأنَا عَبْدُكَ، و أَنَا عَلَى عَهْدِكَ وَ وَعْدِكَ مَا اسْتَطَعْتُ، أعُوْذُ بِكَ مِنْ شَرِّ مَا صَنَعْتُ، أبُوْءُ لَكَ بِنِعْمَتِكَ عَلَيَّ، وأبُوْءُ بِذَنْبِي فَاغْفِر لِي فَإنَّه لا يَغْفِرُ الذُّنُوبَ إلاَّ أَنْتَ",
-              "translitteration": "Allahumma Anta Rabbî lâ ilâha illâ Ant, khalaqtanî wa anâ 'abduk, wa anâ 'alâ 'ahdika wa wa'dika mas-tata't, a'ûthu bika min sharri mâ sana't, abû´u laka bini'matika 'alay, wa abû´u bithanbî faghfir lî fa'innahu lâ yaghfiruth-thunûba illâ Ant.",
-              "svensk_text": "Allah! Du är min Herre. Ingen har rätt att dyrkas förutom Du. Du har skapat mig och jag är Din tjänare. Jag fullgör min plikt [gentemot Dig] i hopp om belöning, enligt min förmåga. Jag söker skydd hos Dig för det onda jag gjort. Jag erkänner Dina välsignelser över mig och jag erkänner mina synder. Så förlåt mig, för sannerligen förlåter ingen synder utom Du.",
-              "kallhanvisning": "Al-Bukhârî 7/150 nr 6306.",
-              "mp3_url": "https://fra1.digitaloceanspaces.com/islamnu/dhikr/remembrance/audio/79.mp3",
-              "source_integrity": {
-                "original_post_index": 4,
-                "source_url_present": true
-              },
-              "wellbeing_metadata": {
-                "id": "morgon-och-kvall-aminnelser-under-morgon-och-kvall-allah-du-ar-min-herre",
-                "mood_tags": [],
-                "problem_tags": [],
-                "situation_tags": [],
-                "intent_tags": [],
-                "search_synonyms_sv": [],
-                "priority_score": 40,
-                "wellbeing_description": "Främst situationsbaserad dhikr.",
-                "source_context": {
-                  "kategori": "Morgon och kväll",
-                  "undersida": "Åminnelser under morgon och kväll"
-                }
-              }
-            },
-            {
-              "titel": "Allah! Jag har trätt in i en ny dag",
-              "url": "https://islam.nu/dhikr/dhikr-for-morgon-och-kvall/allah-jag-har-tratt-in-i-en-ny-dag/",
-              "arabisk_text": "اللَّهُمَّ إنِّي أصْبَحْتُ أُشْهِدُكَ، وأُشْهِدُ حَمَلَةَ عَرْشِكَ، ومَلائِكَتِكَ، وجَميْعَ خَلْقِكَ، أنَّكَ أنْتَ اللهُ لا إلَهَ إلاَّ أنْتَ وَحْدَكَ لا شَرِيْكَ لَكَ، وأنَّ مُحَمَّداً عَبْدُكَ ورَسُولُكَ",
-              "translitteration": "Allahumma innî asbahtu ush-hiduka wa ush-hidu hamalata 'arshik, wa malâ´ikatik wadjamî'a khalqik, annaka anta-Allahu lâ ilâha illâ Ant wahdaka lâ sharîka lak, wa anna Muhammedan 'abduka wa rasûluk.",
-              "svensk_text": "Allah! Jag har trätt in i en ny dag.  Jag kallar Dig, de som bär Din tron, änglarna och all skapelse att vittna att Du är Allah - ingen har rätt att dyrkas förutom Du. Du är en, Du har ingen vid Din sida - och att Muhammed är Din tjänare och Ditt sändebud.Allah kommer att rädda den som säger detta fyra gånger på morgonen eller kvällen från helvetes-elden.",
-              "kallhanvisning": "Abû Dâwûd 4/317 nr 5069, Al-Bukhârî i Al-Adab ul-Mufrad nr 1201, An- Nasâ’î i ‘Amal Al-Yaum wal-Laylah nr 9, Ibn Sunnî nr 70, och Ibn Bâz ansåg kedjorna i An-Nasâ’î och At-Tirmidhî vara goda (hasan) i Tuhfat ul-Akhyâr s. 23.",
-              "mp3_url": "https://fra1.digitaloceanspaces.com/islamnu/dhikr/remembrance/audio/80.mp3",
-              "source_integrity": {
-                "original_post_index": 5,
-                "source_url_present": true
-              },
-              "wellbeing_metadata": {
-                "id": "morgon-och-kvall-aminnelser-under-morgon-och-kvall-allah-jag-har-tratt-in-i-en-ny-dag",
-                "mood_tags": [],
-                "problem_tags": [],
-                "situation_tags": [],
-                "intent_tags": [],
-                "search_synonyms_sv": [],
-                "priority_score": 40,
-                "wellbeing_description": "Främst situationsbaserad dhikr.",
-                "source_context": {
-                  "kategori": "Morgon och kväll",
-                  "undersida": "Åminnelser under morgon och kväll"
-                }
-              }
-            },
-            {
-              "titel": "Allah! Alla gåvor som jag eller någon annan i Din skapelse har fått",
-              "url": "https://islam.nu/dhikr/dhikr-for-morgon-och-kvall/allah-alla-gavor-som-jag-eller-nagon-annan-i-din-skapelse-har-fatt/",
-              "arabisk_text": "اللَّهُمَّ مَا أصْبَحَ بِي مِنْ نِعْمَةٍ، أوْ بِأحَدٍ مِنْ خَلقِكَ، فَمِنْكَ وَحْدَكَ لا شَرِيْكَ لَكَ، فَلَكَ الـحَمْدُ ولَكَ الشُّكْرُ",
-              "translitteration": "Allahumma mâ asbaha bî min ni'matin aw bi ahadin min khalqika faminka wahdaka lâ sharîka lak, falakal-hamdu wa lakash-shukr.",
-              "svensk_text": "Allah! Alla gåvor som jag eller någon annan i Din skapelse har fått [denna dag] är endast från Dig, Du har ingen vid Din sida. Så alla lovprisningar och allt tack hör till Dig.På kvällen säger du:Allah! Alla gåvor som jag eller någon annan i Din skapelse har fått [denna kväll…]”",
-              "kallhanvisning": "Abû Dâwûd 4/318 nr 5073, An-Nasâ’î i ‘Amal Al-Yaum wal-Laylah nr 7, Ibn Sunnî nr 41, Ibn Hibbân ”Mawârid” nr 2361, och Ibn Bâz ansåg dess kedja vara god (hasan) i Tuhfat ul-Akhyâr s. 24.",
-              "mp3_url": "https://fra1.digitaloceanspaces.com/islamnu/dhikr/remembrance/audio/81.mp3",
-              "source_integrity": {
-                "original_post_index": 6,
-                "source_url_present": true
-              },
-              "wellbeing_metadata": {
-                "id": "morgon-och-kvall-aminnelser-under-morgon-och-kvall-allah-alla-gavor-som-jag-eller-nagon-annan-i-din-skapelse-har-fatt",
-                "mood_tags": [],
-                "problem_tags": [],
-                "situation_tags": [],
-                "intent_tags": [],
-                "search_synonyms_sv": [],
-                "priority_score": 40,
-                "wellbeing_description": "Främst situationsbaserad dhikr.",
-                "source_context": {
-                  "kategori": "Morgon och kväll",
-                  "undersida": "Åminnelser under morgon och kväll"
-                }
-              }
-            },
-            {
-              "titel": "Allah! Skona min kropp",
-              "url": "https://islam.nu/dhikr/dhikr-for-morgon-och-kvall/allah-skona-min-kropp/",
-              "arabisk_text": "اللَّهُمَّ عَافِنِي فِي بَدَنِي، اللَّهُمَّ عَافِنِي فِي سَمْعِي، اللَّهُمَّ عَافِنِي فِي بَصَرِي، لَا إلَهَ إلاَّ أنْتَ، اللَّهُمَّ إنِّي أَعُوذُ بِكَ مِنَ الكُفْرِ وَالفَقْرِ، وأَعُوذُ بِكَ مِنْ عَذَابِ القَبْرِ، لا إلَهَ إلاَّ أنْتَ",
-              "translitteration": "Allahumma 'âfinî fî badanî, Allahumma 'âfinî fî sam'î, Allahumma 'âfinî fî basarî, lâ ilâha illâ Ant. Allahumma innî a'ûthu bika minal-kufri, walfaqri, wa ´a'ûthu bika min 'athâbil-qabr, lâ ilâha 'illâ ´Anta.",
-              "svensk_text": "Allah! Skona min kropp. Allah! Skona min hörsel. Allah! Skona min syn. Ingen har rätt att dyrkas förutom Du. Allah! Jag söker Ditt skydd från otro och fattigdom och jag söker Ditt skydd från gravens straff. Ingen har rätt att dyrkas förutom Du.",
-              "kallhanvisning": "Abû Dâwûd 4/324 nr 5090, Ahmad 5/42, An-Nasâ’î i ‘Amal Al-Yaum wal- Laylah nr 22, Ibn Sunnî nr 69, Al-Bukhârî i Al-Adab ul-Mufrad och Ibn Bâz ansåg dess kedja vara god (hasan) i Tuhfat ul-Akhyâr s. 26.",
-              "mp3_url": "https://fra1.digitaloceanspaces.com/islamnu/dhikr/remembrance/audio/82.mp3",
-              "source_integrity": {
-                "original_post_index": 7,
-                "source_url_present": true
-              },
-              "wellbeing_metadata": {
-                "id": "morgon-och-kvall-aminnelser-under-morgon-och-kvall-allah-skona-min-kropp",
-                "mood_tags": [],
-                "problem_tags": [],
-                "situation_tags": [],
-                "intent_tags": [],
-                "search_synonyms_sv": [],
-                "priority_score": 40,
-                "wellbeing_description": "Främst situationsbaserad dhikr.",
-                "source_context": {
-                  "kategori": "Morgon och kväll",
-                  "undersida": "Åminnelser under morgon och kväll"
-                }
-              },
-              "lases_info": "Sägs tre gånger."
-            },
-            {
-              "titel": "Allah är tillräcklig för mig",
-              "url": "https://islam.nu/dhikr/dhikr-for-morgon-och-kvall/allah-ar-tillracklig-for-mig/",
-              "arabisk_text": "حَسْبِيَ اللهُ لاَ إلَهَ إلاَّ هُوَ عَلَيْهِ تَوَكَّلْتُ، وَهُوَ رَبُّ العَرْشِ العَظِيمِ",
-              "translitteration": "HasbiyAllahu lâ ilâha illâ Huwa 'alayhi tawakkaltu wa Huwa Rabbul-'arshil-'adhîm.",
-              "svensk_text": "Allah är tillräcklig för mig. Ingen förtjänar att dyrkas förutom Han. Hos Honom har jag satt min tillit och Han är den mäktiga tronens Herre.",
-              "kallhanvisning": "Ibn Sunnî nr 71, Abû Dâwûd 4/321 nr 5081. Se Zâd ul-Ma’âd 2/376.",
-              "mp3_url": "https://fra1.digitaloceanspaces.com/islamnu/dhikr/remembrance/audio/83.mp3",
-              "source_integrity": {
-                "original_post_index": 8,
-                "source_url_present": true
-              },
-              "wellbeing_metadata": {
-                "id": "morgon-och-kvall-aminnelser-under-morgon-och-kvall-allah-ar-tillracklig-for-mig",
-                "mood_tags": [],
-                "problem_tags": [],
-                "situation_tags": [],
-                "intent_tags": [],
-                "search_synonyms_sv": [],
-                "priority_score": 40,
-                "wellbeing_description": "Främst situationsbaserad dhikr.",
-                "source_context": {
-                  "kategori": "Morgon och kväll",
-                  "undersida": "Åminnelser under morgon och kväll"
-                }
-              },
-              "lases_info": "Sägs sju gånger."
-            },
-            {
-              "titel": "Allah! Jag ber Dig om förlåtelse och beskydd i detta och nästa liv",
-              "url": "https://islam.nu/dhikr/dhikr-for-morgon-och-kvall/allah-jag-ber-dig-om-forlatelse-och-beskydd-i-detta-och-nasta-liv/",
-              "arabisk_text": "اللهُمَّ إنِّي أسْألُكَ العَفْوَ والعَافيةَ في الدُّنْيَا والآخِرَةِ، اللهُمَّ إنِّي أسْألُكَ العَفْوَ والعَافيةَ في دِيْني ودُنْيَاي، وأهْلِي، ومَالي، اللهُمَّ اسْتُرْ عَوْرَاتي، وآمِنْ رَوْعَاتي، اللهُمَّ احْفَظْني مِنْ بيْنِ يَدَيَّ، ومِنْ خَلْفِي، وعَنْ يَميني، وعَنْ شِمَالي، ومِنْ فَوْقِي، وأعُوذُ بِعَظَمَتكَ أنْ أُغْتالَ مِنْ تَحْتي",
-              "translitteration": "Allahumma innî as´alukal-'afwa wal 'âfiyah fid-dunyâ wal âkhirah, Allahumma innî as´alukal-'afwa wal 'âfiyah fî dînî wa dunyâya wa ahlî, wa mâlî, Allahum-mastur 'awrâtî, wa âmin raw'âtî, Allahum-mahfadhnî min bayni yadayya, wa min khalfî, wa 'an yamînî, wa 'an shimâlî, wa min fawqî, wa a'ûthu bi'adhamatika 'an ´ughtâla min tahtî.",
-              "svensk_text": "Allah! Jag ber Dig om förlåtelse och beskydd i detta och nästa liv. Allah! Jag ber Dig om förlåtelse och beskydd i min religion, världsliga affärer, familj och egendom. Allah! Dölj alla mina brister och skydda mig från mina rädslor. Allah! Skydda mig [från faror] framifrån, bakifrån, från höger, från vänster och uppifrån. Jag söker skydd vid Din Väldighet från att slukas underifrån.",
-              "kallhanvisning": "Abû Dâwûd nr 5074, Ibn Mâdjah nr 3871. Se även Sahîh Ibn Mâdjah 2/332.",
-              "mp3_url": "https://fra1.digitaloceanspaces.com/islamnu/dhikr/remembrance/audio/84.mp3",
-              "source_integrity": {
-                "original_post_index": 9,
-                "source_url_present": true
-              },
-              "wellbeing_metadata": {
-                "id": "morgon-och-kvall-aminnelser-under-morgon-och-kvall-allah-jag-ber-dig-om-forlatelse-och-beskydd-i-detta-och-nasta-liv",
-                "mood_tags": [],
-                "problem_tags": [],
-                "situation_tags": [],
-                "intent_tags": [
-                  "forlatelse"
-                ],
-                "search_synonyms_sv": [],
-                "priority_score": 43,
-                "wellbeing_description": "Främst situationsbaserad dhikr.",
-                "source_context": {
-                  "kategori": "Morgon och kväll",
-                  "undersida": "Åminnelser under morgon och kväll"
-                }
-              }
-            },
-            {
-              "titel": "Allah; Du som har kunskap om det dolda och uppenbara",
-              "url": "https://islam.nu/dhikr/dhikr-for-morgon-och-kvall/allah-du-som-har-kunskap-om-det-dolda-och-uppenbara-2/",
-              "arabisk_text": "اللَّهُمَّ عَالِمَ الغَيْبِ والشَّهَادَةِ، فَاطِرَ السَّموَاتِ والأرْضِ، رَبَّ كُلِّ شَيءٍ ومَلِيْكَهُ، أشْهَدُ أنْ لا إلَهَ إلاَّ أنْتَ، أعُوذُ بِكَ مِنْ شَرِّ نَفْسِي، وَمِنْ شَرِّ الشَّيْطَانِ وَشِرْكِهِ، وأنْ أقْتَرِفَ عَلَى نَفْسِي سُوءاً، أوْ أجُرَّهُ إلَى مُسْلِمٍ",
-              "translitteration": "Allahumma 'Âlimal-ghaybi wash-shahâdah fâtiras-samâwâti wal ardh, Rabba kulli shay´in wa malîkah, ash-hadu an lâ ilâha illâ Ant, a'ûthu bika min sharri nafsî, wa min sharrish-shaytâni wa shirkih, wa an 'aqtarifa 'alâ nafsî sû´an, aw adjurrahu ilâ muslim.",
-              "svensk_text": "Allah; Du som har kunskap om det dolda och uppenbara, Skaparen av himlarna och jorden, alltings Herre och Konung. Jag vittnar att ingen har rätt att dyrkas förutom Du. Jag söker skydd hos Dig från det onda i mig själv och det onda från djävulen och hans [kall till] avguderi. Samt från att orsaka mig själv eller någon annan muslim skada.",
-              "kallhanvisning": "At-Tirmidhî nr 3392, Abû Dâwûd nr 5067. Se även Sahîh ut-Tirmidhî 3/142.",
-              "mp3_url": "https://fra1.digitaloceanspaces.com/islamnu/dhikr/remembrance/audio/85.mp3",
-              "source_integrity": {
-                "original_post_index": 10,
-                "source_url_present": true
-              },
-              "wellbeing_metadata": {
-                "id": "morgon-och-kvall-aminnelser-under-morgon-och-kvall-allah-du-som-har-kunskap-om-det-dolda-och-uppenbara",
-                "mood_tags": [],
-                "problem_tags": [],
-                "situation_tags": [],
-                "intent_tags": [],
-                "search_synonyms_sv": [],
-                "priority_score": 40,
-                "wellbeing_description": "Främst situationsbaserad dhikr.",
-                "source_context": {
-                  "kategori": "Morgon och kväll",
-                  "undersida": "Åminnelser under morgon och kväll"
-                }
-              }
-            },
-            {
-              "titel": "I Allahs namn [söker jag skydd]",
-              "url": "https://islam.nu/dhikr/dhikr-for-morgon-och-kvall/i-allahs-namn-soker-jag-skydd/",
-              "arabisk_text": "بِسْمِ اللَّهِ الَّذِي لا يَضُرُّ مَعَ اسْمِهِ شَيءٌ في الأرْضِ وَلَا فِي السَّمَاءِ وهُوَ السَّمِيعُ العَلِيْمُ",
-              "translitteration": "I Allahs namn [söker jag skydd]; Den i vars namn ingenting på jorden eller i himlarna [kan] skadas och Han är as-Samî´u [Den som Hör allt] al-´Alîm [Den Allvetande].[Sägs tre gånger.]",
-              "svensk_text": "",
-              "kallhanvisning": "”Den som läser detta tre gånger på morgonen kommer inte drabbas av något ont till kvällen. Och den som läser detta tre gånger på kvällen kommer inte att drabbas av något ont till morgonen.” Abû Dâwûd 4/323 nr 5088, 5089, At- Tirmidhî 5/465 nr 3388, Ibn Mâdjah nr 3869, Ahmad1/72. Se även Sahîh Ibn Mâdjah 2/332. Ibn Bâz ansåg att kedjan var god (hasan) i Tuhfat-ul-Akhyâr s. 39.",
-              "mp3_url": "https://fra1.digitaloceanspaces.com/islamnu/dhikr/remembrance/audio/86.mp3",
-              "source_integrity": {
-                "original_post_index": 11,
-                "source_url_present": true
-              },
-              "wellbeing_metadata": {
-                "id": "morgon-och-kvall-aminnelser-under-morgon-och-kvall-i-allahs-namn-soker-jag-skydd",
-                "mood_tags": [],
-                "problem_tags": [],
-                "situation_tags": [],
-                "intent_tags": [
-                  "skydd",
-                  "trygghet"
-                ],
-                "search_synonyms_sv": [],
-                "priority_score": 46,
-                "wellbeing_description": "Främst situationsbaserad dhikr.",
-                "source_context": {
-                  "kategori": "Morgon och kväll",
-                  "undersida": "Åminnelser under morgon och kväll"
-                }
-              },
-              "lases_info": "Sägs tre gånger."
-            },
-            {
-              "titel": "Jag är nöjd med Allah som Herre",
-              "url": "https://islam.nu/dhikr/dhikr-for-morgon-och-kvall/jag-ar-nojd-med-allah-som-herre/",
-              "arabisk_text": "رَضِيْتُ باللَّهِ رَبًّا، وبالإسْلامِ دِيْناً، وبِمُحَمَّدٍ نَبيًّا",
-              "translitteration": "Ahmad 4/337, An-Nasâ’î i ‘Amal Al-Yaum wal-Laylah nr 4, Ibn Sunnî nr 68, Abû Dâwûd 4/318 nr 5072, At-Tirmidhî 5/465 nr 3389. Ibn Bâz ansåg den vara god (hasan) i Tuhfat ul-Akhyâr 39.",
-              "svensk_text": "Jag är nöjd med Allah som Herre, med islam som religion och med Muhammed som profet.",
-              "kallhanvisning": "”Allah har lovat att den som läser detta tre gånger på morgonen eller tre gånger på kvällen kommer vara nöjd på Domedagen.” Ahmad 4/337, An-Nasâ’î i ‘Amal Al-Yaum wal-Laylah nr 4, Ibn Sunnî nr 68, Abû Dâwûd 4/318 nr 5072, At-Tirmidhî 5/465 nr 3389. Ibn Bâz ansåg den vara god (hasan) i Tuhfat ul- Akhyâr 39.",
-              "mp3_url": "https://fra1.digitaloceanspaces.com/islamnu/dhikr/remembrance/audio/87.mp3",
-              "source_integrity": {
-                "original_post_index": 12,
-                "source_url_present": true
-              },
-              "wellbeing_metadata": {
-                "id": "morgon-och-kvall-aminnelser-under-morgon-och-kvall-jag-ar-nojd-med-allah-som-herre",
-                "mood_tags": [],
-                "problem_tags": [],
-                "situation_tags": [],
-                "intent_tags": [],
-                "search_synonyms_sv": [],
-                "priority_score": 40,
-                "wellbeing_description": "Främst situationsbaserad dhikr.",
-                "source_context": {
-                  "kategori": "Morgon och kväll",
-                  "undersida": "Åminnelser under morgon och kväll"
-                }
-              },
-              "lases_info": "Sägs tre gånger."
-            },
-            {
-              "titel": "Du Levande, Vidmakthållare!",
-              "url": "https://islam.nu/dhikr/dhikr-for-morgon-och-kvall/du-levande-vidmakthallare/",
-              "arabisk_text": "يَا حَيُّ يَا قَيُّومُ بِرَحْـمَتِكَ أسْتَغِيثُ، أصْلِحْ لِي شَأْنِي كُلَّهُ، وَلاَ تَكِلْنِي إلَى نَفْسِي طَرْفَةَ عَيْنٍ",
-              "translitteration": "Yâ Hayyu yâ Qayyûm, birahmatika astaghîth aslih lî sha´nî kullah wa lâ takilnî ilâ nafsî tarfata 'ayn.",
-              "svensk_text": "Du Levande, Vidmakthållare! Vid Din Nåd ber jag om hjälp. Ställ tillrätta alla mina angelägenheter och överlåt mig inte till mig själv ens för ett ögonblick.",
-              "kallhanvisning": "Al-Hâkim som även ansåg den vara autentisk vilket Imam ad-Dhahabî höll med om, 1/545. Se även Sahîh-ut-Targhîb wa Tarhîb 1/273 nr 654.",
-              "mp3_url": "https://fra1.digitaloceanspaces.com/islamnu/dhikr/remembrance/audio/88.mp3",
-              "source_integrity": {
-                "original_post_index": 13,
-                "source_url_present": true
-              },
-              "wellbeing_metadata": {
-                "id": "morgon-och-kvall-aminnelser-under-morgon-och-kvall-du-levande-vidmakthallare",
-                "mood_tags": [],
-                "problem_tags": [],
-                "situation_tags": [],
-                "intent_tags": [],
-                "search_synonyms_sv": [],
-                "priority_score": 40,
-                "wellbeing_description": "Främst situationsbaserad dhikr.",
-                "source_context": {
-                  "kategori": "Morgon och kväll",
-                  "undersida": "Åminnelser under morgon och kväll"
-                }
-              }
-            },
-            {
-              "titel": "Vi har trätt in i en ny morgon och Herraväldet hör till Allah",
-              "url": "https://islam.nu/dhikr/dhikr-for-morgon-och-kvall/vi-har-tratt-in-i-en-ny-morgon-och-herravaldet-hor-till-allah/",
-              "arabisk_text": "أصْبَحْنَا وأصْبَحَ الـمُلْكُ للَّهِ رَبِّ العَالَمِيْنَ، اللَّهُمَّ إنِّي أسْألُكَ خَيْرَ هَذَا اليَوْمِ: فَتْحَهُ، ونَصْرَهُ، وَنُورَهُ، وبَرَكَتَهُ، وهُدَاهُ، وأعُوْذُ بِكَ مِنْ شَرِّ مَا فِيْهِ وَشَرِّ مَا بَعْدَهُ",
-              "translitteration": "Asbahnâ wa asbahal-mulku lillâhi Rabbil-'âlamîn, Allahumma innî as´aluka khayra hâthal-yawm: Fathahu wa nasrahu wa nûra, wa barakatahu, wa hudâ, wa a'ûthu bika min sharri mâ fîhi wa sharri mâ ba'dah.",
-              "svensk_text": "Vi har trätt in i en ny morgon och Herraväldet hör till Allah, världarnas Herre. Allah! Jag ber om det goda [som finns] i denna dag; dess framgång, seger, ljus, välsignelse och vägledning. Och jag söker skydd från det onda [som finns] i den och det onda efter den.",
-              "kallhanvisning": "På kvällen byter man ut dag mot kväll och säger: Amsaynâ wa amsâ al-mulku-lillâhi Rabbil-’âlamîn. Allahumma innî as´aluka khayra hâthihil-laylah: Fathahâ wa nasrahâ wa nurahâ wa barakatahâ wa hudâhâ, wa a’ûthu bika min sharri mâ fihâ wa sharri mâ ba’dahâ. Abû Dâwûd 4/322 nr 5084. Shaykh Shu’ayb Arna’ût ansåg dess kedja vara god (hasan) i tahqîq Zâd ul-Ma’âd 2/273.",
-              "mp3_url": "https://fra1.digitaloceanspaces.com/islamnu/dhikr/remembrance/audio/89.mp3",
-              "source_integrity": {
-                "original_post_index": 14,
-                "source_url_present": true
-              },
-              "wellbeing_metadata": {
-                "id": "morgon-och-kvall-aminnelser-under-morgon-och-kvall-vi-har-tratt-in-i-en-ny-morgon-och-herravaldet-hor-till-allah",
-                "mood_tags": [],
-                "problem_tags": [],
-                "situation_tags": [],
-                "intent_tags": [],
-                "search_synonyms_sv": [],
-                "priority_score": 40,
-                "wellbeing_description": "Främst situationsbaserad dhikr.",
-                "source_context": {
-                  "kategori": "Morgon och kväll",
-                  "undersida": "Åminnelser under morgon och kväll"
-                }
-              }
-            },
-            {
-              "titel": "Vi har vaknat med det naturliga tillståndet islam",
-              "url": "https://islam.nu/dhikr/dhikr-for-morgon-och-kvall/vi-har-vaknat-med-det-naturliga-tillstandet-islam/",
-              "arabisk_text": "أصْبَحْنَا عَلَى فِطْرَةِ الإسْلامِ، وعَلَى كَلِمَةِ الإخْلاصِ، وعَلَى دِيْنِ نَبيِّنَا مُحَمَّدٍ، وعَلَى مِلَّةِ أبِينَا إبْرَاهيمَ، حَنيفاً مُسْلِماً ومَا كَانَ مِنَ الـمُشْرِكِينَ",
-              "translitteration": "Asbahnâ 'alâ fitratil-Islâm wa 'alâ kalimatil-ikhlâs, wa 'alâ dîni nabiyyinâ Muhammedin [sallAllahu 'alayhi wa sallam], wa 'alâ millati abînâ Ibrâhîma, hanîfan muslima wa mâ kâna minal-mushrikîn.",
-              "svensk_text": "Vi har trätt in i en ny morgon i det naturliga tillståndet islam, och med trosbekännelsen och på vår profet Muhammeds religion och vår förfader Ibrâhîms väg. Han var Hanîf[1] och muslim och hörde inte till dem som begick avguderi.",
-              "kallhanvisning": "När det blir kväll säger man; amsaynâ ’alâ fitratil-Islâm… ”Vi träder in i kvällen…” Ahmad 3/406,407, An-Nasâ’î i ‘Amal Al-Yaum wal-Laylah nr 34. Se även Sahîh ul-Djâmi’ 4/209 nr 4674.",
-              "mp3_url": "https://fra1.digitaloceanspaces.com/islamnu/dhikr/remembrance/audio/90.mp3",
-              "source_integrity": {
-                "original_post_index": 15,
-                "source_url_present": true
-              },
-              "wellbeing_metadata": {
-                "id": "morgon-och-kvall-aminnelser-under-morgon-och-kvall-vi-har-vaknat-med-det-naturliga-tillstandet-islam",
-                "mood_tags": [],
-                "problem_tags": [],
-                "situation_tags": [],
-                "intent_tags": [],
-                "search_synonyms_sv": [],
-                "priority_score": 40,
-                "wellbeing_description": "Främst situationsbaserad dhikr.",
-                "source_context": {
-                  "kategori": "Morgon och kväll",
-                  "undersida": "Åminnelser under morgon och kväll"
-                }
-              }
-            },
-            {
-              "titel": "Fri är Allah från alla brister",
-              "url": "https://islam.nu/dhikr/dhikr-for-morgon-och-kvall/fri-ar-allah-fran-alla-brister-3/",
-              "arabisk_text": "سُبْحَانَ اللَّهِ وَبِحَمْدِهِ",
-              "translitteration": "SubhânAllahi wa bihamdih.",
-              "svensk_text": "Fri är Allah från alla brister och prisad vare Han.",
-              "kallhanvisning": "Muslim 4/2071 nr 2723.",
-              "mp3_url": "https://fra1.digitaloceanspaces.com/islamnu/dhikr/remembrance/audio/91.mp3",
-              "source_integrity": {
-                "original_post_index": 16,
-                "source_url_present": true
-              },
-              "wellbeing_metadata": {
-                "id": "morgon-och-kvall-aminnelser-under-morgon-och-kvall-fri-ar-allah-fran-alla-brister",
-                "mood_tags": [],
-                "problem_tags": [],
-                "situation_tags": [],
-                "intent_tags": [],
-                "search_synonyms_sv": [],
-                "priority_score": 40,
-                "wellbeing_description": "Främst situationsbaserad dhikr.",
-                "source_context": {
-                  "kategori": "Morgon och kväll",
-                  "undersida": "Åminnelser under morgon och kväll"
-                }
-              },
-              "lases_info": "Sägs etthundra gånger."
-            },
-            {
-              "titel": "Ingen har rätt att dyrkas förutom Allah",
-              "url": "https://islam.nu/dhikr/dhikr-for-morgon-och-kvall/ingen-har-ratt-att-dyrkas-forutom-allah-8/",
-              "arabisk_text": "لا إلَهَ إلاَّ اللهُ وَحْدَهُ لا شَرِيْكَ لَهُ، لَهُ الـمُلْكُ، ولَهُ الحَمْدُ، وَهُوَ عَلَى كُلِّ شَيءٍ قَديرٌ",
-              "translitteration": "Lâ ilâha illallâhu wahdahu lâ sharîka lah, lahul-mulku wa lahul-hamd, wa Huwa 'alâ kulli shay´in qadîr.",
-              "svensk_text": "Ingen har rätt att dyrkas förutom Allah. Han är en och Han har ingen vid Sin sida. Till Honom hör Herraväldet och all pris och Han är kapabel till allting.",
-              "mp3_url": "https://fra1.digitaloceanspaces.com/islamnu/dhikr/remembrance/audio/92.mp3",
-              "source_integrity": {
-                "original_post_index": 17,
-                "source_url_present": true
-              },
-              "wellbeing_metadata": {
-                "id": "morgon-och-kvall-aminnelser-under-morgon-och-kvall-ingen-har-ratt-att-dyrkas-forutom-allah",
-                "mood_tags": [],
-                "problem_tags": [],
-                "situation_tags": [],
-                "intent_tags": [],
-                "search_synonyms_sv": [],
-                "priority_score": 40,
-                "wellbeing_description": "Främst situationsbaserad dhikr.",
-                "source_context": {
-                  "kategori": "Morgon och kväll",
-                  "undersida": "Åminnelser under morgon och kväll"
-                }
-              },
-              "hadiths": [
-                {
-                  "text": "Den som säger detta när det blir morgon får samma belöning som att fria en slav från Ismâ´îls söner, tio belöningar skrivs åt honom och tio synder stryks bort från honom. Han höjs tio grader och han är skyddad från djävulen tills det blir kväll. Den som säger det på kvällen får samma belöning tills morgonen.",
-                  "kalla": "Abû Dâwûd 4/319 nr 5077, Ibn Mâdjah nr 3867, Ahmad 4/60. Se även Sahîh ut-Targhîb wa Tarhîb 1/270, Sahîh Abû Dâwûd 3/957, Sahîh Ibn Mâdjah 2/331, Zâd ul-Ma'âd 2/377."
-                },
-                {
-                  "text": "Den som säger detta tio gånger när det blir morgon får tio belöningar av Allah och Allah kommer förlåta honom tio synder. Han får samma belöning som att fria tio slavar från Ismâ´îls söner och Allah kommer skydda honom från djävulen. Den som säger detta tio gånger på kvällen kommer att få samma belöning.",
-                  "kalla": "An-Nasâ'î i 'Amal Al-Yaum wal-Laylah nr 24. Se även Sahîh ut-Targhîb wa Tarhîb 1/272 nr 650."
-                },
-                {
-                  "text": "Abû Hurayrah återberättade att profeten ﷺ sade att Allah kommer skriva etthundra belöningar till den som säger detta tio gånger på morgonen och Han kommer förlåta etthundra synder. Han kommer få belöningen för att ha friat en slav och han kommer att skyddas från djävulen hela dagen fram till kvällen. Den som säger det på kvällen kommer att få samma belöning.",
-                  "kalla": "Tuhfat ul-Akhyâr av Ibn Bâz s. 55."
-                },
-                {
-                  "text": "Läses ett hundra gånger på morgonen.",
-                  "kalla": "Al-Bukhârî med Fath-ul-Bârî 4/95 nr 3293, Muslim 4/2071 nr 2791."
-                }
-              ],
-              "lases_info": "Läses 1, 10 eller 100 gånger."
-            },
-            {
-              "titel": "Han är en och Han har ingen vid Sin sida",
-              "arabisk_text": "لَا إِلَهَ إِلَّا اللهُ وَحَدْهُ لَا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ يُحْيِي وَيُمِيتُ وَهُوَ عَلَى كُلِّ شَيْءٍ قَدِيرٌ",
-              "translitteration": "Lâ ilâha illallâhu wahdahu lâ sharîka lah, lahul-mulku wa lahul-hamd yuhyî wa yumît wa Huwa 'alâ kulli shay´in qadîr.",
-              "svensk_text": "Ingen har rätt att dyrkas förutom Allah. Han är en och Han har ingen vid Sin sida. Till Honom hör Herraväldet och all pris. Han ger liv och död och Han är kapabel till allting.",
-              "kallhanvisning": "At-Tirmidhî 5/515 nr 3474, Ahmad 4/227. Se Zâd ul-Ma'âd 1/300.",
-              "mp3_url": "https://fra1.digitaloceanspaces.com/islamnu/dhikr/remembrance/audio/72.mp3",
-              "lases_info": "Sägs tio gånger.",
-              "wellbeing_metadata": {
-                "id": "morgon-och-kvall-kvall-han-ar-en-och-han-har-ingen-vid-sin-sida",
-                "mood_tags": [
-                  "tacksamhet",
-                  "ro"
-                ],
-                "problem_tags": [],
-                "situation_tags": [
-                  "kväll"
-                ],
-                "intent_tags": [
-                  "tawhid",
-                  "dhikr"
-                ],
-                "search_synonyms_sv": [
-                  "kväll",
-                  "la ilaha",
-                  "tawhid",
-                  "enhet"
-                ],
-                "priority_score": 7,
-                "source_context": {
-                  "kategori": "Morgon och kväll",
-                  "undersida": "Kväll"
-                }
-              }
-            },
-            {
-              "titel": "Fri är Allah från alla brister och prisad vare Han",
-              "url": "https://islam.nu/dhikr/dhikr-for-morgon-och-kvall/fri-ar-allah-fran-alla-brister-och-prisad-vare-han-2/",
-              "arabisk_text": "سُبْحَانَ اللهِ وبِحَمْدِهِ، عَدَدَ خَلْقِهِ، ورِضَا نَفْسِهِ، وَزِنَةَ عَرْشِهِ ومِدَادَ كَلِمَاتهِ",
-              "translitteration": "SubhânAllahi wa bihamdih, 'adada khalqih, wa ridhâ nafsih, wa zinata 'arshih wa midâda kalimâtih.",
-              "svensk_text": "Fri är Allah från alla brister och prisad vare Han; lika många gånger som Sin skapelse, lika många gånger som gör Honom nöjd, lika mycket som Hans tron väger, och lika många gånger som Hans ords vida antal.",
-              "kallhanvisning": "Muslim 4/2090 nr 2726.",
-              "mp3_url": "https://fra1.digitaloceanspaces.com/islamnu/dhikr/remembrance/audio/94.mp3",
-              "source_integrity": {
-                "original_post_index": 19,
-                "source_url_present": true
-              },
-              "wellbeing_metadata": {
-                "id": "morgon-och-kvall-aminnelser-under-morgon-och-kvall-fri-ar-allah-fran-alla-brister-och-prisad-vare-han",
-                "mood_tags": [],
-                "problem_tags": [],
-                "situation_tags": [],
-                "intent_tags": [],
-                "search_synonyms_sv": [],
-                "priority_score": 40,
-                "wellbeing_description": "Främst situationsbaserad dhikr.",
-                "source_context": {
-                  "kategori": "Morgon och kväll",
-                  "undersida": "Åminnelser under morgon och kväll"
-                }
-              },
-              "lases_info": "Sägs tre gånger på morgonen."
-            },
-            {
-              "titel": "Allah! Jag ber Dig om kunskap som gynnar",
-              "url": "https://islam.nu/dhikr/dhikr-for-morgon-och-kvall/allah-jag-ber-dig-om-kunskap-som-gynnar-2/",
-              "arabisk_text": "اللهُمَّ إنِّي أَسْألُكَ عِلْماً نافِعاً، ورِزْقاً طَيِّباً، وعَملاً مُتقَبَّلاً",
-              "translitteration": "Allahumma innî as´aluka 'ilman nâfi'a, wa rizqan tayyiba, wa 'amalan mutaqabbala.",
-              "svensk_text": "Allah! Jag ber Dig om kunskap som gynnar, god [tillåten] försörjning och handlingar som Du accepterar.",
-              "kallhanvisning": "Ibn Sunnî nr 54, Ibn Mâdjah nr 925. Shaykh Shu’ayb Arna’ût ansåg kedjan vara god (hasan) i tahqîq Zâd ul-Ma’âd 2/375. Vi börjar dagen med att påminna oss om hur viktiga dessa tre saker är. Vi avser att göra dem, vi ber Allah att få framgång till att göra dem och vi kämpar och strävar under dagen för att uppnå detta genom att avsätta en del av vår tid under dagen till att studera islam, jobba för vår försörjning och göra goda handlingar.",
-              "mp3_url": "https://fra1.digitaloceanspaces.com/islamnu/dhikr/remembrance/audio/95.mp3",
-              "source_integrity": {
-                "original_post_index": 20,
-                "source_url_present": true
-              },
-              "wellbeing_metadata": {
-                "id": "morgon-och-kvall-aminnelser-under-morgon-och-kvall-allah-jag-ber-dig-om-kunskap-som-gynnar",
-                "mood_tags": [],
-                "problem_tags": [],
-                "situation_tags": [],
-                "intent_tags": [],
-                "search_synonyms_sv": [],
-                "priority_score": 40,
-                "wellbeing_description": "Främst situationsbaserad dhikr.",
-                "source_context": {
-                  "kategori": "Morgon och kväll",
-                  "undersida": "Åminnelser under morgon och kväll"
-                }
-              }
-            },
-            {
-              "titel": "Jag ber Allah om förlåtelse",
-              "url": "https://islam.nu/dhikr/dhikr-for-morgon-och-kvall/jag-ber-allah-om-forlatelse/",
-              "arabisk_text": "أستَغْفِرُ اللهَ وأتُوبُ إليهِ",
-              "translitteration": "Astaghfirullâha wa atûbu ilayh.",
-              "svensk_text": "Jag ber Allah om förlåtelse och vänder mig till Honom i ånger.",
-              "kallhanvisning": "Al-Bukhârî med Fath-ul-Bârî 11/101 nr 6307, Muslim 4/2075 nr 2702.",
-              "mp3_url": "https://fra1.digitaloceanspaces.com/islamnu/dhikr/remembrance/audio/96.mp3",
-              "source_integrity": {
-                "original_post_index": 21,
-                "source_url_present": true
-              },
-              "wellbeing_metadata": {
-                "id": "morgon-och-kvall-aminnelser-under-morgon-och-kvall-jag-ber-allah-om-forlatelse",
-                "mood_tags": [],
-                "problem_tags": [],
-                "situation_tags": [],
-                "intent_tags": [
-                  "forlatelse"
-                ],
-                "search_synonyms_sv": [],
-                "priority_score": 43,
-                "wellbeing_description": "Främst situationsbaserad dhikr.",
-                "source_context": {
-                  "kategori": "Morgon och kväll",
-                  "undersida": "Åminnelser under morgon och kväll"
-                }
-              },
-              "lases_info": "Sägs etthundra gånger under dagen."
-            },
-            {
-              "titel": "Jag söker skydd vid Allahs fullkomliga ord",
-              "url": "https://islam.nu/dhikr/dhikr-for-morgon-och-kvall/jag-soker-skydd-vid-allahs-fullkomliga-ord/",
-              "arabisk_text": "أَعُوْذُ بِكَلِمَاتِ اللَّهِ التَّامَّاتِ مِنْ شَرِّ مَا خَلَقَ",
-              "translitteration": "A'ûthu bikalimâtil-lâhit-tâmmâti min sharri mâ khalaq.",
-              "svensk_text": "Jag söker skydd vid Allahs fullkomliga ord från det onda Han har skapat.",
-              "kallhanvisning": "Ahmad 2/290, An-Nasâ’î i ‘Amal Al-Yaum wal-Laylah nr 590, Ibn Sunnî nr 68. Se även Sahîh-ut-Tirmidhî 3/187, Sahîh Ibn Mâdjah 2/266, Tuhfat-ul- Akhyâr s. 45.",
-              "mp3_url": "https://fra1.digitaloceanspaces.com/islamnu/dhikr/remembrance/audio/97.mp3",
-              "source_integrity": {
-                "original_post_index": 22,
-                "source_url_present": true
-              },
-              "wellbeing_metadata": {
-                "id": "morgon-och-kvall-aminnelser-under-morgon-och-kvall-jag-soker-skydd-vid-allahs-fullkomliga-ord",
-                "mood_tags": [],
-                "problem_tags": [],
-                "situation_tags": [],
-                "intent_tags": [
-                  "skydd",
-                  "trygghet"
-                ],
-                "search_synonyms_sv": [],
-                "priority_score": 46,
-                "wellbeing_description": "Främst situationsbaserad dhikr.",
-                "source_context": {
-                  "kategori": "Morgon och kväll",
-                  "undersida": "Åminnelser under morgon och kväll"
-                }
-              },
-              "lases_info": "Sägs tre gånger på morgonen och på kvällen."
-            },
-            {
-              "titel": "Allah! Upphöj och bevara vår profet Muhammed",
-              "url": "https://islam.nu/dhikr/dhikr-for-morgon-och-kvall/allah-upphoj-och-bevara-var-profet-muhammed/",
-              "arabisk_text": "اللَّهُمَّ صَلِّ وَسَلِّمْ عَلَى نَبيِّنَا مُـحَمَّدٍ",
-              "translitteration": "Allahumma salli wa sallim 'alâ nabiyyinâ Muhammed.",
-              "svensk_text": "Allah! Upphöj och bevara vår profet Muhammed.",
-              "kallhanvisning": "at-Tabarâni med två kedjor varav en av dem är god (hasan). Se Madjmû uz- Zawâid 10/120 och Sahîh-ut-Targhîb wa Tarhîb 1/273 nr 656.",
-              "mp3_url": "https://fra1.digitaloceanspaces.com/islamnu/dhikr/remembrance/audio/98.mp3",
-              "source_integrity": {
-                "original_post_index": 23,
-                "source_url_present": true
-              },
-              "wellbeing_metadata": {
-                "id": "morgon-och-kvall-aminnelser-under-morgon-och-kvall-allah-upphoj-och-bevara-var-profet-muhammed",
-                "mood_tags": [],
-                "problem_tags": [],
-                "situation_tags": [],
-                "intent_tags": [],
-                "search_synonyms_sv": [],
-                "priority_score": 40,
-                "wellbeing_description": "Främst situationsbaserad dhikr.",
-                "source_context": {
-                  "kategori": "Morgon och kväll",
-                  "undersida": "Åminnelser under morgon och kväll"
-                }
-              },
-              "lases_info": "Sägs tio gånger."
-            }
-          ],
-          "source_integrity": {
-            "original_subpage_index": 0
-          }
-        },
-        {
           "titel": "Morgon",
           "dhikr_poster": [
             {
@@ -10261,9 +9519,9 @@
             {
               "titel": "Allah! Med Din välsignelse träder vi in i dagen",
               "url": "https://islam.nu/dhikr/dhikr-for-morgon-och-kvall/allah-med-din-valsignelse-trader-vi-in-i-dagen/",
-              "arabisk_text": "اللَّهُمَّ بِكَ أصْبَحْنَا، وبِكَ أمْسَيْنَا، وَبِكَ نَحْيَا، وَبِكَ نَمُوتُ، وإلَيْكَ النُّشُورُاللَّهُمَّ بِكَ أمْسَيْنَا، وَبِكَ أصْبَحْنَا، وَبِكَ نَحْيَا، وَبِكَ نَمُوْتُ، وَإليْكَ الـمَصِيْرُ",
+              "arabisk_text": "اللَّهُمَّ بِكَ أصْبَحْنَا، وبِكَ أمْسَيْنَا، وَبِكَ نَحْيَا، وَبِكَ نَمُوتُ، وإلَيْكَ النُّشُورُ",
               "translitteration": "Allahumma bika asbahnâ, wa bika amsaynâ, wa bika nahyâ, wa bika namût wa ilaykan-nushûr.",
-              "svensk_text": "Allah! Med Din välsignelse träder vi in i dagen, och med Din välsignelse träder vi in i kvällen. Med Din välsignelse lever vi och dör vi, och till Dig återuppstår vi på Domedagen.På kvällen säger man:Allah! Med Din välsignelse träder vi in i kvällen, och med Din välsignelse träder vi in i dagen. Med Din välsignelse lever vi och dör vi, och till Dig återvänder vi.",
+              "svensk_text": "Allah! Med Din välsignelse träder vi in i dagen, och med Din välsignelse träder vi in i kvällen. Med Din välsignelse lever vi och dör vi, och till Dig återuppstår vi på Domedagen.",
               "kallhanvisning": "At-Tirmidhî 5/466 nr 3391. Se även Sahîh ut-Tirmidhî 3/142.",
               "mp3_url": "https://fra1.digitaloceanspaces.com/islamnu/dhikr/remembrance/audio/78-a.mp3",
               "source_integrity": {
@@ -10271,17 +9529,22 @@
                 "source_url_present": true
               },
               "wellbeing_metadata": {
-                "id": "morgon-och-kvall-aminnelser-under-morgon-och-kvall-allah-med-din-valsignelse-trader-vi-in-i-dagen",
+                "id": "morgon-och-kvall-morgon-allah-med-din-valsignelse-trader-vi-in-i-dagen",
                 "mood_tags": [],
                 "problem_tags": [],
-                "situation_tags": [],
+                "situation_tags": [
+                  "morgon"
+                ],
                 "intent_tags": [],
-                "search_synonyms_sv": [],
+                "search_synonyms_sv": [
+                  "morgon",
+                  "morgon dhikr"
+                ],
                 "priority_score": 40,
-                "wellbeing_description": "Främst situationsbaserad dhikr.",
+                "wellbeing_description": "Morgondhikr: Med Din välsignelse träder vi in i dagen.",
                 "source_context": {
                   "kategori": "Morgon och kväll",
-                  "undersida": "Åminnelser under morgon och kväll"
+                  "undersida": "Morgon"
                 }
               }
             },
@@ -10344,7 +9607,7 @@
               "url": "https://islam.nu/dhikr/dhikr-for-morgon-och-kvall/allah-alla-gavor-som-jag-eller-nagon-annan-i-din-skapelse-har-fatt/",
               "arabisk_text": "اللَّهُمَّ مَا أصْبَحَ بِي مِنْ نِعْمَةٍ، أوْ بِأحَدٍ مِنْ خَلقِكَ، فَمِنْكَ وَحْدَكَ لا شَرِيْكَ لَكَ، فَلَكَ الـحَمْدُ ولَكَ الشُّكْرُ",
               "translitteration": "Allahumma mâ asbaha bî min ni'matin aw bi ahadin min khalqika faminka wahdaka lâ sharîka lak, falakal-hamdu wa lakash-shukr.",
-              "svensk_text": "Allah! Alla gåvor som jag eller någon annan i Din skapelse har fått [denna dag] är endast från Dig, Du har ingen vid Din sida. Så alla lovprisningar och allt tack hör till Dig.På kvällen säger du:Allah! Alla gåvor som jag eller någon annan i Din skapelse har fått [denna kväll…]”",
+              "svensk_text": "Allah! Alla gåvor som jag eller någon annan i Din skapelse har fått [denna dag] är endast från Dig, Du har ingen vid Din sida. Så alla lovprisningar och allt tack hör till Dig.",
               "kallhanvisning": "Abû Dâwûd 4/318 nr 5073, An-Nasâ’î i ‘Amal Al-Yaum wal-Laylah nr 7, Ibn Sunnî nr 41, Ibn Hibbân ”Mawârid” nr 2361, och Ibn Bâz ansåg dess kedja vara god (hasan) i Tuhfat ul-Akhyâr s. 24.",
               "mp3_url": "https://fra1.digitaloceanspaces.com/islamnu/dhikr/remembrance/audio/81.mp3",
               "source_integrity": {
@@ -10570,7 +9833,7 @@
               "arabisk_text": "أصْبَحْنَا وأصْبَحَ الـمُلْكُ للَّهِ رَبِّ العَالَمِيْنَ، اللَّهُمَّ إنِّي أسْألُكَ خَيْرَ هَذَا اليَوْمِ: فَتْحَهُ، ونَصْرَهُ، وَنُورَهُ، وبَرَكَتَهُ، وهُدَاهُ، وأعُوْذُ بِكَ مِنْ شَرِّ مَا فِيْهِ وَشَرِّ مَا بَعْدَهُ",
               "translitteration": "Asbahnâ wa asbahal-mulku lillâhi Rabbil-'âlamîn, Allahumma innî as´aluka khayra hâthal-yawm: Fathahu wa nasrahu wa nûra, wa barakatahu, wa hudâ, wa a'ûthu bika min sharri mâ fîhi wa sharri mâ ba'dah.",
               "svensk_text": "Vi har trätt in i en ny morgon och Herraväldet hör till Allah, världarnas Herre. Allah! Jag ber om det goda [som finns] i denna dag; dess framgång, seger, ljus, välsignelse och vägledning. Och jag söker skydd från det onda [som finns] i den och det onda efter den.",
-              "kallhanvisning": "På kvällen byter man ut dag mot kväll och säger: Amsaynâ wa amsâ al-mulku-lillâhi Rabbil-’âlamîn. Allahumma innî as´aluka khayra hâthihil-laylah: Fathahâ wa nasrahâ wa nurahâ wa barakatahâ wa hudâhâ, wa a’ûthu bika min sharri mâ fihâ wa sharri mâ ba’dahâ. Abû Dâwûd 4/322 nr 5084. Shaykh Shu’ayb Arna’ût ansåg dess kedja vara god (hasan) i tahqîq Zâd ul-Ma’âd 2/273.",
+              "kallhanvisning": "Abû Dâwûd 4/322 nr 5084. Shaykh Shu'ayb Arna'ût ansåg dess kedja vara god (hasan) i tahqîq Zâd ul-Ma'âd 2/273.",
               "mp3_url": "https://fra1.digitaloceanspaces.com/islamnu/dhikr/remembrance/audio/89.mp3",
               "source_integrity": {
                 "original_post_index": 14,
@@ -11004,29 +10267,68 @@
               }
             },
             {
-              "titel": "Allah! Med Din välsignelse träder vi in i dagen",
+              "titel": "Allah! Med Din välsignelse träder vi in i kvällen",
               "url": "https://islam.nu/dhikr/dhikr-for-morgon-och-kvall/allah-med-din-valsignelse-trader-vi-in-i-dagen/",
-              "arabisk_text": "اللَّهُمَّ بِكَ أصْبَحْنَا، وبِكَ أمْسَيْنَا، وَبِكَ نَحْيَا، وَبِكَ نَمُوتُ، وإلَيْكَ النُّشُورُاللَّهُمَّ بِكَ أمْسَيْنَا، وَبِكَ أصْبَحْنَا، وَبِكَ نَحْيَا، وَبِكَ نَمُوْتُ، وَإليْكَ الـمَصِيْرُ",
-              "translitteration": "Allahumma bika asbahnâ, wa bika amsaynâ, wa bika nahyâ, wa bika namût wa ilaykan-nushûr.",
-              "svensk_text": "Allah! Med Din välsignelse träder vi in i dagen, och med Din välsignelse träder vi in i kvällen. Med Din välsignelse lever vi och dör vi, och till Dig återuppstår vi på Domedagen.På kvällen säger man:Allah! Med Din välsignelse träder vi in i kvällen, och med Din välsignelse träder vi in i dagen. Med Din välsignelse lever vi och dör vi, och till Dig återvänder vi.",
+              "arabisk_text": "اللَّهُمَّ بِكَ أمْسَيْنَا، وَبِكَ أصْبَحْنَا، وَبِكَ نَحْيَا، وَبِكَ نَمُوْتُ، وَإليْكَ الـمَصِيْرُ",
+              "translitteration": "Allahumma bika amsaynâ, wa bika asbahnâ, wa bika nahyâ, wa bika namût, wa ilaykadl-masîr.",
+              "svensk_text": "Allah! Med Din välsignelse träder vi in i kvällen, och med Din välsignelse träder vi in i dagen. Med Din välsignelse lever vi och dör vi, och till Dig återvänder vi.",
               "kallhanvisning": "At-Tirmidhî 5/466 nr 3391. Se även Sahîh ut-Tirmidhî 3/142.",
-              "mp3_url": "https://fra1.digitaloceanspaces.com/islamnu/dhikr/remembrance/audio/78-a.mp3",
+              "mp3_url": "https://fra1.digitaloceanspaces.com/islamnu/dhikr/remembrance/attachment/78-b.mp3",
               "source_integrity": {
                 "original_post_index": 3,
                 "source_url_present": true
               },
               "wellbeing_metadata": {
-                "id": "morgon-och-kvall-aminnelser-under-morgon-och-kvall-allah-med-din-valsignelse-trader-vi-in-i-dagen",
+                "id": "morgon-och-kvall-kvall-allah-med-din-valsignelse-trader-vi-in-i-kvallen",
                 "mood_tags": [],
                 "problem_tags": [],
-                "situation_tags": [],
+                "situation_tags": [
+                  "kväll"
+                ],
                 "intent_tags": [],
-                "search_synonyms_sv": [],
+                "search_synonyms_sv": [
+                  "kväll",
+                  "kväll dhikr",
+                  "amsa"
+                ],
                 "priority_score": 40,
-                "wellbeing_description": "Främst situationsbaserad dhikr.",
+                "wellbeing_description": "Kvällsdhikr: Med Din välsignelse träder vi in i kvällen.",
                 "source_context": {
                   "kategori": "Morgon och kväll",
-                  "undersida": "Åminnelser under morgon och kväll"
+                  "undersida": "Kväll"
+                }
+              }
+            },
+            {
+              "titel": "Allah! Alla gåvor som jag eller någon annan i Din skapelse har fått",
+              "url": "https://islam.nu/dhikr/dhikr-for-morgon-och-kvall/allah-alla-gavor-som-jag-eller-nagon-annan-i-din-skapelse-har-fatt/",
+              "arabisk_text": "اللَّهُمَّ مَا أَمْسَى بِي مِنْ نِعْمَةٍ، أَوْ بِأَحَدٍ مِنْ خَلْقِكَ، فَمِنْكَ وَحْدَكَ لَا شَرِيكَ لَكَ، فَلَكَ الْحَمْدُ وَلَكَ الشُّكْرُ",
+              "translitteration": "Allahumma ma amsa bi min ni'matin, aw bi-ahadin min khalqika, fa minka wahdaka la sharika laka, fa lakal-hamdu wa lakash-shukr.",
+              "svensk_text": "Allah! Alla gåvor som jag eller någon annan i Din skapelse har fått denna kväll är endast från Dig, Du har ingen vid Din sida. Så alla lovprisningar och allt tack hör till Dig.",
+              "kallhanvisning": "Abû Dâwûd 4/318 nr 5073, An-Nasâ’î i ‘Amal Al-Yaum wal-Laylah nr 7, Ibn Sunnî nr 41, Ibn Hibbân ”Mawârid” nr 2361, och Ibn Bâz ansåg dess kedja vara god (hasan) i Tuhfat ul-Akhyâr s. 24.",
+              "mp3_url": "https://fra1.digitaloceanspaces.com/islamnu/dhikr/remembrance/audio/81.mp3",
+              "source_integrity": {
+                "original_post_index": 6,
+                "source_url_present": true
+              },
+              "wellbeing_metadata": {
+                "id": "morgon-och-kvall-kvall-allah-alla-gavor-som-jag-eller-nagon-annan-i-din-skapelse-har-fatt",
+                "mood_tags": [],
+                "problem_tags": [],
+                "situation_tags": [
+                  "kväll"
+                ],
+                "intent_tags": [],
+                "search_synonyms_sv": [
+                  "kväll",
+                  "gåvor",
+                  "tacksamhet"
+                ],
+                "priority_score": 40,
+                "wellbeing_description": "Kvällsdhikr: Tacksägelse för Allahs gåvor.",
+                "source_context": {
+                  "kategori": "Morgon och kväll",
+                  "undersida": "Kväll"
                 }
               }
             },
@@ -11058,40 +10360,13 @@
               }
             },
             {
-              "titel": "Allah! Alla gåvor som jag eller någon annan i Din skapelse har fått",
-              "url": "https://islam.nu/dhikr/dhikr-for-morgon-och-kvall/allah-alla-gavor-som-jag-eller-nagon-annan-i-din-skapelse-har-fatt/",
-              "arabisk_text": "اللَّهُمَّ مَا أصْبَحَ بِي مِنْ نِعْمَةٍ، أوْ بِأحَدٍ مِنْ خَلقِكَ، فَمِنْكَ وَحْدَكَ لا شَرِيْكَ لَكَ، فَلَكَ الـحَمْدُ ولَكَ الشُّكْرُ",
-              "translitteration": "Allahumma mâ asbaha bî min ni'matin aw bi ahadin min khalqika faminka wahdaka lâ sharîka lak, falakal-hamdu wa lakash-shukr.",
-              "svensk_text": "Allah! Alla gåvor som jag eller någon annan i Din skapelse har fått [denna dag] är endast från Dig, Du har ingen vid Din sida. Så alla lovprisningar och allt tack hör till Dig.På kvällen säger du:Allah! Alla gåvor som jag eller någon annan i Din skapelse har fått [denna kväll…]”",
-              "kallhanvisning": "Abû Dâwûd 4/318 nr 5073, An-Nasâ’î i ‘Amal Al-Yaum wal-Laylah nr 7, Ibn Sunnî nr 41, Ibn Hibbân ”Mawârid” nr 2361, och Ibn Bâz ansåg dess kedja vara god (hasan) i Tuhfat ul-Akhyâr s. 24.",
-              "mp3_url": "https://fra1.digitaloceanspaces.com/islamnu/dhikr/remembrance/audio/81.mp3",
-              "source_integrity": {
-                "original_post_index": 6,
-                "source_url_present": true
-              },
-              "wellbeing_metadata": {
-                "id": "morgon-och-kvall-aminnelser-under-morgon-och-kvall-allah-alla-gavor-som-jag-eller-nagon-annan-i-din-skapelse-har-fatt",
-                "mood_tags": [],
-                "problem_tags": [],
-                "situation_tags": [],
-                "intent_tags": [],
-                "search_synonyms_sv": [],
-                "priority_score": 40,
-                "wellbeing_description": "Främst situationsbaserad dhikr.",
-                "source_context": {
-                  "kategori": "Morgon och kväll",
-                  "undersida": "Åminnelser under morgon och kväll"
-                }
-              }
-            },
-            {
-              "titel": "Allah! Jag har trätt in i en ny dag",
+              "titel": "Allah! Jag har trätt in i en ny kväll",
               "url": "https://islam.nu/dhikr/dhikr-for-morgon-och-kvall/allah-jag-har-tratt-in-i-en-ny-dag/",
-              "arabisk_text": "اللَّهُمَّ إنِّي أصْبَحْتُ أُشْهِدُكَ، وأُشْهِدُ حَمَلَةَ عَرْشِكَ، ومَلائِكَتِكَ، وجَميْعَ خَلْقِكَ، أنَّكَ أنْتَ اللهُ لا إلَهَ إلاَّ أنْتَ وَحْدَكَ لا شَرِيْكَ لَكَ، وأنَّ مُحَمَّداً عَبْدُكَ ورَسُولُكَ",
-              "translitteration": "Allahumma innî asbahtu ush-hiduka wa ush-hidu hamalata 'arshik, wa malâ´ikatik wadjamî'a khalqik, annaka anta-Allahu lâ ilâha illâ Ant wahdaka lâ sharîka lak, wa anna Muhammedan 'abduka wa rasûluk.",
-              "svensk_text": "Allah! Jag har trätt in i en ny dag.  Jag kallar Dig, de som bär Din tron, änglarna och all skapelse att vittna att Du är Allah - ingen har rätt att dyrkas förutom Du. Du är en, Du har ingen vid Din sida - och att Muhammed är Din tjänare och Ditt sändebud.Allah kommer att rädda den som säger detta fyra gånger på morgonen eller kvällen från helvetes-elden.",
+              "arabisk_text": "اللَّهُمَّ إِنِّي أَمْسَيْتُ أُشْهِدُكَ، وَأُشْهِدُ حَمَلَةَ عَرْشِكَ، وَمَلَائِكَتَكَ، وَجَمِيعَ خَلْقِكَ، أَنَّكَ أَنْتَ اللهُ لَا إِلَهَ إِلَّا أَنْتَ وَحْدَكَ لَا شَرِيكَ لَكَ، وَأَنَّ مُحَمَّدًا عَبْدُكَ وَرَسُولُكَ",
+              "translitteration": "Allahumma inni amsaytu ush-hiduka, wa ush-hidu hamalata 'arshika, wa mala'ikataka, wa jami'a khalqika, annaka Antallahu la ilaha illa Anta wahdaka la sharika laka, wa anna Muhammadan 'abduka wa rasuluka.",
+              "svensk_text": "Allah! Jag har trätt in i en ny kväll. Jag kallar Dig, de som bär Din tron, änglarna och all skapelse att vittna att Du är Allah - ingen har rätt att dyrkas förutom Du. Du är en, Du har ingen vid Din sida - och att Muhammed är Din tjänare och Ditt sändebud.\n\nAllah kommer att rädda den som säger detta fyra gånger på morgonen eller kvällen från helvetes-elden.",
               "kallhanvisning": "Abû Dâwûd 4/317 nr 5069, Al-Bukhârî i Al-Adab ul-Mufrad nr 1201, An- Nasâ’î i ‘Amal Al-Yaum wal-Laylah nr 9, Ibn Sunnî nr 70, och Ibn Bâz ansåg kedjorna i An-Nasâ’î och At-Tirmidhî vara goda (hasan) i Tuhfat ul-Akhyâr s. 23.",
-              "mp3_url": "https://fra1.digitaloceanspaces.com/islamnu/dhikr/remembrance/audio/80.mp3",
+              "mp3_url": "",
               "source_integrity": {
                 "original_post_index": 5,
                 "source_url_present": true
@@ -11310,13 +10585,13 @@
               }
             },
             {
-              "titel": "Vi har trätt in i en ny morgon och Herraväldet hör till Allah",
+              "titel": "Vi har trätt in i en ny kväll och Herraväldet hör till Allah",
               "url": "https://islam.nu/dhikr/dhikr-for-morgon-och-kvall/vi-har-tratt-in-i-en-ny-morgon-och-herravaldet-hor-till-allah/",
-              "arabisk_text": "أصْبَحْنَا وأصْبَحَ الـمُلْكُ للَّهِ رَبِّ العَالَمِيْنَ، اللَّهُمَّ إنِّي أسْألُكَ خَيْرَ هَذَا اليَوْمِ: فَتْحَهُ، ونَصْرَهُ، وَنُورَهُ، وبَرَكَتَهُ، وهُدَاهُ، وأعُوْذُ بِكَ مِنْ شَرِّ مَا فِيْهِ وَشَرِّ مَا بَعْدَهُ",
-              "translitteration": "Asbahnâ wa asbahal-mulku lillâhi Rabbil-'âlamîn, Allahumma innî as´aluka khayra hâthal-yawm: Fathahu wa nasrahu wa nûra, wa barakatahu, wa hudâ, wa a'ûthu bika min sharri mâ fîhi wa sharri mâ ba'dah.",
-              "svensk_text": "Vi har trätt in i en ny morgon och Herraväldet hör till Allah, världarnas Herre. Allah! Jag ber om det goda [som finns] i denna dag; dess framgång, seger, ljus, välsignelse och vägledning. Och jag söker skydd från det onda [som finns] i den och det onda efter den.",
-              "kallhanvisning": "På kvällen byter man ut dag mot kväll och säger: Amsaynâ wa amsâ al-mulku-lillâhi Rabbil-’âlamîn. Allahumma innî as´aluka khayra hâthihil-laylah: Fathahâ wa nasrahâ wa nurahâ wa barakatahâ wa hudâhâ, wa a’ûthu bika min sharri mâ fihâ wa sharri mâ ba’dahâ. Abû Dâwûd 4/322 nr 5084. Shaykh Shu’ayb Arna’ût ansåg dess kedja vara god (hasan) i tahqîq Zâd ul-Ma’âd 2/273.",
-              "mp3_url": "https://fra1.digitaloceanspaces.com/islamnu/dhikr/remembrance/audio/89.mp3",
+              "arabisk_text": "أَمْسَيْنَا وَأَمْسَى الْمُلْكُ لِلَّهِ رَبِّ الْعَالَمِينَ، اللَّهُمَّ إِنِّي أَسْأَلُكَ خَيْرَ هَذِهِ اللَّيْلَةِ: فَتْحَهَا، وَنَصْرَهَا، وَنُورَهَا، وَبَرَكَتَهَا، وَهُدَاهَا، وَأَعُوذُ بِكَ مِنْ شَرِّ مَا فِيهَا وَشَرِّ مَا بَعْدَهَا",
+              "translitteration": "Amsayna wa amsal-mulku lillahi Rabbil-alamin. Allahumma inni as'aluka khayra hadhihil-laylah: fathaha, wa nasraha, wa nuraha, wa barakataha, wa hudaha. Wa a'udhu bika min sharri ma fiha wa sharri ma ba'daha.",
+              "svensk_text": "Vi har trätt in i en ny kväll och Herraväldet hör till Allah, världarnas Herre. Allah! Jag ber om det goda [som finns] i denna kväll; dess framgång, seger, ljus, välsignelse och vägledning. Och jag söker skydd från det onda [som finns] i den och det onda efter den.",
+              "kallhanvisning": "Abû Dâwûd 4/322 nr 5084. Shaykh Shu'ayb Arna'ût ansåg dess kedja vara god (hasan) i tahqîq Zâd ul-Ma'âd 2/273.",
+              "mp3_url": "",
               "source_integrity": {
                 "original_post_index": 14,
                 "source_url_present": true
@@ -11337,13 +10612,13 @@
               }
             },
             {
-              "titel": "Vi har vaknat med det naturliga tillståndet islam",
+              "titel": "Vi har trätt in i en ny kväll i det naturliga tillståndet islam",
               "url": "https://islam.nu/dhikr/dhikr-for-morgon-och-kvall/vi-har-vaknat-med-det-naturliga-tillstandet-islam/",
-              "arabisk_text": "أصْبَحْنَا عَلَى فِطْرَةِ الإسْلامِ، وعَلَى كَلِمَةِ الإخْلاصِ، وعَلَى دِيْنِ نَبيِّنَا مُحَمَّدٍ، وعَلَى مِلَّةِ أبِينَا إبْرَاهيمَ، حَنيفاً مُسْلِماً ومَا كَانَ مِنَ الـمُشْرِكِينَ",
-              "translitteration": "Asbahnâ 'alâ fitratil-Islâm wa 'alâ kalimatil-ikhlâs, wa 'alâ dîni nabiyyinâ Muhammedin [sallAllahu 'alayhi wa sallam], wa 'alâ millati abînâ Ibrâhîma, hanîfan muslima wa mâ kâna minal-mushrikîn.",
-              "svensk_text": "Vi har trätt in i en ny morgon i det naturliga tillståndet islam, och med trosbekännelsen och på vår profet Muhammeds religion och vår förfader Ibrâhîms väg. Han var Hanîf[1] och muslim och hörde inte till dem som begick avguderi.",
-              "kallhanvisning": "När det blir kväll säger man; amsaynâ ’alâ fitratil-Islâm… ”Vi träder in i kvällen…” Ahmad 3/406,407, An-Nasâ’î i ‘Amal Al-Yaum wal-Laylah nr 34. Se även Sahîh ul-Djâmi’ 4/209 nr 4674.",
-              "mp3_url": "https://fra1.digitaloceanspaces.com/islamnu/dhikr/remembrance/audio/90.mp3",
+              "arabisk_text": "أَمْسَيْنَا عَلَى فِطْرَةِ الْإِسْلَامِ، وَعَلَى كَلِمَةِ الْإِخْلَاصِ، وَعَلَى دِينِ نَبِيِّنَا مُحَمَّدٍ، وَعَلَى مِلَّةِ أَبِينَا إِبْرَاهِيمَ، حَنِيفًا مُسْلِمًا وَمَا كَانَ مِنَ الْمُشْرِكِينَ",
+              "translitteration": "Amsayna 'ala fitratil-Islam, wa 'ala kalimatil-ikhlas, wa 'ala dini nabiyyina Muhammad, wa 'ala millati abina Ibrahima, hanifan musliman wa ma kana minal-mushrikin.",
+              "svensk_text": "Vi har trätt in i en ny kväll i det naturliga tillståndet islam, och med trosbekännelsen och på vår profet Muhammeds religion och vår förfader Ibrâhîms väg. Han var Hanîf[1] och muslim och hörde inte till dem som begick avguderi.",
+              "kallhanvisning": "Ahmad 3/406,407, An-Nasâ'î i 'Amal Al-Yaum wal-Laylah nr 34. Se även Sahîh ul-Djâmi' 4/209 nr 4674.",
+              "mp3_url": "",
               "source_integrity": {
                 "original_post_index": 15,
                 "source_url_present": true

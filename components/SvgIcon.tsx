@@ -2,7 +2,7 @@ import React from 'react';
 import Svg, { Path, Rect, Line, Circle, G, Polygon } from 'react-native-svg';
 import RuqyahIcon from './RuqyahIcon';
 
-type IconName = 'home' | 'calendar' | 'compass' | 'book' | 'prayer' | 'dhikr' | 'star' | 'more' | 'sun' | 'moon' | 'allahs-namn' | 'settings' | 'ruler' | 'smartphone' | 'map-arrow' | 'map-point' | 'bell' | 'theme' | 'gps' | 'info' | 'heart' | 'zakat' | 'quran' | 'menu' | 'play' | 'pause' | 'stop' | 'skip-fwd' | 'skip-back' | 'check' | 'close' | 'bookmark' | 'bookmark-fill' | 'trash' | 'download' | 'search' | 'chevron-down' | 'chevron-right' | 'chevron-left' | 'repeat' | 'list' | 'ruqyah' | 'share' | 'image' | 'text' | 'copy' | 'airplay' | 'umrah' | 'quiz';
+type IconName = 'home' | 'calendar' | 'compass' | 'book' | 'prayer' | 'dhikr' | 'star' | 'more' | 'sun' | 'moon' | 'allahs-namn' | 'settings' | 'ruler' | 'smartphone' | 'map-arrow' | 'map-point' | 'bell' | 'theme' | 'gps' | 'info' | 'heart' | 'zakat' | 'quran' | 'menu' | 'play' | 'pause' | 'stop' | 'skip-fwd' | 'skip-back' | 'check' | 'close' | 'bookmark' | 'bookmark-fill' | 'trash' | 'download' | 'search' | 'chevron-down' | 'chevron-right' | 'chevron-left' | 'repeat' | 'list' | 'ruqyah' | 'share' | 'image' | 'text' | 'copy' | 'airplay' | 'umrah' | 'quiz' | 'hadith';
 
 export default function SvgIcon({ name, size = 24, color = '#000' }: { name: IconName; size?: number; color?: string }) {
   switch (name) {
@@ -455,6 +455,15 @@ export default function SvgIcon({ name, size = 24, color = '#000' }: { name: Ico
           <Path d="M9.5 9.5C9.5 8.12 10.62 7 12 7c1.38 0 2.5 1.12 2.5 2.5 0 1-.56 1.87-1.4 2.34C12.42 12.18 12 12.79 12 13.5V14"
             stroke={color} strokeWidth="1.5" strokeLinecap="round"/>
           <Circle cx="12" cy="16.5" r="0.8" fill={color}/>
+        </Svg>
+      );
+
+    case 'hadith':
+      return (
+        <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+          <Path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          <Path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          <Path d="M9 7h6M9 11h4" stroke={color} strokeWidth="1.5" strokeLinecap="round"/>
         </Svg>
       );
 

@@ -18,6 +18,7 @@ import { BERNSTROM_DATA } from '@/data/bernstromTranslation';
 import { SURAH_INDEX } from '@/data/surahIndex';
 import { ALL_DHIKR, dhikrKey, type DhikrPost } from '@/data/dhikrRepository';
 import asmaulData from '@/app/asmaul_husna.json';
+import hadithData from '@/data/hadithData.json';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -60,6 +61,16 @@ export type AsmaReminder = {
   navigationPath: string;
 };
 
+export type HadithReminder = {
+  type: 'hadith';
+  hadithNr: number;
+  arabiska: string; // exact text from JSON — never altered
+  svenska: string;  // exact text from JSON — never altered
+  kalla: string;
+  /** Expo Router path — push this to open the Hadith screen at this hadith */
+  navigationPath: string;
+};
+
 export type DailyReminder = QuranReminder | DhikrReminder | AsmaReminder;
 
 // ── Internal data types ────────────────────────────────────────────────────────
@@ -90,6 +101,59 @@ function daysSinceRef(date: Date): number {
 // ── Curated Quran verse pool ───────────────────────────────────────────────────
 // Well-known, self-contained short verses suitable for daily reminders.
 // Keys in "surah:ayah" format — matches BERNSTROM_DATA and SURAH_INDEX.
+//
+// QURAN_POOL_PAGES — exact Mushaf page (1–604) for each pool verse.
+// Fetched from the Quran Foundation API (verses/by_key/{key}?word_fields=page_number)
+// on 2026-04-21. The Hafs Medina layout is fixed; these never change.
+// Using firstPage of the surah would be wrong for verses mid-surah — the
+// QuranVerseView pendingVerseHighlight check requires the EXACT page.
+
+const QURAN_POOL_PAGES: Record<string, number> = {
+  '1:1':1,'1:2':1,'1:3':1,'1:4':1,'1:5':1,
+  '2:45':7,'2:152':23,'2:153':23,'2:155':24,'2:177':27,
+  '2:255':42,'2:256':42,'2:285':49,'2:286':49,
+  '3:8':50,'3:17':52,'3:26':53,'3:27':53,'3:102':63,'3:103':63,
+  '3:110':64,'3:133':67,'3:139':67,'3:160':71,'3:173':72,'3:185':74,'3:200':76,
+  '4:1':77,'4:36':84,'4:103':95,
+  '6:54':134,
+  '7:23':153,'7:43':155,'7:156':170,
+  '9:51':195,'9:71':198,
+  '10:62':216,'10:107':221,
+  '14:7':256,'14:31':259,
+  '17:23':284,'17:44':286,'17:80':290,
+  '18:10':294,'18:39':298,
+  '19:96':312,
+  '20:8':312,'20:114':320,
+  '21:87':329,'21:107':331,
+  '23:1':342,'23:2':342,'23:3':342,
+  '24:35':354,
+  '25:70':366,'25:74':366,
+  '27:19':378,
+  '29:45':401,'29:69':404,
+  '30:21':406,
+  '31:13':412,'31:22':413,
+  '36:58':444,
+  '39:10':459,'39:53':464,
+  '40:60':474,
+  '42:19':485,
+  '43:32':491,
+  '49:10':516,'49:12':517,'49:13':517,
+  '51:50':522,'51:56':523,
+  '55:13':531,
+  '56:77':537,'56:78':537,'56:79':537,
+  '57:21':540,
+  '59:22':548,'59:23':548,'59:24':548,
+  '65:3':558,
+  '67:1':562,'67:2':562,
+  '71:10':570,
+  '72:1':572,
+  '73:8':574,
+  '94:5':596,'94:6':596,
+  '97:1':598,
+  '99:7':599,'99:8':599,
+  '103:1':601,'103:2':601,'103:3':601,
+  '112:1':604,'112:2':604,'112:3':604,'112:4':604,
+};
 
 const QURAN_POOL: string[] = [
   // Al-Fatihah
@@ -197,7 +261,44 @@ const DHIKR_POOL: DhikrPost[] = ALL_DHIKR.filter((post) => {
 
 const ASMA_POOL: AsmaName[] = asmaulData as AsmaName[];
 
-// ── Main export ────────────────────────────────────────────────────────────────
+// ── Hadith pool ────────────────────────────────────────────────────────────────
+
+type HadithEntry = {
+  hadith_nr: number;
+  arabiska: string;
+  svenska: string;
+  källa: string;
+};
+
+const HADITH_POOL: HadithEntry[] = hadithData as HadithEntry[];
+
+// ── Main exports ───────────────────────────────────────────────────────────────
+
+/**
+ * Returns a Quran verse for today. Always Quran — cycles through QURAN_POOL
+ * daily (independent of the 3-day dhikr/asma rotation).
+ * Same date → same verse, always.
+ */
+export function getDailyQuranVerse(date: Date): QuranReminder {
+  return buildQuranReminder(daysSinceRef(date));
+}
+
+/**
+ * Returns today's hadith. Cycles through all hadiths daily, independent of
+ * other daily content rotations. Same date → same hadith, always.
+ */
+export function getDailyHadith(date: Date): HadithReminder {
+  const slot = daysSinceRef(date);
+  const entry = HADITH_POOL[slot % HADITH_POOL.length];
+  return {
+    type:           'hadith',
+    hadithNr:       entry.hadith_nr,
+    arabiska:       entry.arabiska,
+    svenska:        entry.svenska,
+    kalla:          entry.källa,
+    navigationPath: `/hadith?hadithNr=${entry.hadith_nr}`,
+  };
+}
 
 /**
  * Returns today's daily reminder based on the given date.
@@ -205,13 +306,12 @@ const ASMA_POOL: AsmaName[] = asmaulData as AsmaName[];
  */
 export function getDailyReminder(date: Date): DailyReminder {
   const days     = daysSinceRef(date);
-  const category = (days % 3) as 0 | 1 | 2;
-  const slot     = Math.floor(days / 3);
+  const category = days % 2;
+  const slot     = Math.floor(days / 2);
 
   switch (category) {
     case 0: return buildQuranReminder(slot);
-    case 1: return buildDhikrReminder(slot);
-    case 2: return buildAsmaReminder(slot);
+    default: return buildAsmaReminder(slot);
   }
 }
 
@@ -224,7 +324,10 @@ function buildQuranReminder(slot: number): QuranReminder {
   const surahNumber = parseInt(surahStr, 10);
   const ayahNumber  = parseInt(ayahStr, 10);
   const surahInfo   = SURAH_INDEX.find((s) => s.id === surahNumber);
-  const page        = surahInfo?.firstPage ?? 1;
+  // Use the exact Mushaf page for this verse (not the surah's firstPage) so that
+  // QuranVerseView's pendingVerseHighlight check fires on the right page, enabling
+  // scroll-to and flash highlight of the correct verse in verse-by-verse mode.
+  const page        = QURAN_POOL_PAGES[verseKey] ?? surahInfo?.firstPage ?? 1;
 
   return {
     type:           'quran',

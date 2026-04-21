@@ -1,6 +1,6 @@
 import {
   View, Text, ScrollView, TouchableOpacity, Switch,
-  Modal, Alert, ActivityIndicator, Platform,
+  Modal, Alert, ActivityIndicator, Platform, TextInput, KeyboardAvoidingView,
 } from 'react-native';
 import { useState, useCallback } from 'react';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -125,6 +125,9 @@ export default function SettingsScreen() {
   const [allahNamesEnabled,      setAllahNamesEnabled]      = useState(true);
   const [liveNotifEnabled,       setLiveNotifEnabled]       = useState(true);
   const [upcomingReminderEnabled, setUpcomingReminderEnabled] = useState(true);
+  const [preferredName,    setPreferredName]    = useState<string | null>(null);
+  const [nameModalVisible, setNameModalVisible] = useState(false);
+  const [nameInput,        setNameInput]        = useState('');
 
   useFocusEffect(useCallback(() => { loadAll(); }, []));
 
@@ -151,6 +154,8 @@ export default function SettingsScreen() {
       setUpcomingReminderEnabled(upcomingRemind !== 'false'); // null (never set) = default on
       const zakat = await loadZakatReminderSettings();
       setZakatEnabled(zakat?.enabled ?? false);
+      const name = await AsyncStorage.getItem('andalus_preferred_name');
+      setPreferredName(name || null);
     } catch {}
   }
 
@@ -160,6 +165,23 @@ export default function SettingsScreen() {
     AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(updated)).catch(() => {});
     AsyncStorage.setItem('andalus_settings_updated', Date.now().toString()).catch(() => {});
     dispatch({ type: 'SET_SETTINGS', payload: partial });
+  }
+
+  async function handleSaveName() {
+    const trimmed = nameInput.trim();
+    if (trimmed) {
+      await AsyncStorage.setItem('andalus_preferred_name', trimmed);
+      setPreferredName(trimmed);
+    } else {
+      await AsyncStorage.removeItem('andalus_preferred_name');
+      setPreferredName(null);
+    }
+    setNameModalVisible(false);
+  }
+
+  function openNameModal() {
+    setNameInput(preferredName ?? '');
+    setNameModalVisible(true);
   }
 
   async function detectLocation() {
@@ -437,6 +459,11 @@ export default function SettingsScreen() {
           </View>
         </View>
 
+        <SectionLabel label="Personalisering" T={T}/>
+        <Row T={T} iconName="star" label="Vad vill du att vi ska kalla dig?"
+          value={preferredName || 'Ej angivet'}
+          onPress={openNameModal}/>
+
         <SectionLabel label="Om appen" T={T}/>
         <View style={{backgroundColor:T.card,borderRadius:14,borderWidth:0.5,borderColor:T.border,padding:16}}>
           <Text style={{fontSize:15,fontWeight:'700',color:T.text}}>Hidayah</Text>
@@ -489,6 +516,90 @@ export default function SettingsScreen() {
         ))}
         <View style={{height:8}}/>
       </Sheet>
+
+      {/* ── Preferred name modal ── */}
+      <Modal
+        visible={nameModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setNameModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={{flex:1,backgroundColor:'rgba(0,0,0,0.45)'}}
+          activeOpacity={1}
+          onPress={() => setNameModalVisible(false)}
+        />
+        <KeyboardAvoidingView behavior={Platform.OS==='ios' ? 'padding' : undefined}>
+          <View style={{
+            backgroundColor:T.card,
+            borderTopLeftRadius:22,borderTopRightRadius:22,
+            paddingBottom:Platform.OS==='ios'?34:20,
+            borderWidth:0.5,borderBottomWidth:0,borderColor:T.border,
+          }}>
+            <View style={{width:36,height:4,borderRadius:2,backgroundColor:T.border,alignSelf:'center',marginTop:10,marginBottom:14}}/>
+            <View style={{paddingHorizontal:20,marginBottom:4,flexDirection:'row',alignItems:'center',justifyContent:'space-between'}}>
+              <Text style={{flex:1,fontSize:18,fontWeight:'700',color:T.text}}>
+                Vad vill du att vi ska kalla dig?
+              </Text>
+              <TouchableOpacity
+                onPress={() => setNameModalVisible(false)}
+                hitSlop={{top:8,bottom:8,left:8,right:8}}
+                style={{width:28,height:28,borderRadius:14,backgroundColor:T.accentGlow,alignItems:'center',justifyContent:'center',marginLeft:12}}
+              >
+                <Text style={{fontSize:16,color:T.textMuted,lineHeight:20,marginTop:-1}}>×</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={{height:0.5,backgroundColor:T.border,marginTop:10,marginBottom:16}}/>
+            <View style={{paddingHorizontal:20,gap:12}}>
+              <TextInput
+                value={nameInput}
+                onChangeText={setNameInput}
+                placeholder="Skriv ditt namn"
+                placeholderTextColor={T.textMuted}
+                autoFocus
+                autoCapitalize="words"
+                returnKeyType="done"
+                onSubmitEditing={handleSaveName}
+                style={{
+                  backgroundColor:T.bg,
+                  borderRadius:12,
+                  borderWidth:0.5,
+                  borderColor:T.border,
+                  paddingHorizontal:14,
+                  paddingVertical:13,
+                  fontSize:16,
+                  color:T.text,
+                }}
+              />
+              {preferredName && (
+                <TouchableOpacity
+                  onPress={async () => {
+                    await AsyncStorage.removeItem('andalus_preferred_name');
+                    setPreferredName(null);
+                    setNameModalVisible(false);
+                  }}
+                  activeOpacity={0.7}
+                  style={{alignItems:'center',paddingVertical:8}}
+                >
+                  <Text style={{fontSize:13,color:T.textMuted}}>Ta bort sparad namn</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                onPress={handleSaveName}
+                activeOpacity={0.8}
+                style={{
+                  backgroundColor:nameInput.trim()?T.accent:T.border,
+                  borderRadius:12,
+                  paddingVertical:14,
+                  alignItems:'center',
+                }}
+              >
+                <Text style={{fontSize:15,fontWeight:'700',color:'#fff'}}>Spara</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }

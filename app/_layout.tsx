@@ -136,7 +136,9 @@ function AppContent({ onFontsReady }: { onFontsReady: () => void }) {
         // Dhikr-påminnelse — öppna Dhikr-sidan direkt.
         router.push('/dhikr' as any);
       } else if (data?.screen === 'youtube_live') {
-        // YouTube live notification — navigate to home tab where the stream is shown.
+        // YouTube live notification — navigate to home and signal HomeScreen to scroll
+        // to the YouTube card so the live badge is immediately visible.
+        AsyncStorage.setItem('islamnu_live_notif_tap', 'true').catch(() => {});
         router.navigate('/(tabs)/home' as any);
       } else if (data?.announcementId) {
         // Store the tapped announcement ID so HomeScreen can react on focus.
