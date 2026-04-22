@@ -114,7 +114,7 @@ function CustomTabBar() {
                 const dir       = toIndex < fromIndex ? 'left' : 'right';
 
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push({ pathname: tab.route as any, params: { _dir: dir } });
+                router.navigate({ pathname: tab.route as any, params: { _dir: dir } });
               }}
               style={{
                 width: 72, height: 85,
