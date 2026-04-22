@@ -1,16 +1,14 @@
 /**
  * VerseShareCard.tsx
  *
- * Renders an elegant verse share image at Instagram portrait ratio (1080×1350)
- * using a hidden WebView + HTML Canvas. No native modules required beyond
- * react-native-webview (already installed) and expo-sharing + expo-file-system.
+ * Renders a verse share image (1080×1350) using a hidden WebView + pure
+ * HTML5 Canvas (no SVG foreignObject). Pure canvas is required because
+ * SVG foreignObject capture does not serialize CSS @font-face fonts —
+ * QCF V2 PUA glyphs would render as boxes via that path.
  *
- * NOTE: QCF V2 page fonts use Private Use Area codepoints that CANNOT be
- * embedded into the SVG foreignObject → canvas capture pipeline. The font
- * is never serialized into the SVG, so PUA glyphs render as boxes/gibberish.
- * We use text_uthmani (standard Unicode Arabic) instead — it renders correctly
- * with iOS system Arabic fonts (Geeza Pro). The verse-end marker is added
- * using standard Unicode: ﴿١٧﴾ (ornate parentheses + Arabic-Indic numerals).
+ * With pure canvas + FontFace API, the QCF V2 page fonts are loaded from
+ * the Quran Foundation CDN and drawn glyph-by-glyph RTL. The result is
+ * the same authentic King Fahad Complex V2 typeface used in the Mushaf reader.
  */
 
 import React, { useRef, useCallback, useImperativeHandle, forwardRef, useState } from 'react';
@@ -18,162 +16,302 @@ import { View, StyleSheet } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
+import { Asset } from 'expo-asset';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
+export type QCFWord = {
+  code_v2: string;
+  pageNumber: number;
+};
+
 export type VerseShareData = {
-  verseKey: string;        // e.g. "2:255"
-  arabicText: string;      // text_uthmani — standard Unicode Arabic
+  verseKey: string;
   translation: string | null;
-  surahName: string;       // e.g. "Al-Baqarah"
-  surahNameArabic: string; // e.g. "البقرة"
+  surahName: string;
+  surahNameArabic: string;
   verseNumber: number;
+  qcfWords: QCFWord[];   // QCF V2 glyphs — use these for Arabic rendering
 };
 
 export type VerseShareCardRef = {
   capture: (data: VerseShareData) => Promise<void>;
 };
 
-// ── Hidayah monogram logo ────────────────────────────────────────────────────
-// Gold gradient on white rounded rect background for share cards
+// ── Logo loader ───────────────────────────────────────────────────────────────
 
-const LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 56 56">
-  <rect width="56" height="56" rx="14" fill="#fff"/>
-  <svg x="6" y="6" width="44" height="44" viewBox="0 0 512 512">
-    <defs>
-      <linearGradient id="hg" x1="0" y1="0" x2="1" y2="1" gradientUnits="objectBoundingBox">
-        <stop offset="0" stop-color="#EBC78C"/>
-        <stop offset="0.5" stop-color="#C2A676"/>
-        <stop offset="1" stop-color="#9A7F54"/>
-      </linearGradient>
-    </defs>
-    <path fill="url(#hg)" d="M256,0C114.6,0,0,114.6,0,256s114.6,256,256,256s256-114.6,256-256S397.4,0,256,0z M256,368c-5.1,0-9.8-1.1-14.1-3.2c-4.3-2.1-7.9-5-10.7-8.6l-50.5-62.1L125,417c-2.3,3.7-5.5,6.7-9.5,8.8c-4,2.2-8.5,3.2-13.5,3.2c-5.1,0-9.9-1.2-14.2-3.4s-7.8-5.2-10.4-8.8c-2.6-3.6-4.3-7.5-5-11.6c-0.7-4.1-0.8-8.2-0.2-12.2l40-272l3.4-33c0.2-2.3,0.5-4.5,1.1-6.7c0.6-2.2,1.5-4.3,2.7-6.2c1.2-1.9,2.7-3.6,4.5-5.1c1.8-1.5,4-2.6,6.4-3.4c2.4-0.8,5.1-1.2,7.9-1.2c2.8,0,5.5,0.4,8,1.2c2.5,0.8,4.7,1.9,6.5,3.4c1.8,1.5,3.3,3.2,4.5,5.1s2.1,4.1,2.7,6.3c0.6,2.2,0.9,4.4,1.1,6.7l3.4,33l40,272l25.5,31.4l25.5-31.4l40-272l3.4-33c0.2-2.3,0.5-4.5,1.1-6.7c0.6-2.2,1.5-4.3,2.7-6.3c1.2-1.9,2.7-3.6,4.5-5.1c1.8-1.5,4-2.6,6.4-3.4c2.4-0.8,5.1-1.2,7.9-1.2s5.5,0.4,8,1.2c2.5,0.8,4.7,1.9,6.5,3.4c1.8,1.5,3.3,3.2,4.5,5.1s2.1,4.1,2.7,6.3c0.6,2.2,0.9,4.4,1.1,6.7l3.4,33l40,272l25.5,31.4l50.5,62.1c2.8,3.6,6.4,6.4,10.7,8.6s9,3.2,14.1,3.2s9.8-1.1,14.1-3.2s7.9-5,10.7-8.6l10-12.2c2.8-3.6,4.5-7.5,5.2-11.6c0.7-4.1,0.8-8.2,0.3-12.2c-0.5-4.1-1.6-8.1-3.4-11.8c-1.8-3.7-4.1-7.1-6.9-10l-125-125l25.5-31.4l125,125c2.8,2.8,5.1,6.2,6.9,10s3,7.7,3.4,11.8c0.5,4.1,0.4,8.2-0.3,12.2s-2.4,7.9-5.2,11.6c-2.8,3.6-6.4,6.4-10.7,8.6s-9,3.2-14.1,3.2z"/>
-  </svg>
-</svg>`;
-
-// ── Verse end marker ────────────────────────────────────────────────────────
-
-/** Build ﴿١٧﴾ — ornate right/left parentheses with Arabic-Indic numerals */
-function verseEndMark(verseNumber: number): string {
-  const arabicIndic = String(verseNumber).replace(/[0-9]/g, (d) =>
-    String.fromCharCode(0x0660 + Number(d)),
-  );
-  // U+FD3F = ornate right paren ﴿  U+FD3E = ornate left paren ﴾
-  return `\uFD3F${arabicIndic}\uFD3E`;
+async function loadLogoBase64(): Promise<string> {
+  const asset = Asset.fromModule(require('@/assets/images/icon.png'));
+  await asset.downloadAsync();
+  const uri = asset.localUri ?? asset.uri;
+  return FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
 }
 
-// ── HTML builder ─────────────────────────────────────────────────────────────
+// ── HTML + canvas builder ────────────────────────────────────────────────────
 
-function escHtml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
+function buildHtml(data: VerseShareData, logoBase64: string): string {
+  // Serialize all data as JSON embedded in the script.
+  // Escape </script> to prevent tag injection.
+  const safeJson = (v: unknown) =>
+    JSON.stringify(v).replace(/<\/script>/gi, '<\\/script>');
 
-function buildHtml(data: VerseShareData): string {
-  const arabicLen = data.arabicText.length;
-  const hasTranslation = !!data.translation;
-  const transLen = data.translation?.length ?? 0;
-
-  // Arabic text sizing — large to fill the space
-  // Arabic with full tashkeel needs ~2.4x line-height so shadda/harakat don't overlap
-  let arabicSize: number;
-  let arabicLineH: number;
-  if (arabicLen > 500) {
-    arabicSize = 38; arabicLineH = 92;
-  } else if (arabicLen > 300) {
-    arabicSize = 48; arabicLineH = 115;
-  } else if (arabicLen > 150) {
-    arabicSize = 56; arabicLineH = 134;
-  } else {
-    arabicSize = 64; arabicLineH = 154;
-  }
-
-  // Translation sizing
-  let transSize: number;
-  let transLineH: number;
-  if (!hasTranslation) {
-    transSize = 0; transLineH = 0;
-  } else if (transLen > 400) {
-    transSize = 22; transLineH = 36;
-  } else if (transLen > 200) {
-    transSize = 26; transLineH = 42;
-  } else {
-    transSize = 30; transLineH = 48;
-  }
-
-  const logoSvgEncoded = LOGO_SVG.replace(/\n\s*/g, '');
-
-  // Arabic text with verse-end marker ﴿١٧﴾
-  const arabicWithMark = escHtml(data.arabicText) + ' ' + verseEndMark(data.verseNumber);
+  const scriptPayload = safeJson({
+    verseKey: data.verseKey,
+    surahName: data.surahName,
+    surahNameArabic: data.surahNameArabic,
+    verseNumber: data.verseNumber,
+    translation: data.translation,
+    qcfWords: data.qcfWords,
+  });
 
   return `<!DOCTYPE html>
-<html><head><meta charset="utf-8">
+<html><head>
+<meta charset="utf-8">
 <meta name="viewport" content="width=1080,initial-scale=1">
 <style>
-* { margin:0; padding:0; box-sizing:border-box; }
-body { width:1080px; height:1350px; background:#0C1A17; font-family:-apple-system,system-ui,sans-serif; overflow:hidden; }
-.accent-bar { position:absolute; top:0; left:0; right:0; height:6px; background:#668468; }
-.container { display:flex; flex-direction:column; height:100%; padding:48px 56px 44px; }
-.header { display:flex; align-items:center; gap:16px; }
-.logo-wrap { width:56px; height:56px; flex-shrink:0; }
-.app-name { color:#fff; font-size:28px; font-weight:700; letter-spacing:0.5px; }
-.divider { height:1px; background:rgba(102,132,104,0.4); margin:24px 0; flex-shrink:0; }
-.content { flex:1; display:flex; flex-direction:column; justify-content:center; padding:0 12px; }
-.arabic { color:#fff; font-size:${arabicSize}px; line-height:${arabicLineH}px; text-align:center; direction:rtl; font-family:'Geeza Pro','Traditional Arabic','Arabic Typesetting',serif; padding:0 8px; -webkit-font-smoothing:antialiased; font-feature-settings:'kern' 1, 'mark' 1, 'mkmk' 1; letter-spacing:0.01em; }
-.trans-wrap { padding:16px 24px 0; flex-shrink:0; }
-.trans-line { width:56px; height:2px; background:#668468; margin:0 auto 20px; }
-.trans { color:rgba(255,255,255,0.75); font-size:${transSize}px; line-height:${transLineH}px; text-align:center; font-style:italic; }
-.footer { text-align:center; padding-top:24px; flex-shrink:0; }
-.badge { display:inline-block; background:rgba(102,132,104,0.3); padding:6px 22px; border-radius:16px; margin-bottom:12px; }
-.badge-text { color:#4db8a8; font-size:18px; font-weight:700; letter-spacing:0.5px; }
-.footer-arabic { color:#fff; font-size:26px; font-weight:600; direction:rtl; margin-bottom:6px; font-family:'Geeza Pro','Arabic Typesetting',serif; }
-.footer-text { color:rgba(255,255,255,0.5); font-size:17px; font-weight:500; }
-</style></head><body>
-<div class="accent-bar"></div>
-<div class="container">
-  <div class="header">
-    <div class="logo-wrap">${logoSvgEncoded}</div>
-    <span class="app-name">Hidayah</span>
-  </div>
-  <div class="divider"></div>
-  <div class="content">
-    <div class="arabic">${arabicWithMark}</div>
-    ${hasTranslation ? `
-    <div class="trans-wrap">
-      <div class="trans-line"></div>
-      <div class="trans">${escHtml(data.translation!)}</div>
-    </div>` : ''}
-  </div>
-  <div class="divider"></div>
-  <div class="footer">
-    <div class="badge"><span class="badge-text">${escHtml(data.verseKey)}</span></div>
-    <div class="footer-arabic">${escHtml(data.surahNameArabic)}</div>
-    <div class="footer-text">Surah ${escHtml(data.surahName)}, Vers ${data.verseNumber}</div>
-  </div>
-</div>
+* { margin:0; padding:0; }
+body { width:1080px; height:1350px; overflow:hidden; background:#000; }
+canvas { display:block; }
+</style>
+</head>
+<body>
+<canvas id="c" width="1080" height="1350"></canvas>
 <script>
-setTimeout(function() {
+(async function() {
   try {
-    var c = document.createElement('canvas');
-    c.width = 1080; c.height = 1350;
-    var ctx = c.getContext('2d');
-    var svgData = '<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1350">' +
-      '<foreignObject width="100%" height="100%">' +
-      new XMLSerializer().serializeToString(document.documentElement) +
-      '</foreignObject></svg>';
-    var img = new Image();
-    img.onload = function() {
-      ctx.drawImage(img, 0, 0);
-      var base64 = c.toDataURL('image/png').split(',')[1];
-      window.ReactNativeWebView.postMessage(base64);
-    };
-    img.onerror = function() {
-      window.ReactNativeWebView.postMessage('ERROR');
-    };
-    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgData);
+    var DATA = ${scriptPayload};
+    var LOGO_B64 = ${safeJson(logoBase64)};
+
+    var canvas = document.getElementById('c');
+    var ctx = canvas.getContext('2d');
+    var W = 1080, H = 1350;
+
+    // ── 1. Load logo image ──────────────────────────────────────────────────
+    var logo = await new Promise(function(res, rej) {
+      var img = new Image();
+      img.onload = function() { res(img); };
+      img.onerror = rej;
+      img.src = 'data:image/png;base64,' + LOGO_B64;
+    });
+
+    // ── 2. Load QCF V2 fonts ────────────────────────────────────────────────
+    var uniquePages = [...new Set(DATA.qcfWords.map(function(w) { return w.pageNumber; }))];
+    await Promise.all(uniquePages.map(async function(n) {
+      var name = 'QCFp' + String(n).padStart(3, '0');
+      var url  = 'https://verses.quran.foundation/fonts/quran/hafs/v2/ttf/p' + n + '.ttf';
+      var f = new FontFace(name, 'url(' + url + ')');
+      document.fonts.add(f);
+      await f.load();
+    }));
+
+    // ── 3. Background ───────────────────────────────────────────────────────
+    ctx.fillStyle = '#0C1A17';
+    ctx.fillRect(0, 0, W, H);
+
+    // ── 4. Accent bar ───────────────────────────────────────────────────────
+    ctx.fillStyle = '#24645d';
+    ctx.fillRect(0, 0, W, 6);
+
+    // ── 5. Header (logo + app name) ─────────────────────────────────────────
+    var PAD_H = 56, PAD_TOP = 48;
+    var LOGO_SIZE = 56, LOGO_RADIUS = 14;
+    var lx = PAD_H, ly = PAD_TOP;
+
+    // Rounded-rect clip for icon
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(lx + LOGO_RADIUS, ly);
+    ctx.lineTo(lx + LOGO_SIZE - LOGO_RADIUS, ly);
+    ctx.quadraticCurveTo(lx + LOGO_SIZE, ly, lx + LOGO_SIZE, ly + LOGO_RADIUS);
+    ctx.lineTo(lx + LOGO_SIZE, ly + LOGO_SIZE - LOGO_RADIUS);
+    ctx.quadraticCurveTo(lx + LOGO_SIZE, ly + LOGO_SIZE, lx + LOGO_SIZE - LOGO_RADIUS, ly + LOGO_SIZE);
+    ctx.lineTo(lx + LOGO_RADIUS, ly + LOGO_SIZE);
+    ctx.quadraticCurveTo(lx, ly + LOGO_SIZE, lx, ly + LOGO_SIZE - LOGO_RADIUS);
+    ctx.lineTo(lx, ly + LOGO_RADIUS);
+    ctx.quadraticCurveTo(lx, ly, lx + LOGO_RADIUS, ly);
+    ctx.closePath();
+    ctx.clip();
+    ctx.drawImage(logo, lx, ly, LOGO_SIZE, LOGO_SIZE);
+    ctx.restore();
+
+    // App name
+    ctx.fillStyle = '#fff';
+    ctx.font = '700 28px -apple-system, system-ui, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('Hidayah', lx + LOGO_SIZE + 16, ly + LOGO_SIZE / 2);
+
+    // ── 6. Top divider ──────────────────────────────────────────────────────
+    var DIV1_Y = PAD_TOP + LOGO_SIZE + 24;
+    ctx.fillStyle = 'rgba(36,100,93,0.4)';
+    ctx.fillRect(PAD_H, DIV1_Y, W - PAD_H * 2, 1);
+
+    // ── 7. Footer (calculate height, draw later) ────────────────────────────
+    var PAD_BOT = 44;
+    var BADGE_FONT = 18, BADGE_PAD_H = 22, BADGE_PAD_V = 8;
+    var FOOTER_ARABIC_SIZE = 26, FOOTER_TEXT_SIZE = 17;
+    var FOOTER_GAP = 12;
+
+    ctx.font = '700 ' + BADGE_FONT + 'px -apple-system, sans-serif';
+    var badgeTextW = ctx.measureText(DATA.verseKey).width;
+    var badgeW = badgeTextW + BADGE_PAD_H * 2;
+    var badgeH = BADGE_FONT + BADGE_PAD_V * 2;
+
+    var footerH = badgeH + FOOTER_GAP + Math.round(FOOTER_ARABIC_SIZE * 1.4)
+                + FOOTER_GAP + Math.round(FOOTER_TEXT_SIZE * 1.4);
+
+    // Bottom divider
+    var DIV2_Y = H - PAD_BOT - 24 - footerH - 1;
+    ctx.fillStyle = 'rgba(36,100,93,0.4)';
+    ctx.fillRect(PAD_H, DIV2_Y, W - PAD_H * 2, 1);
+
+    // Draw footer elements
+    var footerY = DIV2_Y + 1 + 24;
+
+    // Badge pill
+    var bx = (W - badgeW) / 2;
+    ctx.fillStyle = 'rgba(36,100,93,0.3)';
+    ctx.beginPath();
+    var br = 16;
+    ctx.moveTo(bx + br, footerY);
+    ctx.lineTo(bx + badgeW - br, footerY);
+    ctx.quadraticCurveTo(bx + badgeW, footerY, bx + badgeW, footerY + br);
+    ctx.lineTo(bx + badgeW, footerY + badgeH - br);
+    ctx.quadraticCurveTo(bx + badgeW, footerY + badgeH, bx + badgeW - br, footerY + badgeH);
+    ctx.lineTo(bx + br, footerY + badgeH);
+    ctx.quadraticCurveTo(bx, footerY + badgeH, bx, footerY + badgeH - br);
+    ctx.lineTo(bx, footerY + br);
+    ctx.quadraticCurveTo(bx, footerY, bx + br, footerY);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = '#cab488';
+    ctx.font = '700 ' + BADGE_FONT + 'px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(DATA.verseKey, W / 2, footerY + badgeH / 2);
+
+    // Surah name (Arabic)
+    var arabicFooterY = footerY + badgeH + FOOTER_GAP + FOOTER_ARABIC_SIZE;
+    ctx.fillStyle = '#fff';
+    ctx.font = '600 ' + FOOTER_ARABIC_SIZE + "px 'Geeza Pro', 'Arabic Typesetting', serif";
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText(DATA.surahNameArabic, W / 2, arabicFooterY);
+
+    // Footer text
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.font = '500 ' + FOOTER_TEXT_SIZE + 'px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(
+      'Surah ' + DATA.surahName + ', Vers ' + DATA.verseNumber,
+      W / 2,
+      arabicFooterY + FOOTER_GAP + FOOTER_TEXT_SIZE,
+    );
+
+    // ── 8. Content area — Arabic + translation ──────────────────────────────
+    var contentTop = DIV1_Y + 1 + 32;
+    var contentBot = DIV2_Y - 32;
+    var contentH   = contentBot - contentTop;
+    var TEXT_MAX_W = W - PAD_H * 2 - 16;
+
+    // Choose font size based on word count
+    var wordCount = DATA.qcfWords.length;
+    var ARABIC_SIZE = wordCount > 35 ? 48 : wordCount > 22 ? 60 : wordCount > 12 ? 72 : 82;
+    var LINE_H = Math.round(ARABIC_SIZE * 1.75);
+
+    // ── Word-wrap (RTL: first word = rightmost) ─────────────────────────────
+    var wrapLines = [];
+    var curWords = [], curW = 0;
+    for (var wi = 0; wi < DATA.qcfWords.length; wi++) {
+      var wrd = DATA.qcfWords[wi];
+      var fontName = 'QCFp' + String(wrd.pageNumber).padStart(3, '0');
+      ctx.font = ARABIC_SIZE + 'px ' + fontName;
+      var mw = ctx.measureText(wrd.code_v2).width;
+      if (curW + mw > TEXT_MAX_W && curWords.length > 0) {
+        wrapLines.push({ words: curWords, totalW: curW });
+        curWords = []; curW = 0;
+      }
+      curWords.push({ code_v2: wrd.code_v2, pageNumber: wrd.pageNumber, w: mw });
+      curW += mw;
+    }
+    if (curWords.length > 0) wrapLines.push({ words: curWords, totalW: curW });
+
+    // ── Translation wrap ────────────────────────────────────────────────────
+    var transLines = [];
+    var TRANS_SIZE = 0, TRANS_LINE_H = 0;
+    if (DATA.translation) {
+      var tLen = DATA.translation.length;
+      TRANS_SIZE = tLen > 500 ? 28 : tLen > 280 ? 34 : 40;
+      TRANS_LINE_H = Math.round(TRANS_SIZE * 1.65);
+      ctx.font = 'italic ' + TRANS_SIZE + 'px -apple-system, sans-serif';
+      var tWords = DATA.translation.split(' ');
+      var tCur = '';
+      for (var ti = 0; ti < tWords.length; ti++) {
+        var test = tCur ? tCur + ' ' + tWords[ti] : tWords[ti];
+        if (ctx.measureText(test).width > TEXT_MAX_W && tCur) {
+          transLines.push(tCur);
+          tCur = tWords[ti];
+        } else {
+          tCur = test;
+        }
+      }
+      if (tCur) transLines.push(tCur);
+    }
+
+    // ── Vertical centering ──────────────────────────────────────────────────
+    var arabicBlockH = wrapLines.length * LINE_H;
+    var transBlockH  = transLines.length > 0
+      ? 20 + 2 + 20 + transLines.length * TRANS_LINE_H
+      : 0;
+    var totalTextH = arabicBlockH + transBlockH;
+    var textStartY = contentTop + Math.max(0, (contentH - totalTextH) / 2);
+
+    // ── Draw Arabic lines (RTL) ─────────────────────────────────────────────
+    for (var li = 0; li < wrapLines.length; li++) {
+      var line = wrapLines[li];
+      var baseY = textStartY + li * LINE_H + ARABIC_SIZE;
+      // Start from right edge of the centered block
+      var x = (W + line.totalW) / 2;
+      for (var gi = 0; gi < line.words.length; gi++) {
+        var g = line.words[gi];
+        var gFont = 'QCFp' + String(g.pageNumber).padStart(3, '0');
+        ctx.font = ARABIC_SIZE + 'px ' + gFont;
+        ctx.fillStyle = '#fff';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillText(g.code_v2, x - g.w, baseY);
+        x -= g.w;
+      }
+    }
+
+    // ── Draw translation ────────────────────────────────────────────────────
+    if (transLines.length > 0) {
+      var transBlockY = textStartY + arabicBlockH + 20;
+      // Separator line
+      ctx.fillStyle = '#cab488';
+      ctx.fillRect((W - 56) / 2, transBlockY, 56, 2);
+      ctx.fillStyle = 'rgba(255,255,255,0.75)';
+      ctx.font = 'italic ' + TRANS_SIZE + 'px -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'alphabetic';
+      for (var tli = 0; tli < transLines.length; tli++) {
+        ctx.fillText(
+          transLines[tli],
+          W / 2,
+          transBlockY + 2 + 20 + tli * TRANS_LINE_H + TRANS_SIZE,
+        );
+      }
+    }
+
+    // ── 9. Export ───────────────────────────────────────────────────────────
+    var base64 = canvas.toDataURL('image/png').split(',')[1];
+    window.ReactNativeWebView.postMessage(base64);
+
   } catch(e) {
-    window.ReactNativeWebView.postMessage('ERROR');
+    window.ReactNativeWebView.postMessage('ERROR:' + e.message);
   }
-}, 200);
+})();
 </script>
 </body></html>`;
 }
@@ -188,24 +326,26 @@ const VerseShareCard = forwardRef<VerseShareCardRef, object>(
     const onMessage = useCallback((e: WebViewMessageEvent) => {
       const msg = e.nativeEvent.data;
       if (resolveRef.current) {
-        resolveRef.current(msg === 'ERROR' ? null : msg);
+        resolveRef.current(msg.startsWith('ERROR') ? null : msg);
         resolveRef.current = null;
       }
       setHtml(null);
     }, []);
 
     const capture = useCallback(async (data: VerseShareData) => {
-      const htmlContent = buildHtml(data);
+      const logoBase64 = await loadLogoBase64();
+      const htmlContent = buildHtml(data, logoBase64);
       setHtml(htmlContent);
 
       const base64 = await new Promise<string | null>((resolve) => {
         resolveRef.current = resolve;
+        // 10s timeout — font loading from CDN can be slow on first share
         setTimeout(() => {
           if (resolveRef.current) {
             resolveRef.current(null);
             resolveRef.current = null;
           }
-        }, 6000);
+        }, 10000);
       });
 
       setHtml(null);
@@ -231,6 +371,7 @@ const VerseShareCard = forwardRef<VerseShareCardRef, object>(
           onMessage={onMessage}
           javaScriptEnabled
           scrollEnabled={false}
+          allowsInlineMediaPlayback={false}
         />
       </View>
     );

@@ -1,7 +1,7 @@
 /**
  * app/hadith.tsx — Hadithsamling
  *
- * Full hadith browser with list + slide-in detail view.
+ * Full hadith browser with list + slide-in detail view + favorites.
  * Supports deep-linking from home: /hadith?hadithNr=1
  *
  * Navigation params:
@@ -14,16 +14,18 @@ import React, {
 import {
   View, Text, FlatList, TouchableOpacity, TextInput,
   Animated, Easing, PanResponder, Dimensions, StyleSheet,
-  Share,
+  Share, Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, Stack, useLocalSearchParams } from 'expo-router';
 import BackButton from '../components/BackButton';
 import Svg, { Path } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { BlurView } from 'expo-blur';
 import { useTheme } from '../context/ThemeContext';
 import ArabicText from '../components/ArabicText';
 import hadithData from '../data/hadithData.json';
+import HadithShareCard, { type HadithShareCardRef } from '../components/HadithShareCard';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -38,8 +40,9 @@ const ALL_HADITHS: Hadith[] = hadithData as Hadith[];
 const SCREEN_W = Dimensions.get('window').width;
 
 // Font size persistence
-const HADITH_FS_ARABIC  = 'hadith-arabic-font-size-v1';
-const HADITH_FS_SVENSKA = 'hadith-svenska-font-size-v1';
+const HADITH_FS_ARABIC   = 'hadith-arabic-font-size-v1';
+const HADITH_FS_SVENSKA  = 'hadith-svenska-font-size-v1';
+const HADITH_FAVORITES_KEY = 'hadith_favorites_v1';
 const HADITH_ARABIC_STEPS  = [14, 18, 22, 26, 32, 40, 50] as const; // default idx 1 (18px)
 const HADITH_SVENSKA_STEPS = [11, 14, 16, 18, 22, 27, 32] as const; // default idx 2 (16px)
 
@@ -52,6 +55,23 @@ function normalize(s: string): string {
     .replace(/\s+/g, ' ')
     .trim()
     .toLowerCase();
+}
+
+// ── Heart SVG ─────────────────────────────────────────────────────────────────
+
+function HeartIcon({ filled, color, size = 22 }: { filled: boolean; color: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path
+        d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
+        fill={filled ? color : 'none'}
+        stroke={color}
+        strokeWidth={filled ? 0 : 1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
 }
 
 // ── Slide screen hook ─────────────────────────────────────────────────────────
@@ -149,17 +169,31 @@ function HadithFontSizeRow({ label, index, steps, onDecrease, onIncrease, T, las
 function HadithDetail({
   hadith,
   onClose,
+  isFavorite,
+  onToggleFavorite,
 }: {
   hadith: Hadith;
   onClose: () => void;
+  isFavorite: boolean;
+  onToggleFavorite: (nr: number) => void;
 }) {
   const { theme: T, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const { translateX, edgePan, goBack } = useSlideIn(onClose);
 
-  const [arabicIdx,    setArabicIdx]    = useState(1); // default 18px
-  const [svenskaIdx,   setSvenskaIdx]   = useState(2); // default 16px
-  const [showFontPanel, setShowFontPanel] = useState(false);
+  const [arabicIdx,      setArabicIdx]      = useState(1);
+  const [svenskaIdx,     setSvenskaIdx]     = useState(2);
+  const [showFontPanel,  setShowFontPanel]  = useState(false);
+  const [showShareMenu,  setShowShareMenu]  = useState(false);
+  const [sharingImage,   setSharingImage]   = useState(false);
+
+  // Heart bounce animation
+  const heartScale   = useRef(new Animated.Value(1)).current;
+  // Share menu slide-up animation
+  const menuSlideY   = useRef(new Animated.Value(160)).current;
+  const menuOpacity  = useRef(new Animated.Value(0)).current;
+  // Hidden WebView share card
+  const shareCardRef = useRef<HadithShareCardRef>(null);
 
   useEffect(() => {
     Promise.all([
@@ -179,50 +213,90 @@ function HadithDetail({
   const arabicFs  = HADITH_ARABIC_STEPS[arabicIdx];
   const svenskaFs = HADITH_SVENSKA_STEPS[svenskaIdx];
 
-  const handleShare = useCallback(async () => {
+  // Open share menu with animation
+  const openShareMenu = useCallback(() => {
+    setShowShareMenu(true);
+    menuSlideY.setValue(160);
+    menuOpacity.setValue(0);
+    Animated.parallel([
+      Animated.timing(menuSlideY,  { toValue: 0,   duration: 280, useNativeDriver: true, easing: Easing.out(Easing.cubic) }),
+      Animated.timing(menuOpacity, { toValue: 1,   duration: 200, useNativeDriver: true }),
+    ]).start();
+  }, []);
+
+  const closeShareMenu = useCallback(() => {
+    Animated.parallel([
+      Animated.timing(menuSlideY,  { toValue: 160, duration: 220, useNativeDriver: true, easing: Easing.in(Easing.cubic) }),
+      Animated.timing(menuOpacity, { toValue: 0,   duration: 180, useNativeDriver: true }),
+    ]).start(() => setShowShareMenu(false));
+  }, []);
+
+  const handleShareText = useCallback(async () => {
+    closeShareMenu();
     try {
-      await Share.share({
-        message: `${hadith.svenska}\n\n— ${hadith.källa}`,
-      });
+      await Share.share({ message: `${hadith.svenska}\n\n— ${hadith.källa}` });
     } catch {}
+  }, [hadith, closeShareMenu]);
+
+  const handleShareImage = useCallback(async () => {
+    closeShareMenu();
+    setSharingImage(true);
+    try {
+      await shareCardRef.current?.capture({
+        hadithNr: hadith.hadith_nr,
+        arabiska: hadith.arabiska,
+        svenska:  hadith.svenska,
+        källa:    hadith.källa,
+      });
+    } finally {
+      setSharingImage(false);
+    }
   }, [hadith]);
+
+  const handleToggleFavorite = useCallback(() => {
+    Animated.sequence([
+      Animated.timing(heartScale, { toValue: 1.4, duration: 110, useNativeDriver: true, easing: Easing.out(Easing.quad) }),
+      Animated.timing(heartScale, { toValue: 1,   duration: 180, useNativeDriver: true, easing: Easing.out(Easing.cubic) }),
+    ]).start();
+    onToggleFavorite(hadith.hadith_nr);
+  }, [hadith.hadith_nr, onToggleFavorite]);
+
+  const heartColor = isFavorite ? '#FF3B30' : T.textMuted;
 
   return (
     <Animated.View
-      style={[
-        StyleSheet.absoluteFill,
-        { backgroundColor: T.bg, transform: [{ translateX }] },
-      ]}
+      style={[StyleSheet.absoluteFill, { backgroundColor: T.bg, transform: [{ translateX }] }]}
       {...edgePan.panHandlers}
     >
       <Stack.Screen options={{ headerShown: false }} />
 
       {/* Header */}
-      <View
-        style={[
-          styles.detailHeader,
-          { paddingTop: insets.top + 8, borderBottomColor: T.border },
-        ]}
-      >
+      <View style={[styles.detailHeader, { paddingTop: insets.top + 8, borderBottomColor: T.border }]}>
         <TouchableOpacity
           onPress={goBack}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           style={styles.backBtn}
         >
           <Svg width={9} height={15} viewBox="0 0 9 15" fill="none">
-            <Path
-              d="M8 1L1 7.5L8 14"
-              stroke={T.text}
-              strokeWidth={2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
+            <Path d="M8 1L1 7.5L8 14" stroke={T.text} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
           </Svg>
         </TouchableOpacity>
+
         <Text style={[styles.detailHeaderTitle, { color: T.text }]}>
           Hadith {hadith.hadith_nr}
         </Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          {/* Heart — favorite toggle */}
+          <TouchableOpacity
+            onPress={handleToggleFavorite}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Animated.View style={{ transform: [{ scale: heartScale }] }}>
+              <HeartIcon filled={isFavorite} color={heartColor} size={22} />
+            </Animated.View>
+          </TouchableOpacity>
+
           {/* Gear — font size panel toggle */}
           <TouchableOpacity
             onPress={() => setShowFontPanel(p => !p)}
@@ -235,15 +309,17 @@ function HadithDetail({
               <Path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
             </Svg>
           </TouchableOpacity>
-          {/* Share */}
+
+          {/* Share — opens submenu */}
           <TouchableOpacity
-            onPress={handleShare}
+            onPress={openShareMenu}
+            disabled={sharingImage}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
               <Path
                 d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13"
-                stroke={T.accent}
+                stroke={sharingImage ? T.textMuted : T.accent}
                 strokeWidth={2}
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -265,55 +341,200 @@ function HadithDetail({
       <FlatList
         data={[hadith]}
         keyExtractor={() => String(hadith.hadith_nr)}
-        contentContainerStyle={{
-          paddingHorizontal: 20,
-          paddingTop: 24,
-          paddingBottom: insets.bottom + 120,
-        }}
+        contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 24, paddingBottom: insets.bottom + 120 }}
         showsVerticalScrollIndicator={false}
         renderItem={() => (
           <View style={{ gap: 20 }}>
-            {/* Hadith number badge */}
             <View style={[styles.nrBadge, { backgroundColor: T.accent + '18' }]}>
-              <Text style={[styles.nrBadgeText, { color: T.accent }]}>
-                #{hadith.hadith_nr}
-              </Text>
+              <Text style={[styles.nrBadgeText, { color: T.accent }]}>#{hadith.hadith_nr}</Text>
             </View>
-
-            {/* Arabic text */}
-            <View
-              style={[
-                styles.arabicCard,
-                { backgroundColor: T.card, borderColor: T.border },
-              ]}
-            >
+            <View style={[styles.arabicCard, { backgroundColor: T.card, borderColor: T.border }]}>
               <ArabicText style={{ fontSize: arabicFs, lineHeight: Math.round(arabicFs * 1.8), fontWeight: '400', textAlign: 'right', writingDirection: 'rtl', color: T.text }}>
                 {hadith.arabiska}
               </ArabicText>
             </View>
-
-            {/* Swedish text */}
             <Text style={{ fontSize: svenskaFs, lineHeight: Math.round(svenskaFs * 1.6), fontWeight: '400', color: T.text }}>
               {hadith.svenska}
             </Text>
-
-            {/* Source */}
-            <View
-              style={[
-                styles.sourceRow,
-                { borderTopColor: T.border },
-              ]}
-            >
-              <Text style={[styles.sourceLabel, { color: T.textMuted }]}>
-                Källa
-              </Text>
-              <Text style={[styles.sourceText, { color: T.textMuted }]}>
-                {hadith.källa}
-              </Text>
+            <View style={[styles.sourceRow, { borderTopColor: T.border }]}>
+              <Text style={[styles.sourceLabel, { color: T.textMuted }]}>Källa</Text>
+              <Text style={[styles.sourceText, { color: T.textMuted }]}>{hadith.källa}</Text>
             </View>
           </View>
         )}
       />
+
+      {/* Share menu overlay */}
+      {showShareMenu && (
+        <TouchableOpacity
+          style={StyleSheet.absoluteFill}
+          activeOpacity={1}
+          onPress={closeShareMenu}
+        >
+          <Animated.View style={[StyleSheet.absoluteFill, { opacity: menuOpacity, backgroundColor: 'rgba(0,0,0,0.45)' }]} />
+        </TouchableOpacity>
+      )}
+      {showShareMenu && (
+        <Animated.View
+          style={[
+            styles.shareMenu,
+            {
+              bottom: insets.bottom + 24,
+              transform: [{ translateY: menuSlideY }],
+              opacity: menuOpacity,
+            },
+          ]}
+          pointerEvents="box-none"
+        >
+          <View style={[styles.shareMenuCard, { borderColor: T.border }]}>
+            <BlurView
+              intensity={isDark ? 60 : 80}
+              tint={isDark ? 'dark' : 'light'}
+              style={StyleSheet.absoluteFill}
+            />
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? 'rgba(28,28,30,0.7)' : 'rgba(255,255,255,0.7)', borderRadius: 16 }]} />
+
+            {/* Bild */}
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={handleShareImage}
+              style={[styles.shareMenuItem, { borderBottomWidth: 0.5, borderBottomColor: T.border }]}
+            >
+              <View style={[styles.shareMenuIcon, { backgroundColor: T.accent + '20' }]}>
+                <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+                  <Path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke={T.accent} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+                  <Path d="M17 8l-5-5-5 5M12 3v12" stroke={T.accent} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+                </Svg>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.shareMenuLabel, { color: T.text }]}>Bild</Text>
+                <Text style={[styles.shareMenuSub, { color: T.textMuted }]}>Dela som vacker bild</Text>
+              </View>
+              <Svg width={7} height={12} viewBox="0 0 7 12" fill="none">
+                <Path d="M1 1l5 5-5 5" stroke={T.textMuted} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+              </Svg>
+            </TouchableOpacity>
+
+            {/* Text */}
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={handleShareText}
+              style={styles.shareMenuItem}
+            >
+              <View style={[styles.shareMenuIcon, { backgroundColor: T.accent + '20' }]}>
+                <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+                  <Path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke={T.accent} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+                </Svg>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.shareMenuLabel, { color: T.text }]}>Text</Text>
+                <Text style={[styles.shareMenuSub, { color: T.textMuted }]}>Dela som textmeddelande</Text>
+              </View>
+              <Svg width={7} height={12} viewBox="0 0 7 12" fill="none">
+                <Path d="M1 1l5 5-5 5" stroke={T.textMuted} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+              </Svg>
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
+      )}
+
+      {/* Hidden share card — renders off-screen WebView when capturing */}
+      <HadithShareCard ref={shareCardRef} />
+    </Animated.View>
+  );
+}
+
+// ── Favorites screen ──────────────────────────────────────────────────────────
+
+function HadithFavorites({
+  favorites,
+  onClose,
+  onSelectHadith,
+  onToggleFavorite,
+}: {
+  favorites: Set<number>;
+  onClose: () => void;
+  onSelectHadith: (h: Hadith) => void;
+  onToggleFavorite: (nr: number) => void;
+}) {
+  const { theme: T } = useTheme();
+  const insets = useSafeAreaInsets();
+  const { translateX, edgePan, goBack } = useSlideIn(onClose);
+
+  const favoriteHadiths = useMemo(
+    () => ALL_HADITHS.filter(h => favorites.has(h.hadith_nr)),
+    [favorites],
+  );
+
+  return (
+    <Animated.View
+      style={[StyleSheet.absoluteFill, { backgroundColor: T.bg, transform: [{ translateX }] }]}
+      {...edgePan.panHandlers}
+    >
+      {/* Header */}
+      <View style={[styles.detailHeader, { paddingTop: insets.top + 8, borderBottomColor: T.border }]}>
+        <TouchableOpacity
+          onPress={goBack}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          style={styles.backBtn}
+        >
+          <Svg width={9} height={15} viewBox="0 0 9 15" fill="none">
+            <Path d="M8 1L1 7.5L8 14" stroke={T.text} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+          </Svg>
+        </TouchableOpacity>
+        <Text style={[styles.detailHeaderTitle, { color: T.text }]}>Favoriter</Text>
+        <View style={{ width: 32 }} />
+      </View>
+
+      {favoriteHadiths.length === 0 ? (
+        <View style={styles.emptyState}>
+          <HeartIcon filled={false} color={T.textMuted} size={44} />
+          <Text style={[styles.emptyText, { color: T.textMuted, marginTop: 16 }]}>
+            Inga favoriter ännu
+          </Text>
+          <Text style={[{ color: T.textMuted, fontSize: 13, textAlign: 'center', lineHeight: 20, opacity: 0.7, paddingHorizontal: 32, marginTop: 6 }]}>
+            Tryck på hjärtat i en hadith för att spara den här
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={favoriteHadiths}
+          keyExtractor={h => String(h.hadith_nr)}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: insets.bottom + 120 }}
+          showsVerticalScrollIndicator={false}
+          ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
+          ListHeaderComponent={
+            <Text style={[styles.countLabel, { color: T.textMuted, paddingHorizontal: 4, marginBottom: 4 }]}>
+              {favoriteHadiths.length} {favoriteHadiths.length === 1 ? 'favorit' : 'favoriter'}
+            </Text>
+          }
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => onSelectHadith(item)}
+              style={[styles.listItem, { backgroundColor: T.card, borderColor: T.border }]}
+            >
+              <View style={[styles.listNrBadge, { backgroundColor: T.accent + '18' }]}>
+                <Text style={[styles.listNrText, { color: T.accent }]}>{item.hadith_nr}</Text>
+              </View>
+              <View style={styles.listContent}>
+                <Text style={[styles.listSwedish, { color: T.text }]} numberOfLines={2}>
+                  {item.svenska}
+                </Text>
+                <Text style={[styles.listSource, { color: T.textMuted }]} numberOfLines={1}>
+                  {item.källa}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => onToggleFavorite(item.hadith_nr)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <HeartIcon filled color="#FF3B30" size={18} />
+              </TouchableOpacity>
+            </TouchableOpacity>
+          )}
+        />
+      )}
     </Animated.View>
   );
 }
@@ -341,27 +562,15 @@ function HadithListItem({
         </Text>
       </View>
       <View style={styles.listContent}>
-        <Text
-          style={[styles.listSwedish, { color: T.text }]}
-          numberOfLines={2}
-        >
+        <Text style={[styles.listSwedish, { color: T.text }]} numberOfLines={2}>
           {hadith.svenska}
         </Text>
-        <Text
-          style={[styles.listSource, { color: T.textMuted }]}
-          numberOfLines={1}
-        >
+        <Text style={[styles.listSource, { color: T.textMuted }]} numberOfLines={1}>
           {hadith.källa}
         </Text>
       </View>
       <Svg width={7} height={12} viewBox="0 0 7 12" fill="none">
-        <Path
-          d="M1 1l5 5-5 5"
-          stroke={T.textMuted}
-          strokeWidth={1.8}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
+        <Path d="M1 1l5 5-5 5" stroke={T.textMuted} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
       </Svg>
     </TouchableOpacity>
   );
@@ -375,14 +584,42 @@ export default function HadithScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ hadithNr?: string }>();
 
-  const [query, setQuery] = useState('');
-  const [selectedHadith, setSelectedHadith] = useState<Hadith | null>(null);
+  const [query,           setQuery]           = useState('');
+  const [selectedHadith,  setSelectedHadith]  = useState<Hadith | null>(null);
+  const [showFavorites,   setShowFavorites]   = useState(false);
+  const [favorites,       setFavorites]       = useState<Set<number>>(new Set());
+
+  // Load favorites from AsyncStorage on mount
+  useEffect(() => {
+    AsyncStorage.getItem(HADITH_FAVORITES_KEY).then(raw => {
+      if (raw) {
+        try {
+          const arr: number[] = JSON.parse(raw);
+          setFavorites(new Set(arr));
+        } catch {}
+      }
+    });
+  }, []);
+
+  // Toggle a hadith as favorite and persist
+  const toggleFavorite = useCallback((hadithNr: number) => {
+    setFavorites(prev => {
+      const next = new Set(prev);
+      if (next.has(hadithNr)) {
+        next.delete(hadithNr);
+      } else {
+        next.add(hadithNr);
+      }
+      AsyncStorage.setItem(HADITH_FAVORITES_KEY, JSON.stringify([...next]));
+      return next;
+    });
+  }, []);
 
   // Deep-link: open detail directly if hadithNr param present
   useEffect(() => {
     if (params.hadithNr) {
       const nr = parseInt(params.hadithNr, 10);
-      const found = ALL_HADITHS.find((h) => h.hadith_nr === nr);
+      const found = ALL_HADITHS.find(h => h.hadith_nr === nr);
       if (found) setSelectedHadith(found);
     }
   }, [params.hadithNr]);
@@ -390,7 +627,7 @@ export default function HadithScreen() {
   const filtered = useMemo(() => {
     if (!query.trim()) return ALL_HADITHS;
     const q = normalize(query);
-    return ALL_HADITHS.filter((h) =>
+    return ALL_HADITHS.filter(h =>
       normalize(h.svenska).includes(q) ||
       normalize(h.källa).includes(q) ||
       normalize(h.arabiska).includes(q) ||
@@ -398,22 +635,27 @@ export default function HadithScreen() {
     );
   }, [query]);
 
-  const closeDetail = useCallback(() => setSelectedHadith(null), []);
+  const closeDetail    = useCallback(() => setSelectedHadith(null), []);
+  const closeFavorites = useCallback(() => setShowFavorites(false), []);
+
+  const hasFavorites = favorites.size > 0;
 
   return (
     <View style={[styles.root, { backgroundColor: T.bg }]}>
       <Stack.Screen options={{ headerShown: false }} />
 
       {/* Header */}
-      <View
-        style={[
-          styles.header,
-          { paddingTop: insets.top + 8, borderBottomColor: T.border },
-        ]}
-      >
+      <View style={[styles.header, { paddingTop: insets.top + 8, borderBottomColor: T.border }]}>
         <BackButton onPress={() => router.back()} />
         <Text style={[styles.headerTitle, { color: T.text }]}>Hadithsamling</Text>
-        <View style={{ width: 32 }} />
+        {/* Heart — opens favorites */}
+        <TouchableOpacity
+          onPress={() => setShowFavorites(true)}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          style={{ width: 32, alignItems: 'flex-end' }}
+        >
+          <HeartIcon filled={hasFavorites} color={hasFavorites ? '#FF3B30' : T.textMuted} size={22} />
+        </TouchableOpacity>
       </View>
 
       {/* Search */}
@@ -422,10 +664,7 @@ export default function HadithScreen() {
           <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
             <Path
               d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-              stroke={T.textMuted}
-              strokeWidth={2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
+              stroke={T.textMuted} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
             />
           </Svg>
           <TextInput
@@ -456,19 +695,12 @@ export default function HadithScreen() {
       {/* List */}
       <FlatList
         data={filtered}
-        keyExtractor={(h) => String(h.hadith_nr)}
-        contentContainerStyle={{
-          paddingHorizontal: 16,
-          paddingBottom: insets.bottom + 120,
-        }}
+        keyExtractor={h => String(h.hadith_nr)}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 120 }}
         showsVerticalScrollIndicator={false}
         ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
         renderItem={({ item }) => (
-          <HadithListItem
-            hadith={item}
-            onPress={() => setSelectedHadith(item)}
-            T={T}
-          />
+          <HadithListItem hadith={item} onPress={() => setSelectedHadith(item)} T={T} />
         )}
         ListEmptyComponent={
           <View style={styles.emptyState}>
@@ -482,9 +714,24 @@ export default function HadithScreen() {
         }
       />
 
-      {/* Detail overlay */}
+      {/* Favorites overlay */}
+      {showFavorites && (
+        <HadithFavorites
+          favorites={favorites}
+          onClose={closeFavorites}
+          onSelectHadith={setSelectedHadith}
+          onToggleFavorite={toggleFavorite}
+        />
+      )}
+
+      {/* Detail overlay — renders on top of everything including favorites */}
       {selectedHadith && (
-        <HadithDetail hadith={selectedHadith} onClose={closeDetail} />
+        <HadithDetail
+          hadith={selectedHadith}
+          onClose={closeDetail}
+          isFavorite={favorites.has(selectedHadith.hadith_nr)}
+          onToggleFavorite={toggleFavorite}
+        />
       )}
     </View>
   );
@@ -595,10 +842,6 @@ const styles = StyleSheet.create({
     width: 32,
     alignItems: 'flex-start',
   },
-  shareBtn: {
-    width: 32,
-    alignItems: 'flex-end',
-  },
   detailHeaderTitle: {
     fontSize: 17,
     fontWeight: '700',
@@ -619,18 +862,6 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
     padding: 18,
   },
-  arabicText: {
-    fontSize: 20,
-    lineHeight: 36,
-    fontWeight: '400',
-    textAlign: 'right',
-    writingDirection: 'rtl',
-  },
-  swedishText: {
-    fontSize: 15,
-    lineHeight: 24,
-    fontWeight: '400',
-  },
   sourceRow: {
     borderTopWidth: 0.5,
     paddingTop: 16,
@@ -647,5 +878,41 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     fontStyle: 'italic',
     opacity: 0.75,
+  },
+  // Share menu
+  shareMenu: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+  },
+  shareMenuCard: {
+    borderRadius: 16,
+    borderWidth: 0.5,
+    overflow: 'hidden',
+  },
+  shareMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  shareMenuIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  shareMenuLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  shareMenuSub: {
+    fontSize: 12,
+    fontWeight: '400',
+    opacity: 0.7,
   },
 });

@@ -123,8 +123,8 @@ export default function SettingsScreen() {
   const [kahfEnabled,            setKahfEnabled]            = useState(true);
   const [zakatEnabled,           setZakatEnabled]           = useState(false);
   const [allahNamesEnabled,      setAllahNamesEnabled]      = useState(true);
-  const [liveNotifEnabled,       setLiveNotifEnabled]       = useState(true);
-  const [upcomingReminderEnabled, setUpcomingReminderEnabled] = useState(true);
+  const [liveNotifEnabled,       setLiveNotifEnabled]       = useState(false);
+  const [upcomingReminderEnabled, setUpcomingReminderEnabled] = useState(false);
   const [preferredName,    setPreferredName]    = useState<string | null>(null);
   const [nameModalVisible, setNameModalVisible] = useState(false);
   const [nameInput,        setNameInput]        = useState('');
@@ -149,9 +149,9 @@ export default function SettingsScreen() {
       const allahNames = await AsyncStorage.getItem('allahNamesNotificationEnabled');
       setAllahNamesEnabled(allahNames !== 'false'); // null (never set) = default on
       const liveNotif = await AsyncStorage.getItem(LIVE_NOTIF_ENABLED_KEY);
-      setLiveNotifEnabled(liveNotif !== 'false'); // null (never set) = default on
+      setLiveNotifEnabled(liveNotif === 'true'); // null (never set) = default off
       const upcomingRemind = await AsyncStorage.getItem(UPCOMING_REMIND_ENABLED_KEY);
-      setUpcomingReminderEnabled(upcomingRemind !== 'false'); // null (never set) = default on
+      setUpcomingReminderEnabled(upcomingRemind === 'true'); // null (never set) = default off
       const zakat = await loadZakatReminderSettings();
       setZakatEnabled(zakat?.enabled ?? false);
       const name = await AsyncStorage.getItem('andalus_preferred_name');
@@ -468,7 +468,7 @@ export default function SettingsScreen() {
         <View style={{backgroundColor:T.card,borderRadius:14,borderWidth:0.5,borderColor:T.border,padding:16}}>
           <Text style={{fontSize:15,fontWeight:'700',color:T.text}}>Hidayah</Text>
           <Text style={{fontSize:13,color:T.textMuted,marginTop:2}}>Bönetider och Qibla-kompass</Text>
-          <Text style={{fontSize:12,color:T.textMuted,marginTop:6,opacity:0.7}}>Version 1.0.1</Text>
+          <Text style={{fontSize:12,color:T.textMuted,marginTop:6,opacity:0.7}}>Version 1.0.5</Text>
           <Text style={{fontSize:11,color:T.textMuted,marginTop:2,opacity:0.55}}>
             © {new Date().getFullYear()} Fatih Köker. Alla rättigheter förbehållna.
           </Text>

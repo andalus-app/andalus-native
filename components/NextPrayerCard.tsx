@@ -21,8 +21,10 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
+
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/context/ThemeContext';
 import { useApp } from '@/context/AppContext';
@@ -167,6 +169,48 @@ export default function NextPrayerCard() {
     return () => clearInterval(id);
   }, [computeState]);
 
+  // Animated dashOffset — smoothly interpolates the ring between 1-second ticks
+  // so it moves continuously instead of jumping once per second (ticking effect).
+  // When the prayer key changes (new interval starts), the ring plays a 2.5 s
+  // fill-up animation from empty → full before settling into normal ticking.
+  const dashOffsetAnim = useRef(new Animated.Value(0)).current;
+  const dashOffsetInitialized = useRef(false);
+  const prevPrayerKey = useRef<string | null>(null);
+
+  useEffect(() => {
+    const target = info ? CIRCUMFERENCE * (1 - info.progress) : 0;
+
+    if (!dashOffsetInitialized.current) {
+      dashOffsetAnim.setValue(target);
+      dashOffsetInitialized.current = true;
+      prevPrayerKey.current = info?.key ?? null;
+      return;
+    }
+
+    const prayerChanged = info?.key !== prevPrayerKey.current;
+    prevPrayerKey.current = info?.key ?? null;
+
+    if (prayerChanged) {
+      // New prayer interval: start from an empty ring and fill up over 2.5 s
+      dashOffsetAnim.stopAnimation();
+      dashOffsetAnim.setValue(CIRCUMFERENCE);
+      Animated.timing(dashOffsetAnim, {
+        toValue: target,
+        duration: 2500,
+        useNativeDriver: false,
+        easing: Easing.out(Easing.cubic),
+      }).start();
+    } else {
+      // Normal per-second tick: animate smoothly to next position
+      Animated.timing(dashOffsetAnim, {
+        toValue: target,
+        duration: 950,
+        useNativeDriver: false,
+        easing: Easing.linear,
+      }).start();
+    }
+  }, [info]);
+
   // ── Derived display values ─────────────────────────────────────────────────
 
   const goldColor = isDark ? '#cab488' : T.accent;
@@ -250,7 +294,7 @@ export default function NextPrayerCard() {
               fill="none"
             />
             {/* Outer glow */}
-            <Circle
+            <AnimatedCircle
               cx={RING_SIZE / 2}
               cy={RING_SIZE / 2}
               r={RING_RADIUS}
@@ -259,12 +303,12 @@ export default function NextPrayerCard() {
               strokeOpacity={0.13}
               fill="none"
               strokeDasharray={CIRCUMFERENCE}
-              strokeDashoffset={dashOffset}
+              strokeDashoffset={dashOffsetAnim}
               strokeLinecap="round"
               transform={`rotate(-90, ${RING_SIZE / 2}, ${RING_SIZE / 2})`}
             />
             {/* Inner glow */}
-            <Circle
+            <AnimatedCircle
               cx={RING_SIZE / 2}
               cy={RING_SIZE / 2}
               r={RING_RADIUS}
@@ -273,12 +317,12 @@ export default function NextPrayerCard() {
               strokeOpacity={0.28}
               fill="none"
               strokeDasharray={CIRCUMFERENCE}
-              strokeDashoffset={dashOffset}
+              strokeDashoffset={dashOffsetAnim}
               strokeLinecap="round"
               transform={`rotate(-90, ${RING_SIZE / 2}, ${RING_SIZE / 2})`}
             />
             {/* Main arc */}
-            <Circle
+            <AnimatedCircle
               cx={RING_SIZE / 2}
               cy={RING_SIZE / 2}
               r={RING_RADIUS}
@@ -286,7 +330,7 @@ export default function NextPrayerCard() {
               strokeWidth={STROKE_W}
               fill="none"
               strokeDasharray={CIRCUMFERENCE}
-              strokeDashoffset={dashOffset}
+              strokeDashoffset={dashOffsetAnim}
               strokeLinecap="round"
               transform={`rotate(-90, ${RING_SIZE / 2}, ${RING_SIZE / 2})`}
             />
