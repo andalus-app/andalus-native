@@ -105,37 +105,14 @@ export default function AdminAnnouncementsScreen() {
   const [formError,       setFormError]       = useState('');
   const [datePickerTarget, setDatePickerTarget] = useState<'starts_at' | 'ends_at' | null>(null);
 
-  // ── Hem-banner topp (local AsyncStorage, no Supabase) ─────────────────────
-  const HT_KEY = 'andalus_home_top_banner_v1';
+  // ── Hem-banner topp (Supabase, display_type='home_top') ──────────────────
+  // Stored in Supabase so ALL users see it — not just the admin's device.
+  const [htId,       setHtId]       = useState<string | null>(null);
   const [htText,     setHtText]     = useState('');
   const [htUrl,      setHtUrl]      = useState('');
   const [htActive,   setHtActive]   = useState(false);
   const [htExpanded, setHtExpanded] = useState(false);
   const [htSaving,   setHtSaving]   = useState(false);
-
-  useEffect(() => {
-    AsyncStorage.getItem(HT_KEY).then(raw => {
-      if (!raw) return;
-      try {
-        const { text, url, active } = JSON.parse(raw);
-        setHtText(text ?? '');
-        setHtUrl(url ?? '');
-        setHtActive(active ?? false);
-      } catch {}
-    });
-  }, []);
-
-  const saveHt = useCallback(async () => {
-    setHtSaving(true);
-    await AsyncStorage.setItem(HT_KEY, JSON.stringify({ text: htText.trim(), url: htUrl.trim(), active: htActive }));
-    setHtSaving(false);
-    setHtExpanded(false);
-  }, [htText, htUrl, htActive]);
-
-  const clearHt = useCallback(async () => {
-    await AsyncStorage.removeItem(HT_KEY);
-    setHtText(''); setHtUrl(''); setHtActive(false); setHtExpanded(false);
-  }, []);
 
   const appUserId = Storage.getItem('islamnu_user_id') ?? '';
 
@@ -143,11 +120,53 @@ export default function AdminAnnouncementsScreen() {
   const load = useCallback(async (showRefresh = false) => {
     if (showRefresh) setRefreshing(true); else setLoading(true);
     const data = await fetchAllAnnouncements();
-    setAnnouncements(data);
+    // Populate home_top fields from Supabase (first home_top row wins)
+    const ht = data.find(a => a.display_type === 'home_top');
+    if (ht) {
+      setHtId(ht.id);
+      setHtText(ht.title);
+      setHtUrl(ht.link_url ?? '');
+      setHtActive(ht.is_active);
+    } else {
+      setHtId(null); setHtText(''); setHtUrl(''); setHtActive(false);
+    }
+    // Exclude home_top from the main list — managed via its own UI section
+    setAnnouncements(data.filter(a => a.display_type !== 'home_top'));
     if (showRefresh) setRefreshing(false); else setLoading(false);
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // ── Home-top save/clear ────────────────────────────────────────────────────
+  const saveHt = useCallback(async () => {
+    setHtSaving(true);
+    const input: AnnouncementInput = {
+      title:                    htText.trim(),
+      message:                  null,
+      image_url:                null,
+      link_url:                 htUrl.trim() || null,
+      link_text:                null,
+      display_type:             'home_top',
+      notification_mode:        'none',
+      is_active:                htActive,
+      starts_at:                null,
+      ends_at:                  null,
+      created_by_app_user_id:   appUserId || null,
+    };
+    if (htId) {
+      await updateAnnouncement(htId, input);
+    } else {
+      const { data } = await createAnnouncement(input);
+      if (data) setHtId(data.id);
+    }
+    setHtSaving(false);
+    setHtExpanded(false);
+  }, [htId, htText, htUrl, htActive, appUserId]);
+
+  const clearHt = useCallback(async () => {
+    if (htId) await updateAnnouncement(htId, { is_active: false, title: '' });
+    setHtText(''); setHtUrl(''); setHtActive(false); setHtExpanded(false);
+  }, [htId]);
 
   // ── Form helpers ───────────────────────────────────────────────────────────
   const openCreate = useCallback(() => {

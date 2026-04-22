@@ -635,14 +635,6 @@ export default function HomeScreen() {
     refreshBookingNotif();
     // Reload name on every focus so edits made in Settings are reflected instantly.
     AsyncStorage.getItem('andalus_preferred_name').then(n => setPreferredName(n || null));
-    // Reload home-top banner from AsyncStorage (set by admin in admin-announcements screen).
-    AsyncStorage.getItem('andalus_home_top_banner_v1').then(raw => {
-      if (!raw) { setHomeTopBanner(null); return; }
-      try {
-        const parsed = JSON.parse(raw);
-        setHomeTopBanner(parsed.active && parsed.text ? parsed : null);
-      } catch { setHomeTopBanner(null); }
-    });
     // If the user tapped a YouTube LIVE notification, scroll to the YouTube card.
     AsyncStorage.getItem('islamnu_live_notif_tap').then(tap => {
       if (!tap) return;
@@ -745,6 +737,9 @@ export default function HomeScreen() {
     const all   = await fetchActiveAnnouncements();
     const bList = all.filter(a => a.display_type === 'banner');
     const pList = all.filter(a => a.display_type === 'popup');
+    // home_top comes from Supabase (first active one wins) — visible to all users
+    const htItem = all.find(a => a.display_type === 'home_top');
+    setHomeTopBanner(htItem ? { text: htItem.title, url: htItem.link_url ?? '', active: true } : null);
 
     setBannerAnnouncements(bList);
 

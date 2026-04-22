@@ -9,7 +9,7 @@
 import { supabase } from '../lib/supabase';
 import * as FileSystem from 'expo-file-system/legacy';
 
-export type DisplayType    = 'popup' | 'banner' | 'notification_only';
+export type DisplayType    = 'popup' | 'banner' | 'notification_only' | 'home_top';
 export type NotifMode      = 'none' | 'push';
 
 export type Announcement = {
