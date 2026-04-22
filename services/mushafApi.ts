@@ -900,3 +900,47 @@ export async function fetchVersePage(
   }
   return hintPage; // fallback to estimate
 }
+
+/**
+ * Fetches the QCF V2 code_v2 glyph words for a single verse.
+ *
+ * Scans hintPage-1, hintPage, and hintPage+1 to handle the N-1/N+1 overflow
+ * anomalies documented in the CLAUDE.md Previously Fixed Bugs section.
+ * Pages already in the in-memory cache resolve instantly.
+ *
+ * Returns words in reading order (position 1 first = visually rightmost in RTL).
+ */
+export async function fetchVerseGlyphs(
+  verseKey: string,
+  hintPage: number,
+): Promise<Array<{ code_v2: string; pageNumber: number }>> {
+  const pages = Array.from(
+    new Set([Math.max(1, hintPage - 1), hintPage, Math.min(604, hintPage + 1)]),
+  );
+
+  const allWords: MushafWord[] = [];
+  const seen = new Set<string>(); // dedupe by lineNumber_position
+
+  await Promise.all(
+    pages.map(async (p) => {
+      try {
+        const composed = await fetchComposedMushafPage(p);
+        for (const line of composed.versePage.lines) {
+          for (const word of line.words) {
+            if (word.verseKey !== verseKey) continue;
+            const key = `${word.lineNumber}_${word.position}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            allWords.push(word);
+          }
+        }
+      } catch { /* skip pages that fail */ }
+    }),
+  );
+
+  allWords.sort((a, b) =>
+    a.lineNumber !== b.lineNumber ? a.lineNumber - b.lineNumber : a.position - b.position,
+  );
+
+  return allWords.map((w) => ({ code_v2: w.glyph, pageNumber: w.pageNumber }));
+}

@@ -645,12 +645,15 @@ export async function cancelZakatNotifications(): Promise<void> {
 }
 
 // ── Allah's 99 Names daily notification ──────────────────────────────────────
-// Fires every day at 12:00 local time with the next name in sequential rotation.
+// Fires every day at 07:00 local time with the next name in sequential rotation.
 // Schedules the next 30 days in advance so notifications fire even if the app
 // isn't opened daily. Re-synced on app startup and when the toggle changes.
 
-const ALLAH_NAMES_PREFIX      = 'andalus-allah-names-';
-const ALLAH_NAMES_ENABLED_KEY = 'allahNamesNotificationEnabled';
+const ALLAH_NAMES_PREFIX        = 'andalus-allah-names-';
+const ALLAH_NAMES_ENABLED_KEY   = 'allahNamesNotificationEnabled';
+// Bump this when fire time or schedule logic changes — forces a re-schedule for all users.
+const ALLAH_NAMES_SCHEDULE_VERSION     = '2';
+const ALLAH_NAMES_SCHEDULE_VERSION_KEY = 'allahNamesScheduleVersion';
 
 // Fixed epoch — do not change. Makes the rotation deterministic across devices.
 const ALLAH_NAMES_EPOCH_MS = new Date('2025-01-01T00:00:00Z').getTime();
@@ -667,7 +670,9 @@ function allahNamesIndex(dayOffset = 0): number {
     ALLAH_NAMES_DATA.length;
 }
 
-/** Schedules daily 12:00 notifications for the next 30 days.
+const ALLAH_NAMES_HOUR = 7; // Daily notification time — 07:00
+
+/** Schedules daily 07:00 notifications for the next 30 days.
  *  Each notification carries the sequential name for that calendar day. */
 export async function scheduleAllahNamesNotifications(): Promise<void> {
   if (!N) return;
@@ -682,8 +687,8 @@ export async function scheduleAllahNamesNotifications(): Promise<void> {
     for (let dayOffset = 0; dayOffset < 30; dayOffset++) {
       const fire = new Date(now);
       fire.setDate(fire.getDate() + dayOffset);
-      fire.setHours(12, 0, 0, 0);
-      if (fire <= now) continue; // already past noon today — skip
+      fire.setHours(ALLAH_NAMES_HOUR, 0, 0, 0);
+      if (fire <= now) continue; // already past fire time today — skip
 
       const idx  = allahNamesIndex(dayOffset);
       const name = ALLAH_NAMES_DATA[idx];
@@ -703,7 +708,7 @@ export async function scheduleAllahNamesNotifications(): Promise<void> {
         },
       });
     }
-    console.log('[AllahNames] Scheduled 30-day notifications at 12:00');
+    console.log('[AllahNames] Scheduled 30-day notifications at 07:00');
   } catch (e) {
     console.warn('[AllahNames] scheduleAllahNamesNotifications error:', e);
   }
@@ -729,7 +734,8 @@ export async function disableAllahNamesReminder(): Promise<void> {
 }
 
 /** Called once at app startup. Re-schedules if enabled but scheduler is stale
- *  (e.g. after OS purge, reinstall, or 30-day window has rolled forward). */
+ *  (e.g. after OS purge, reinstall, 30-day window rolled forward, or schedule
+ *  version bumped to force a time/logic change for all users). */
 export async function syncAllahNamesReminderOnStartup(): Promise<void> {
   try {
     const onboarded = await AsyncStorage.getItem('islamnu_onboarding_completed');
@@ -740,11 +746,29 @@ export async function syncAllahNamesReminderOnStartup(): Promise<void> {
     // null (never set) = default on
 
     if (!N) return;
+
+    // Force re-schedule if the schedule version has changed (e.g. fire time updated).
+    const savedVersion = await AsyncStorage.getItem(ALLAH_NAMES_SCHEDULE_VERSION_KEY);
+    if (savedVersion !== ALLAH_NAMES_SCHEDULE_VERSION) {
+      await scheduleAllahNamesNotifications();
+      await AsyncStorage.setItem(ALLAH_NAMES_SCHEDULE_VERSION_KEY, ALLAH_NAMES_SCHEDULE_VERSION);
+      return;
+    }
+
     const existing = await N.getAllScheduledNotificationsAsync();
     const ours = existing.filter(n => n.identifier.startsWith(ALLAH_NAMES_PREFIX));
 
-    // Re-schedule if fewer than 7 days remain in the window
-    if (ours.length < 7) {
+    // Check if today's notification is missing and fire time hasn't passed yet.
+    const now = new Date();
+    const todayKey = now.toISOString().slice(0, 10); // YYYY-MM-DD
+    const todayFireTime = new Date(now);
+    todayFireTime.setHours(ALLAH_NAMES_HOUR, 0, 0, 0);
+    const todayMissing =
+      now < todayFireTime &&
+      !ours.some(n => n.identifier === `${ALLAH_NAMES_PREFIX}${todayKey}`);
+
+    // Re-schedule if fewer than 7 days remain OR today's notification is missing.
+    if (ours.length < 7 || todayMissing) {
       await scheduleAllahNamesNotifications();
     }
   } catch (e) {

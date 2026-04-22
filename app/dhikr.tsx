@@ -13,6 +13,7 @@ import { useTheme } from '../context/ThemeContext';
 import { pauseYoutubePlayer } from '../context/YoutubePlayerContext';
 import { DhikrCategoryIcon } from '../components/DhikrCategoryIcon';
 import DhikrWellbeingView from '../components/dhikr/DhikrWellbeingView';
+import HeartPlasterIcon from '../components/HeartPlasterIcon';
 import {
   GRUPPER,
   ALL_DHIKR,
@@ -1104,11 +1105,7 @@ const TABS = [
   },
   {
     id: 'wellbeing', label: 'Välmående',
-    icon: (color: string) => (
-      <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-        <Path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z" />
-      </Svg>
-    ),
+    icon: (color: string) => <HeartPlasterIcon size={20} color={color} />,
   },
   {
     id: 'search', label: 'Sök',
@@ -1313,9 +1310,7 @@ export default function DhikrScreen() {
                   style={{ position: 'relative', width: 42, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: active ? activePillBg : 'transparent' }}>
                   {showRedHeart ? (
                     <Animated.View style={{ transform: [{ scale: heartPulse }] }}>
-                      <Svg width={18} height={18} viewBox="0 0 24 24" fill="#FF3B30" stroke="#FF3B30" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                        <Path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z" />
-                      </Svg>
+                      <HeartPlasterIcon size={20} color="#FF3B30" />
                     </Animated.View>
                   ) : (
                     t.icon(active ? T.accent : T.textMuted)

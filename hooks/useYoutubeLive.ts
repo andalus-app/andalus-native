@@ -136,13 +136,13 @@ export function useYoutubeLive() {
       // either never went live or the Edge Function cache is stale — hide it.
       if (isStaleUpcoming(result)) result = null;
 
-      // Read notification preferences — treat null (never set) as ON (default).
+      // Read notification preferences — treat null (never set) as OFF (default).
       const [liveNotifPref, upcomingPref] = await Promise.all([
         AsyncStorage.getItem(LIVE_NOTIF_ENABLED_KEY),
         AsyncStorage.getItem(UPCOMING_REMIND_ENABLED_KEY),
       ]);
-      const liveNotifEnabled    = liveNotifPref  !== 'false';
-      const upcomingReminderEnabled = upcomingPref !== 'false';
+      const liveNotifEnabled        = liveNotifPref === 'true';
+      const upcomingReminderEnabled = upcomingPref  === 'true';
 
       // ── Live stream notification ─────────────────────────────────────────────
       // Push is sent server-side by the Edge Function (Expo Push API → APNs/FCM),

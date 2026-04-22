@@ -9,7 +9,6 @@ import DagensHadithCard from '../../components/DagensHadithCard';
 import SvgIcon from '../../components/SvgIcon';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import ThemeToggle from '../../components/ThemeToggle';
 import { useTheme } from '../../context/ThemeContext';
 import { useYoutubeLive } from '../../hooks/useYoutubeLive';
 import { useYoutubePlayer } from '../../context/YoutubePlayerContext';
@@ -921,7 +920,13 @@ export default function HomeScreen() {
               </View>
             )}
           </TouchableOpacity>}
-          <ThemeToggle />
+          <TouchableOpacity
+            onPress={() => router.push('/settings')}
+            style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}
+            activeOpacity={0.7}
+          >
+            <SvgIcon name="settings" size={19} color={T.textMuted} />
+          </TouchableOpacity>
         </View>
       </View>
       <BookingBellPanel

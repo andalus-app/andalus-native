@@ -44,6 +44,7 @@ import { SURAH_INDEX, surahForPage } from '../../data/surahIndex';
 import { getPageVerseData } from '../../services/quranVerseService';
 import { LOCAL_BERNSTROM_ID } from '../../services/quranTranslationService';
 import { getBernstromByKey } from '../../data/bernstromTranslation';
+import { fetchVerseGlyphs } from '../../services/mushafApi';
 import SvgIcon from '../SvgIcon';
 import VerseShareCard, { type VerseShareCardRef, type VerseShareData } from './VerseShareCard';
 
@@ -118,15 +119,18 @@ function VerseActionsMenu() {
     if (!s) return null;
 
     try {
-      // For local Bernström (-1), fetch Arabic only from API, translation from bundled data
       const isLocalBernstrom = settings.translationId === LOCAL_BERNSTROM_ID;
       const apiTranslationId = isLocalBernstrom ? null : settings.translationId;
 
-      const verses = await getPageVerseData(currentPage, apiTranslationId);
-      const found = verses.find((v) => v.verseKey === vk);
-      const arabicText = found?.textUthmani ?? '';
+      // Fetch QCF V2 glyphs and translation concurrently
+      const [qcfWords, verses] = await Promise.all([
+        fetchVerseGlyphs(vk, currentPage),
+        getPageVerseData(currentPage, apiTranslationId),
+      ]);
 
-      // Resolve translation: bundled Bernström or API result
+      const found = verses.find((v) => v.verseKey === vk);
+
+      // Resolve translation
       let translation: string | null = null;
       if (isLocalBernstrom) {
         translation = getBernstromByKey(vk) ?? null;
@@ -134,27 +138,13 @@ function VerseActionsMenu() {
         translation = found.translation;
       }
 
-      if (!arabicText && !found) {
-        // Verse may be on adjacent pages — fetch without translation as fallback
-        const fallback = await getPageVerseData(currentPage, null);
-        const fb = fallback.find((v) => v.verseKey === vk);
-        return {
-          verseKey: vk,
-          arabicText: fb?.textUthmani ?? '',
-          translation: isLocalBernstrom ? (getBernstromByKey(vk) ?? null) : null,
-          surahName: s.nameSimple,
-          surahNameArabic: s.nameArabic,
-          verseNumber: vNum,
-        };
-      }
-
       return {
         verseKey: vk,
-        arabicText,
         translation,
         surahName: s.nameSimple,
         surahNameArabic: s.nameArabic,
         verseNumber: vNum,
+        qcfWords,
       };
     } catch {
       return null;
@@ -163,8 +153,6 @@ function VerseActionsMenu() {
 
   const buildShareText = useCallback((data: VerseShareData): string => {
     const lines = [
-      data.arabicText,
-      '',
       ...(data.translation ? [data.translation, ''] : []),
       `— Surah ${data.surahName} (${data.surahNameArabic}), ${data.verseKey}`,
       '',
