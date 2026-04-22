@@ -8,7 +8,7 @@ import { useTheme } from '../../context/ThemeContext';
 
 // ── Data ──────────────────────────────────────────────────────────────────────
 
-type IconName = 'allahs-namn' | 'ruqyah' | 'zakat' | 'calendar' | 'book' | 'heart' | 'info' | 'umrah' | 'quiz' | 'hadith';
+type IconName = 'allahs-namn' | 'ruqyah' | 'zakat' | 'calendar' | 'book' | 'heart' | 'info' | 'umrah' | 'quiz' | 'hadith' | 'settings';
 
 type Row = {
   key:   string;
@@ -48,8 +48,8 @@ const SECTIONS: Section[] = [
   {
     title: 'Övrigt',
     data: [
-      { key: 'support', title: 'Stötta kallet',      icon: 'heart',       route: '/support' },
-      { key: 'about',   title: 'Om Hidayah',        icon: 'info',        route: '/about'   },
+      { key: 'about',    title: 'Om Hidayah',    icon: 'info',     route: '/about'    },
+      { key: 'settings', title: 'Inställningar', icon: 'settings', route: '/settings' },
     ],
   },
 ];

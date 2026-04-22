@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, TouchableOpacity, RefreshControl, Linking, Image, useWindowDimensions, Animated, Easing, PanResponder, Modal, StyleSheet, AppState, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, RefreshControl, Linking, Image, useWindowDimensions, Animated, Easing, PanResponder, Modal, StyleSheet, AppState, TextInput } from 'react-native';
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Svg, { Path } from 'react-native-svg';
@@ -575,15 +575,19 @@ export default function HomeScreen() {
   const { theme: T, isDark } = useTheme();
   const router = useRouter();
   const { width: screenWidth } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
   const [bellOpen, setBellOpen] = useState(false);
 
   const { banners, dismissBanner, markAllRead, refresh } = useBanners();
   const { pendingCount, cancelledCount, pendingBookings, bookingNotifs, totalUnread: bookingUnread, isAdmin, isLoggedIn, dismissNotif, markAllSeen, refresh: refreshBookingNotif } = useBookingNotif();
   const { stream, isLive, isUpcoming, refresh: refreshYoutube } = useYoutubeLive();
-  const readTimerRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const scrollRef        = useRef<ScrollView>(null);
-  const youtubeCardYRef  = useRef<number>(0);
+  const readTimerRef              = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scrollRef                 = useRef<ScrollView>(null);
+  const youtubeCardYRef           = useRef<number>(0);
+  const announcementsLoadingRef   = useRef(false);
+  const lastAnnouncementsLoadRef  = useRef(0);
+  const ANNOUNCEMENTS_COOLDOWN_MS = 30_000;
 
   // ── Admin triple-tap state ─────────────────────────────────────────────────
   // Tap count and debounce timer live in refs so they never trigger a re-render.
@@ -610,19 +614,32 @@ export default function HomeScreen() {
   const [preferredName,    setPreferredName]    = useState<string | null>(null);
   const [nameModalVisible, setNameModalVisible] = useState(false);
   const [nameInput,        setNameInput]        = useState('');
+  const nameSlideAnim = useRef(new Animated.Value(-400)).current;
+
+  const closeNameModal = useCallback(() => {
+    Animated.timing(nameSlideAnim, { toValue: -400, duration: 220, easing: Easing.in(Easing.quad), useNativeDriver: true }).start(() => setNameModalVisible(false));
+  }, [nameSlideAnim]);
 
   const handleSaveName = useCallback(async () => {
     const trimmed = nameInput.trim();
     if (!trimmed) return;
     await AsyncStorage.setItem('andalus_preferred_name', trimmed);
     setPreferredName(trimmed);
-    setNameModalVisible(false);
-  }, [nameInput]);
+    closeNameModal();
+  }, [nameInput, closeNameModal]);
+
+  const handleClearName = useCallback(async () => {
+    await AsyncStorage.setItem('andalus_preferred_name', '');
+    setPreferredName('');
+    closeNameModal();
+  }, [closeNameModal]);
 
   const openNameModal = useCallback(() => {
     setNameInput(preferredName ?? '');
+    nameSlideAnim.setValue(-400);
     setNameModalVisible(true);
-  }, [preferredName]);
+    Animated.spring(nameSlideAnim, { toValue: 0, useNativeDriver: true, bounciness: 6 }).start();
+  }, [preferredName, nameSlideAnim]);
 
   // On focus: immediately refresh booking notifs (status updates need to be instant).
   // Banner refresh is NOT triggered on every focus — that was causing a storm of
@@ -633,7 +650,7 @@ export default function HomeScreen() {
   useFocusEffect(useCallback(() => {
     refreshBookingNotif();
     // Reload name on every focus so edits made in Settings are reflected instantly.
-    AsyncStorage.getItem('andalus_preferred_name').then(n => setPreferredName(n || null));
+    AsyncStorage.getItem('andalus_preferred_name').then(n => setPreferredName(n ?? null));
     // If the user tapped a YouTube LIVE notification, scroll to the YouTube card.
     AsyncStorage.getItem('islamnu_live_notif_tap').then(tap => {
       if (!tap) return;
@@ -733,7 +750,21 @@ export default function HomeScreen() {
 
   // ── Fetch active announcements ────────────────────────────────────────────
   const loadAnnouncements = useCallback(async () => {
-    const all   = await fetchActiveAnnouncements();
+    // Guard: skip if a fetch is already in flight or was completed within 30 s.
+    // Rapid tab-switching would otherwise flood Supabase with concurrent requests,
+    // overwhelming the JS thread with simultaneous state updates and causing a freeze.
+    if (announcementsLoadingRef.current) return;
+    if (Date.now() - lastAnnouncementsLoadRef.current < ANNOUNCEMENTS_COOLDOWN_MS) return;
+    announcementsLoadingRef.current = true;
+    let all: Announcement[] = [];
+    try {
+      all = await fetchActiveAnnouncements();
+    } catch {
+      announcementsLoadingRef.current = false;
+      return;
+    }
+    announcementsLoadingRef.current = false;
+    lastAnnouncementsLoadRef.current = Date.now();
     const bList = all.filter(a => a.display_type === 'banner');
     const pList = all.filter(a => a.display_type === 'popup');
     // home_top comes from Supabase (first active one wins) — visible to all users
@@ -955,14 +986,16 @@ export default function HomeScreen() {
             // When a home-top banner is active: slide out left, new slides in from right
             <View style={{ position: 'relative', overflow: 'hidden' }}>
               {/* Greeting layer */}
-              <Animated.View style={{ transform: [{ translateX: greetingX }], alignItems: 'center' }} pointerEvents="none">
+              <Animated.View style={{ transform: [{ translateX: greetingX }], alignItems: 'center' }} pointerEvents="box-none">
                 <Text style={{ fontSize: 22, fontWeight: '700', color: T.text, letterSpacing: -0.2, textAlign: 'center', alignSelf: 'stretch' }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
                   {preferredName ? `As-salāmo ʿalaykom, ${preferredName}` : 'As-salāmo ʿalaykom'}
                 </Text>
-                {!preferredName && (
-                  <Text style={{ fontSize: 13, color: T.textMuted, marginTop: 5, textAlign: 'center' }}>
-                    Vad vill du att vi ska kalla dig? ›
-                  </Text>
+                {preferredName === null && (
+                  <TouchableOpacity activeOpacity={0.6} onPress={openNameModal} hitSlop={{ top: 4, bottom: 8, left: 16, right: 16 }}>
+                    <Text style={{ fontSize: 13, color: T.textMuted, marginTop: 5, textAlign: 'center' }}>
+                      Vad vill du att vi ska kalla dig? ›
+                    </Text>
+                  </TouchableOpacity>
                 )}
               </Animated.View>
 
@@ -990,12 +1023,8 @@ export default function HomeScreen() {
               <Text style={{ fontSize: 22, fontWeight: '700', color: T.text, letterSpacing: -0.2, textAlign: 'center', alignSelf: 'stretch' }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
                 {preferredName ? `As-salāmo ʿalaykom, ${preferredName}` : 'As-salāmo ʿalaykom'}
               </Text>
-              {!preferredName && (
-                <TouchableOpacity
-                  activeOpacity={0.6}
-                  onPress={openNameModal}
-                  hitSlop={{ top: 4, bottom: 8, left: 0, right: 16 }}
-                >
+              {preferredName === null && (
+                <TouchableOpacity activeOpacity={0.6} onPress={openNameModal} hitSlop={{ top: 4, bottom: 8, left: 16, right: 16 }}>
                   <Text style={{ fontSize: 13, color: T.textMuted, marginTop: 5, textAlign: 'center' }}>
                     Vad vill du att vi ska kalla dig? ›
                   </Text>
@@ -1379,30 +1408,25 @@ export default function HomeScreen() {
       <Modal
         visible={nameModalVisible}
         transparent
-        animationType="slide"
-        onRequestClose={() => setNameModalVisible(false)}
+        animationType="none"
+        onRequestClose={closeNameModal}
       >
-        <TouchableOpacity
-          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' }}
-          activeOpacity={1}
-          onPress={() => setNameModalVisible(false)}
-        />
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <View style={{
+        <View style={{ flex: 1 }}>
+          <Animated.View style={{
+            transform: [{ translateY: nameSlideAnim }],
             backgroundColor: T.card,
-            borderTopLeftRadius: 22, borderTopRightRadius: 22,
-            paddingBottom: Platform.OS === 'ios' ? 34 : 20,
-            borderWidth: 0.5, borderBottomWidth: 0, borderColor: T.border,
+            borderBottomLeftRadius: 22, borderBottomRightRadius: 22,
+            paddingTop: insets.top + 12,
+            paddingBottom: 20,
+            borderWidth: 0.5, borderTopWidth: 0, borderColor: T.border,
           }}>
-            {/* Drag handle */}
-            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: T.border, alignSelf: 'center', marginTop: 10, marginBottom: 14 }} />
             {/* Header */}
             <View style={{ paddingHorizontal: 20, marginBottom: 4, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <Text style={{ flex: 1, fontSize: 18, fontWeight: '700', color: T.text }}>
                 Vad vill du att vi ska kalla dig?
               </Text>
               <TouchableOpacity
-                onPress={() => setNameModalVisible(false)}
+                onPress={closeNameModal}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: T.accentGlow, alignItems: 'center', justifyContent: 'center', marginLeft: 12 }}
               >
@@ -1446,9 +1470,17 @@ export default function HomeScreen() {
               >
                 <Text style={{ fontSize: 15, fontWeight: '700', color: '#fff' }}>Spara</Text>
               </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleClearName}
+                activeOpacity={0.7}
+                style={{ paddingVertical: 10, alignItems: 'center' }}
+              >
+                <Text style={{ fontSize: 13, color: T.textMuted, fontWeight: '500' }}>Visa hälsning utan namn</Text>
+              </TouchableOpacity>
             </View>
-          </View>
-        </KeyboardAvoidingView>
+          </Animated.View>
+          <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={closeNameModal} />
+        </View>
       </Modal>
     </View>
   );

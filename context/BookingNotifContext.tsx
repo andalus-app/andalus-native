@@ -85,9 +85,16 @@ export function BookingNotifProvider({ children }: { children: React.ReactNode }
   const [isAdmin,        setIsAdmin]        = useState(false);
   const [isLoggedIn,     setIsLoggedIn]     = useState(false);
   const debounceRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fetchingRef  = useRef(false);
   const dismissedRef = useRef<Set<string>>(loadDismissedIds());
 
   const refresh = useCallback(async () => {
+    // Guard: skip if a fetch is already in flight.
+    // Without this, rapid tab-switching causes N concurrent Supabase queries (2-3 per call),
+    // each returning and calling multiple setState() — overloading the JS thread and freezing the app.
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
+    try {
     const userId    = Storage.getItem(SK_USER_ID);
     const userRole  = Storage.getItem(SK_USER_ROLE);
     const adminFlag = userRole === 'admin' || userRole === 'superadmin';
@@ -242,6 +249,9 @@ export function BookingNotifProvider({ children }: { children: React.ReactNode }
     }
 
     setBookingNotifs([...bookingNotifsList, ...excNotifs]);
+    } finally {
+      fetchingRef.current = false;
+    }
   }, []);
 
   const debouncedRefresh = useCallback(() => {

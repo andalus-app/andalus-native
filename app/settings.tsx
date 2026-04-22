@@ -1,8 +1,9 @@
 import {
   View, Text, ScrollView, TouchableOpacity, Switch,
-  Modal, Alert, ActivityIndicator, Platform, TextInput, KeyboardAvoidingView,
+  Modal, Alert, ActivityIndicator, Platform, TextInput, Animated, Easing,
 } from 'react-native';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
@@ -68,7 +69,7 @@ function Row({ iconName, customIcon, label, value, onPress, right, T }) {
         <Text style={{fontSize:15,fontWeight:'600',color:T.text}}>{label}</Text>
         {value ? <Text style={{fontSize:12,color:T.textMuted,marginTop:1}}>{value}</Text> : null}
       </View>
-      {right !== undefined ? right : (onPress ? <Text style={{fontSize:18,color:T.textMuted}}>›</Text> : null)}
+      {right !== undefined ? <View style={{alignSelf:'center'}}>{right}</View> : (onPress ? <Text style={{fontSize:18,color:T.textMuted}}>›</Text> : null)}
     </TouchableOpacity>
   );
 }
@@ -114,6 +115,7 @@ export default function SettingsScreen() {
   const { theme: T, setMode, mode } = useTheme();
   const { dispatch } = useApp();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [settings,      setSettings]      = useState(DEFAULT_SETTINGS);
   const [locationLabel, setLocationLabel] = useState('Hämtar...');
   const [detecting,     setDetecting]     = useState(false);
@@ -127,6 +129,7 @@ export default function SettingsScreen() {
   const [upcomingReminderEnabled, setUpcomingReminderEnabled] = useState(false);
   const [preferredName,    setPreferredName]    = useState<string | null>(null);
   const [nameModalVisible, setNameModalVisible] = useState(false);
+  const nameSlideAnim = useRef(new Animated.Value(-400)).current;
   const [nameInput,        setNameInput]        = useState('');
 
   useFocusEffect(useCallback(() => { loadAll(); }, []));
@@ -155,7 +158,7 @@ export default function SettingsScreen() {
       const zakat = await loadZakatReminderSettings();
       setZakatEnabled(zakat?.enabled ?? false);
       const name = await AsyncStorage.getItem('andalus_preferred_name');
-      setPreferredName(name || null);
+      setPreferredName(name ?? null);
     } catch {}
   }
 
@@ -169,19 +172,21 @@ export default function SettingsScreen() {
 
   async function handleSaveName() {
     const trimmed = nameInput.trim();
-    if (trimmed) {
-      await AsyncStorage.setItem('andalus_preferred_name', trimmed);
-      setPreferredName(trimmed);
-    } else {
-      await AsyncStorage.removeItem('andalus_preferred_name');
-      setPreferredName(null);
-    }
-    setNameModalVisible(false);
+    if (!trimmed) return;
+    await AsyncStorage.setItem('andalus_preferred_name', trimmed);
+    setPreferredName(trimmed);
+    closeNameModal();
   }
 
   function openNameModal() {
     setNameInput(preferredName ?? '');
+    nameSlideAnim.setValue(-400);
     setNameModalVisible(true);
+    Animated.spring(nameSlideAnim, { toValue: 0, useNativeDriver: true, bounciness: 6 }).start();
+  }
+
+  function closeNameModal() {
+    Animated.timing(nameSlideAnim, { toValue: -400, duration: 220, easing: Easing.in(Easing.quad), useNativeDriver: true }).start(() => setNameModalVisible(false));
   }
 
   async function detectLocation() {
@@ -222,6 +227,31 @@ export default function SettingsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={{paddingHorizontal:16,paddingBottom:120}}>
+        <SectionLabel label="Utseende" T={T}/>
+        <View style={{backgroundColor:T.card,borderRadius:14,borderWidth:0.5,borderColor:T.border,padding:14,marginBottom:8}}>
+          <View style={{flexDirection:'row',alignItems:'center',gap:10,marginBottom:12}}>
+            <SvgXml xml={themeIconXml(T.accent)} width={18} height={18}/>
+            <Text style={{fontSize:15,fontWeight:'600',color:T.text}}>Tema</Text>
+          </View>
+          <View style={{flexDirection:'row',gap:8}}>
+            {themeOptions.map(({label,icon,value}) => {
+              const active = mode===value;
+              return (
+                <TouchableOpacity key={value} onPress={() => setMode(value)} activeOpacity={0.8}
+                  style={{flex:1,paddingVertical:12,borderRadius:10,backgroundColor:active?T.accent:T.bg,borderWidth:1,borderColor:active?T.accent:T.border,alignItems:'center',gap:6}}>
+                  <SvgIcon name={icon} size={18} color={active?'#fff':T.text}/>
+                  <Text style={{fontSize:12,fontWeight:'600',color:active?'#fff':T.text}}>{label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
+        <SectionLabel label="Personalisering" T={T}/>
+        <Row T={T} iconName="star" label="Vad vill du att vi ska kalla dig?"
+          value={preferredName || 'Ej angivet'}
+          onPress={openNameModal}/>
+
         <SectionLabel label="Plats" T={T}/>
         <Row T={T} iconName="map-arrow" label="Automatisk plats"
           value={settings.autoLocation?'Uppdateras automatiskt via GPS':'Manuell'}
@@ -439,31 +469,6 @@ export default function SettingsScreen() {
             }}
             trackColor={{false:T.border,true:T.accent}} thumbColor="#fff" ios_backgroundColor={T.border}/>}/>
 
-        <SectionLabel label="Utseende" T={T}/>
-        <View style={{backgroundColor:T.card,borderRadius:14,borderWidth:0.5,borderColor:T.border,padding:14,marginBottom:8}}>
-          <View style={{flexDirection:'row',alignItems:'center',gap:10,marginBottom:12}}>
-            <SvgXml xml={themeIconXml(T.accent)} width={18} height={18}/>
-            <Text style={{fontSize:15,fontWeight:'600',color:T.text}}>Tema</Text>
-          </View>
-          <View style={{flexDirection:'row',gap:8}}>
-            {themeOptions.map(({label,icon,value}) => {
-              const active = mode===value;
-              return (
-                <TouchableOpacity key={value} onPress={() => setMode(value)} activeOpacity={0.8}
-                  style={{flex:1,paddingVertical:12,borderRadius:10,backgroundColor:active?T.accent:T.bg,borderWidth:1,borderColor:active?T.accent:T.border,alignItems:'center',gap:6}}>
-                  <SvgIcon name={icon} size={18} color={active?'#fff':T.text}/>
-                  <Text style={{fontSize:12,fontWeight:'600',color:active?'#fff':T.text}}>{label}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
-
-        <SectionLabel label="Personalisering" T={T}/>
-        <Row T={T} iconName="star" label="Vad vill du att vi ska kalla dig?"
-          value={preferredName || 'Ej angivet'}
-          onPress={openNameModal}/>
-
         <SectionLabel label="Om appen" T={T}/>
         <View style={{backgroundColor:T.card,borderRadius:14,borderWidth:0.5,borderColor:T.border,padding:16}}>
           <Text style={{fontSize:15,fontWeight:'700',color:T.text}}>Hidayah</Text>
@@ -521,28 +526,24 @@ export default function SettingsScreen() {
       <Modal
         visible={nameModalVisible}
         transparent
-        animationType="slide"
-        onRequestClose={() => setNameModalVisible(false)}
+        animationType="none"
+        onRequestClose={closeNameModal}
       >
-        <TouchableOpacity
-          style={{flex:1,backgroundColor:'rgba(0,0,0,0.45)'}}
-          activeOpacity={1}
-          onPress={() => setNameModalVisible(false)}
-        />
-        <KeyboardAvoidingView behavior={Platform.OS==='ios' ? 'padding' : undefined}>
-          <View style={{
-            backgroundColor:T.card,
-            borderTopLeftRadius:22,borderTopRightRadius:22,
-            paddingBottom:Platform.OS==='ios'?34:20,
-            borderWidth:0.5,borderBottomWidth:0,borderColor:T.border,
+        <View style={{ flex: 1 }}>
+          <Animated.View style={{
+            transform: [{ translateY: nameSlideAnim }],
+            backgroundColor: T.card,
+            borderBottomLeftRadius: 22, borderBottomRightRadius: 22,
+            paddingTop: insets.top + 12,
+            paddingBottom: 20,
+            borderWidth: 0.5, borderTopWidth: 0, borderColor: T.border,
           }}>
-            <View style={{width:36,height:4,borderRadius:2,backgroundColor:T.border,alignSelf:'center',marginTop:10,marginBottom:14}}/>
             <View style={{paddingHorizontal:20,marginBottom:4,flexDirection:'row',alignItems:'center',justifyContent:'space-between'}}>
               <Text style={{flex:1,fontSize:18,fontWeight:'700',color:T.text}}>
                 Vad vill du att vi ska kalla dig?
               </Text>
               <TouchableOpacity
-                onPress={() => setNameModalVisible(false)}
+                onPress={closeNameModal}
                 hitSlop={{top:8,bottom:8,left:8,right:8}}
                 style={{width:28,height:28,borderRadius:14,backgroundColor:T.accentGlow,alignItems:'center',justifyContent:'center',marginLeft:12}}
               >
@@ -571,19 +572,6 @@ export default function SettingsScreen() {
                   color:T.text,
                 }}
               />
-              {preferredName && (
-                <TouchableOpacity
-                  onPress={async () => {
-                    await AsyncStorage.removeItem('andalus_preferred_name');
-                    setPreferredName(null);
-                    setNameModalVisible(false);
-                  }}
-                  activeOpacity={0.7}
-                  style={{alignItems:'center',paddingVertical:8}}
-                >
-                  <Text style={{fontSize:13,color:T.textMuted}}>Ta bort sparad namn</Text>
-                </TouchableOpacity>
-              )}
               <TouchableOpacity
                 onPress={handleSaveName}
                 activeOpacity={0.8}
@@ -596,9 +584,21 @@ export default function SettingsScreen() {
               >
                 <Text style={{fontSize:15,fontWeight:'700',color:'#fff'}}>Spara</Text>
               </TouchableOpacity>
+              <TouchableOpacity
+                onPress={async () => {
+                  await AsyncStorage.setItem('andalus_preferred_name', '');
+                  setPreferredName('');
+                  closeNameModal();
+                }}
+                activeOpacity={0.7}
+                style={{alignItems:'center',paddingVertical:10}}
+              >
+                <Text style={{fontSize:13,fontWeight:'500',color:T.textMuted}}>Visa hälsning utan namn</Text>
+              </TouchableOpacity>
             </View>
-          </View>
-        </KeyboardAvoidingView>
+          </Animated.View>
+          <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={closeNameModal} />
+        </View>
       </Modal>
     </View>
   );
