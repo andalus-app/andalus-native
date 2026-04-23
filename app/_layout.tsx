@@ -8,7 +8,6 @@ import { setAudioModeAsync } from 'expo-audio';
 import { ThemeProvider, useTheme } from '../context/ThemeContext';
 import { AppProvider, useApp } from '../context/AppContext';
 import { NotificationProvider } from '../context/NotificationContext';
-import { BannerProvider } from '../context/BannerContext';
 import { BookingNotifProvider } from '../context/BookingNotifContext';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { initStorage } from '../services/storage';
@@ -309,15 +308,13 @@ export default function RootLayout() {
       {storageReady && (
         <ThemeProvider>
           <AppProvider>
-            <BannerProvider>
-              <BookingNotifProvider>
+            <BookingNotifProvider>
                 <NotificationProvider>
                   <YoutubePlayerProvider>
                     <AppContent onFontsReady={handleFontsReady} />
                   </YoutubePlayerProvider>
                 </NotificationProvider>
               </BookingNotifProvider>
-            </BannerProvider>
           </AppProvider>
         </ThemeProvider>
       )}

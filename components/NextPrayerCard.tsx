@@ -263,6 +263,8 @@ export default function NextPrayerCard() {
           backgroundColor: T.card,
           borderColor: T.border,
           shadowColor: isDark ? '#000' : '#1a1a1a',
+          shadowOpacity: isDark ? 0.10 : 0.18,
+          shadowRadius: isDark ? 18 : 24,
         },
       ]}
     >
@@ -369,8 +371,6 @@ const styles = StyleSheet.create({
     paddingBottom: 0,
     marginBottom: 12,
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.10,
-    shadowRadius: 18,
     elevation: 3,
   },
   label: {

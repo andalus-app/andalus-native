@@ -12,7 +12,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
 import { useYoutubeLive } from '../../hooks/useYoutubeLive';
 import { useYoutubePlayer } from '../../context/YoutubePlayerContext';
-import { useBanners, Banner } from '../../context/BannerContext';
 import { useBookingNotif, BookingNotif, PendingBooking } from '../../context/BookingNotifContext';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
@@ -27,97 +26,6 @@ import AdminPinModal, { EligibleAdminUser } from '../../components/AdminPinModal
 const SWIPE_THRESHOLD = 80;
 
 
-function BannerCard({ banner, onDismiss, theme: T }: { banner: Banner; onDismiss: () => void; theme: any }) {
-  const { width } = useWindowDimensions();
-  const translateX = useRef(new Animated.Value(0)).current;
-  const opacity = useRef(new Animated.Value(1)).current;
-
-  const dismiss = useCallback(() => {
-    Animated.parallel([
-      Animated.timing(translateX, { toValue: -width, duration: 260, useNativeDriver: true }),
-      Animated.timing(opacity,    { toValue: 0,      duration: 220, useNativeDriver: true }),
-    ]).start(() => onDismiss());
-  }, [width, onDismiss]);
-
-  const snapBack = useCallback(() => {
-    Animated.spring(translateX, { toValue: 0, useNativeDriver: true, bounciness: 6 }).start();
-  }, []);
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 8 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
-      onPanResponderTerminationRequest: () => false,
-      onPanResponderMove: (_, g) => {
-        if (g.dx < 0) translateX.setValue(g.dx);
-      },
-      onPanResponderRelease: (_, g) => {
-        if (g.dx < -SWIPE_THRESHOLD || g.vx < -0.6) {
-          Animated.parallel([
-            Animated.timing(translateX, { toValue: -width, duration: 220, useNativeDriver: true }),
-            Animated.timing(opacity,    { toValue: 0,      duration: 180, useNativeDriver: true }),
-          ]).start(() => onDismiss());
-        } else {
-          snapBack();
-        }
-      },
-      onPanResponderTerminate: () => snapBack(),
-    })
-  ).current;
-
-  return (
-    <Animated.View
-      style={{ transform: [{ translateX }], opacity, marginBottom: 10 }}
-      {...panResponder.panHandlers}
-    >
-      <View style={{
-        backgroundColor: T.card,
-        borderRadius: 14,
-        borderWidth: 0.5,
-        borderColor: T.border,
-        padding: 14,
-      }}>
-        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
-          <View style={{
-            width: 28, height: 28, borderRadius: 14,
-            backgroundColor: T.accent + '22',
-            alignItems: 'center', justifyContent: 'center',
-            marginTop: 1, flexShrink: 0,
-          }}>
-            <Svg width={14} height={14} viewBox="0 0 24 24" fill={T.accent}>
-              <Path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z" />
-            </Svg>
-          </View>
-
-          <Text style={{ flex: 1, fontSize: 14, lineHeight: 20, color: T.text }}>
-            {banner.title}
-          </Text>
-
-          <TouchableOpacity
-            onPress={dismiss}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            style={{ marginTop: 2, flexShrink: 0 }}
-          >
-            <Svg width={16} height={16} viewBox="0 0 24 24" fill={T.textMuted}>
-              <Path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
-            </Svg>
-          </TouchableOpacity>
-        </View>
-
-        {banner.linkUrl && banner.linkText && (
-          <TouchableOpacity
-            onPress={() => Linking.openURL(banner.linkUrl!)}
-            activeOpacity={0.7}
-            style={{ marginTop: 6, marginLeft: 38 }}
-          >
-            <Text style={{ fontSize: 14, color: T.accent, textDecorationLine: 'underline' }}>
-              {banner.linkText}
-            </Text>
-          </TouchableOpacity>
-        )}
-      </View>
-    </Animated.View>
-  );
-}
 
 type YoutubeCardProps = {
   stream: import('../../hooks/useYoutubeLive').YTStream | null;
@@ -588,10 +496,8 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [bellOpen, setBellOpen] = useState(false);
 
-  const { banners, dismissBanner, markAllRead, refresh } = useBanners();
   const { pendingCount, cancelledCount, pendingBookings, bookingNotifs, totalUnread: bookingUnread, isAdmin, isLoggedIn, dismissNotif, markAllSeen, refresh: refreshBookingNotif } = useBookingNotif();
   const { stream, isLive, isUpcoming, refresh: refreshYoutube } = useYoutubeLive();
-  const readTimerRef              = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scrollRef                 = useRef<ScrollView>(null);
   const youtubeCardYRef           = useRef<number>(0);
   // Set to true when a live-notification tap is pending. Triggers scroll either
@@ -654,11 +560,6 @@ export default function HomeScreen() {
   }, [preferredName, nameSlideAnim]);
 
   // On focus: immediately refresh booking notifs (status updates need to be instant).
-  // Banner refresh is NOT triggered on every focus — that was causing a storm of
-  // network requests during rapid tab-switching, hitting different CDN edge servers
-  // that returned stale (empty) data and flickering the banners away.
-  // Instead, a 30 s interval polls banners while on this screen.
-  // The initial load and app-foreground cases are handled in BannerContext itself.
   useFocusEffect(useCallback(() => {
     refreshBookingNotif();
     // Reload name on every focus so edits made in Settings are reflected instantly.
@@ -679,28 +580,15 @@ export default function HomeScreen() {
         pendingScrollToYoutubeRef.current = true;
       }
     });
-    const interval = setInterval(refresh, 30 * 1000);
-    return () => clearInterval(interval);
-  }, [refresh, refreshBookingNotif]));
+  }, [refreshBookingNotif]));
 
-  // Mark all visible banners as read after 3 s on this screen
-  useEffect(() => {
-    if (banners.length === 0) return;
-    readTimerRef.current = setTimeout(() => {
-      markAllRead(banners.map(b => b.id));
-    }, 3000);
-    return () => {
-      if (readTimerRef.current) clearTimeout(readTimerRef.current);
-    };
-  }, [banners.map(b => b.id).join(',')]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    // force=true bypasses the 30 s rate limit — the user explicitly asked to refresh.
     // refreshYoutube triggers an immediate YouTube fetch (clears pending poll timer).
     refreshYoutube();
-    Promise.all([refresh(true), refreshBookingNotif()]).finally(() => setRefreshing(false));
-  }, [refresh, refreshBookingNotif, refreshYoutube]);
+    refreshBookingNotif().finally(() => setRefreshing(false));
+  }, [refreshBookingNotif, refreshYoutube]);
 
   const openBell = useCallback(() => {
     setBellOpen(true);
@@ -1092,16 +980,16 @@ export default function HomeScreen() {
           ];
 
           return (
-            <View style={{ marginTop: 4, marginBottom: 4 }}>
+            <View style={{ marginTop: 0, marginBottom: 4 }}>
               <Text style={{
                 fontSize: 12, fontWeight: '600', color: T.textMuted,
-                letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 10,
+                letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 11,
               }}>
                 Fortsätt
               </Text>
 
               {/* Negative margin lets the scroll row bleed to screen edges */}
-              <View style={{ marginHorizontal: -16 }}>
+              <View style={{ marginHorizontal: -16, marginTop: -28, marginBottom: -28 }}>
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
@@ -1110,7 +998,7 @@ export default function HomeScreen() {
                   // Snap[1]: iOS clamps to max offset → cards 2+3 fully visible.
                   snapToOffsets={[0, CARD_W + GAP]}
                   snapToAlignment="start"
-                  contentContainerStyle={{ paddingLeft: 16, paddingRight: 20 }}
+                  contentContainerStyle={{ paddingLeft: 16, paddingRight: 20, paddingTop: 28, paddingBottom: 28 }}
                 >
                   {ITEMS.map((item, index) => (
                     <TouchableOpacity
@@ -1123,12 +1011,13 @@ export default function HomeScreen() {
                         borderRadius: 14,
                         borderWidth: 0.5,
                         borderColor: T.border,
-                        padding: 14,
+                        paddingHorizontal: 14,
+                        paddingVertical: 11,
                         marginRight: index < ITEMS.length - 1 ? GAP : 0,
                         shadowColor: '#000',
                         shadowOffset: { width: 0, height: 3 },
-                        shadowOpacity: 0.08,
-                        shadowRadius: 10,
+                        shadowOpacity: isDark ? 0.08 : 0.15,
+                        shadowRadius: isDark ? 10 : 16,
                       }}
                     >
                       <View style={{
@@ -1287,10 +1176,6 @@ export default function HomeScreen() {
             isPulsing={a.id === pulsingId}
             onPulseEnd={() => setPulsingId(null)}
           />
-        ))}
-
-        {banners.map(b => (
-          <BannerCard key={b.id} banner={b} onDismiss={() => dismissBanner(b.id)} theme={T} />
         ))}
 
       </ScrollView>
@@ -1521,10 +1406,9 @@ function AnnouncementBannerCard({
   announcement: Announcement; T: any; isDark: boolean;
   isPulsing?: boolean; onPulseEnd?: () => void;
 }) {
-  // Logo column width + gap — matches the existing Google Sheets BannerCard layout
   const LOGO_SIZE   = 28;
   const GAP         = 10;
-  const TEXT_INDENT = LOGO_SIZE + GAP; // 38 — same as BannerCard link text indent
+  const TEXT_INDENT = LOGO_SIZE + GAP;
 
   // Scale animation triggered when the user taps the push notification for this banner.
   // Runs 3× (scale 1→1.06→1, 180ms each direction) then stops and resets the parent state.
@@ -1554,7 +1438,7 @@ function AnnouncementBannerCard({
           <Image source={{ uri: a.image_url }} style={{ width: '100%', height: 160 }} resizeMode="cover" />
         ) : null}
         <View style={{ padding: 14 }}>
-          {/* Logo + title row — identical structure to BannerCard */}
+          {/* Logo + title row */}
           <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: GAP }}>
             <View style={{ width: LOGO_SIZE, height: LOGO_SIZE, flexShrink: 0, marginTop: 1 }}>
               <HidayahLogo size={LOGO_SIZE} />
@@ -1569,7 +1453,7 @@ function AnnouncementBannerCard({
               {a.message}
             </Text>
           ) : null}
-          {/* Link — same pattern as Google Sheets BannerCard */}
+          {/* Link */}
           {a.link_url && a.link_text ? (
             <TouchableOpacity
               onPress={() => Linking.openURL(a.link_url!)}

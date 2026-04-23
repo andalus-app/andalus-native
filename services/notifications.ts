@@ -280,24 +280,6 @@ export async function cancelFridayDuaReminder(): Promise<void> {
   } catch {}
 }
 
-// ── Banner (Google Sheets) notifications ─────────────────────────────────────
-const BANNER_PREFIX = 'andalus-msg-';
-
-export async function deliverBannerNotification(id: string, title: string): Promise<void> {
-  if (!N) return;
-  try {
-    await N.scheduleNotificationAsync({
-      identifier: BANNER_PREFIX + id,
-      content: { title, body: '', sound: true },
-      trigger: {
-        type: N.SchedulableTriggerInputTypes.TIME_INTERVAL,
-        seconds: 1,
-        repeats: false,
-      },
-    });
-  } catch {}
-}
-
 // ── YouTube live stream notification ─────────────────────────────────────────
 // Called at most once per unique videoId (deduplication is enforced by useYoutubeLive).
 // NOTE: This fires an immediate local notification — it only works when the app is
@@ -700,11 +682,6 @@ export async function syncAllahNamesReminderOnStartup(): Promise<void> {
   }
 }
 
-export async function dismissBannerNotification(id: string): Promise<void> {
-  if (!N) return;
-  try { await N.dismissNotificationAsync(BANNER_PREFIX + id); } catch {}
-}
-
 // ── Announcement push notification ───────────────────────────────────────────
 // Fires an immediate local push notification for a banner announcement.
 // Deduplication (one notification per unique id+updated_at) is enforced by
@@ -724,16 +701,6 @@ export async function sendAnnouncementNotification(id: string, title: string, bo
       },
     });
   } catch {}
-}
-
-export async function getDeliveredBannerIds(): Promise<string[]> {
-  if (!N) return [];
-  try {
-    const all = await N.getDeliveredNotificationsAsync();
-    return all
-      .filter(n => n.request.identifier.startsWith(BANNER_PREFIX))
-      .map(n => n.request.identifier.slice(BANNER_PREFIX.length));
-  } catch { return []; }
 }
 
 // ── Friday Al-Kahf reminder ───────────────────────────────────────────────────

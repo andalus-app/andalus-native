@@ -6,7 +6,6 @@ import * as Haptics from 'expo-haptics';
 import SvgIcon from '../../components/SvgIcon';
 import { useTheme } from '../../context/ThemeContext';
 import { useYoutubeLive } from '../../hooks/useYoutubeLive';
-import { useBanners } from '../../context/BannerContext';
 import { useBookingNotif } from '../../context/BookingNotifContext';
 
 const PEEK_AMOUNT = 60; // px scrolled right to reveal the 6th tab
@@ -25,7 +24,6 @@ function CustomTabBar() {
   const pathname = usePathname();
   const router = useRouter();
   const { isLive } = useYoutubeLive();
-  const { hasUnread } = useBanners();
   const { totalUnread: bookingUnread } = useBookingNotif();
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
@@ -149,7 +147,7 @@ function CustomTabBar() {
                     }} />
                   </View>
                 )}
-                {tab.name === 'home' && !isLive && (hasUnread || bookingUnread > 0) && (
+                {tab.name === 'home' && !isLive && bookingUnread > 0 && (
                   <View style={{
                     position: 'absolute', top: -2, right: -2,
                     width: bookingUnread > 9 ? 16 : bookingUnread > 0 ? 14 : 8,

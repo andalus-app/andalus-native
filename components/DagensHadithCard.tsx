@@ -10,7 +10,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, AppState, AppStateStatus, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { Animated, AppState, AppStateStatus, Text, TouchableOpacity, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/context/ThemeContext';
 import { getDailyHadith } from '@/services/dailyReminder';
@@ -31,11 +31,12 @@ export default function DagensHadithCard() {
   const { theme: T, isDark } = useTheme();
   const router = useRouter();
   const [dateKey, setDateKey] = useState<string>(todayStr);
-  const [expanded,  setExpanded]  = useState(false);
-  const [truncated, setTruncated] = useState(false);
   const opacity = useRef(new Animated.Value(1)).current;
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dateKeyRef = useRef<string>(dateKey);
+
+  const [expanded,  setExpanded]  = useState(false);
+  const [truncated, setTruncated] = useState(false);
 
   const hadith = useMemo(() => getDailyHadith(new Date()), [dateKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -73,7 +74,6 @@ export default function DagensHadithCard() {
     };
   }, [scheduleMidnight]);
 
-  // Catch midnight crossings while app was in background
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state: AppStateStatus) => {
       if (state === 'active') {
@@ -97,27 +97,33 @@ export default function DagensHadithCard() {
           backgroundColor: T.card,
           borderColor: T.border,
           shadowColor: isDark ? '#000' : '#1a1a1a',
+          shadowOpacity: isDark ? 0.08 : 0.16,
+          shadowRadius: isDark ? 12 : 18,
         },
       ]}
     >
       <Animated.View style={{ opacity }}>
         <Text style={[styles.title, { color: T.text }]}>Dagens Hadith</Text>
 
-        {/* Swedish hadith text */}
-        <Text
-          style={[styles.swedish, { color: T.text }]}
-          numberOfLines={expanded ? undefined : 3}
-          onTextLayout={e => { if (!expanded) setTruncated(e.nativeEvent.lines.length > 3); }}
-        >
-          {hadith.svenska}
-        </Text>
-        {!expanded && truncated && (
-          <TouchableOpacity onPress={e => { e.stopPropagation?.(); setExpanded(true); }} activeOpacity={0.7} style={{ alignSelf: 'center', marginTop: -5 }}>
-            <Text style={{ fontSize: 12, color: T.accent }}>Visa mer</Text>
+        <View style={expanded ? undefined : styles.textContainer}>
+          <Text
+            style={[styles.swedish, { color: T.text }]}
+            numberOfLines={expanded ? undefined : 3}
+            onTextLayout={e => { if (!expanded) setTruncated(e.nativeEvent.lines.length > 3); }}
+          >
+            {hadith.svenska}
+          </Text>
+        </View>
+        {truncated && (
+          <TouchableOpacity
+            onPress={e => { e.stopPropagation?.(); setExpanded(v => !v); }}
+            activeOpacity={0.7}
+            style={styles.visaMerBtn}
+          >
+            <Text style={{ fontSize: 12, color: T.text }}>{expanded ? 'Visa mindre' : 'Visa mer'}</Text>
           </TouchableOpacity>
         )}
 
-        {/* Source */}
         <Text style={[styles.source, { color: T.textMuted }]}>
           {hadith.kalla}
         </Text>
@@ -130,33 +136,41 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: 16,
     borderWidth: 0.5,
-    paddingHorizontal: 18,
-paddingTop: 12,
-paddingBottom: 12,
+    paddingHorizontal: 16,
+    paddingTop: 11,
+    paddingBottom: 11,
     marginBottom: 11,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.10,
-    shadowRadius: 18,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
- title: {
-  fontSize: 15,
-  fontWeight: '700',
-  letterSpacing: 0.1,
-  textAlign: 'center',
-  marginBottom: 6,
-},
-  swedish: {
+  title: {
     fontSize: 14,
-    lineHeight: 22,
+    fontWeight: '600',
+    letterSpacing: 0.1,
+    textAlign: 'left',
+    marginBottom: 5,
+  },
+  textContainer: {
+    height: 63,
+    overflow: 'hidden',
+    marginBottom: 5,
+  },
+  visaMerBtn: {
+    alignSelf: 'flex-start',
+    marginTop: 2,
+    marginBottom: 3,
+  },
+  swedish: {
+    fontSize: 13,
+    lineHeight: 21,
     fontWeight: '400',
-    marginBottom: 8,
-    minHeight: 66, // 3 lines × lineHeight 22 — keeps card height static
+    textAlign: 'left',
   },
   source: {
     fontSize: 12,
     fontWeight: '500',
     fontStyle: 'italic',
-    opacity: 0.65,
+    textAlign: 'left',
+    opacity: 0.6,
   },
 });

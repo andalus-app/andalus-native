@@ -10,10 +10,12 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, AppState, AppStateStatus, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { Animated, AppState, AppStateStatus, Text, TouchableOpacity, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/context/ThemeContext';
 import { getDailyQuranVerse } from '@/services/dailyReminder';
+
+const GOLD_DARK = '#cab488';
 
 function todayStr(): string {
   const d = new Date();
@@ -27,6 +29,16 @@ function msUntilMidnight(): number {
   return midnight.getTime() - now.getTime();
 }
 
+function AccentDivider({ color, small }: { color: string; small?: boolean }) {
+  return (
+    <View style={[styles.dividerRow, small && styles.dividerRowSmall]}>
+      <View style={[styles.dividerLine, { backgroundColor: color }]} />
+      <Text style={[styles.dividerDot, { color }]}>◆</Text>
+      <View style={[styles.dividerLine, { backgroundColor: color }]} />
+    </View>
+  );
+}
+
 export default function DagensKoranversCard() {
   const { theme: T, isDark } = useTheme();
   const router = useRouter();
@@ -38,6 +50,10 @@ export default function DagensKoranversCard() {
   const dateKeyRef = useRef<string>(dateKey);
 
   const verse = useMemo(() => getDailyQuranVerse(new Date()), [dateKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const accentColor = isDark ? GOLD_DARK : T.accent;
+  const verseColor  = isDark ? '#FFFFFF' : T.text;
+  const borderSideColor = isDark ? 'rgba(202,180,136,0.18)' : 'rgba(36,100,93,0.18)';
 
   const fadeAndUpdate = useCallback(() => {
     Animated.timing(opacity, {
@@ -62,7 +78,6 @@ export default function DagensKoranversCard() {
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {
       fadeAndUpdate();
-      // Schedule next midnight after updating
       scheduleMidnight();
     }, msUntilMidnight());
   }, [fadeAndUpdate]);
@@ -74,7 +89,6 @@ export default function DagensKoranversCard() {
     };
   }, [scheduleMidnight]);
 
-  // Catch midnight crossings while app was in background
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state: AppStateStatus) => {
       if (state === 'active') {
@@ -96,30 +110,41 @@ export default function DagensKoranversCard() {
         styles.card,
         {
           backgroundColor: T.card,
-          borderColor: T.border,
-          shadowColor: isDark ? '#000' : '#1a1a1a',
+          borderColor: borderSideColor,
+          borderTopColor: accentColor,
+          borderTopWidth: 3.5,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: isDark ? 0.08 : 0.16,
+          shadowRadius: isDark ? 12 : 18,
         },
       ]}
     >
       <Animated.View style={{ opacity }}>
-        <Text style={[styles.title, { color: T.text }]}>Dagens Koranvers</Text>
+        <Text style={[styles.title, { color: accentColor }]}>Dagens Koranvers</Text>
 
-        {/* Swedish verse text */}
-        <Text
-          style={[styles.swedish, { color: T.text }]}
-          numberOfLines={expanded ? undefined : 3}
-          onTextLayout={e => { if (!expanded) setTruncated(e.nativeEvent.lines.length > 3); }}
-        >
-          {verse.swedish}
-        </Text>
-        {!expanded && truncated && (
-          <TouchableOpacity onPress={e => { e.stopPropagation?.(); setExpanded(true); }} activeOpacity={0.7} style={{ alignSelf: 'center', marginTop: -5 }}>
-            <Text style={{ fontSize: 12, color: T.accent }}>Visa mer</Text>
+        <View style={expanded ? undefined : styles.verseContainer}>
+          <Text
+            style={[styles.swedish, { color: verseColor }]}
+            numberOfLines={expanded ? undefined : 3}
+            onTextLayout={e => { if (!expanded) setTruncated(e.nativeEvent.lines.length > 3); }}
+          >
+            {verse.swedish}
+          </Text>
+        </View>
+        {truncated && (
+          <TouchableOpacity
+            onPress={e => { e.stopPropagation?.(); setExpanded(v => !v); }}
+            activeOpacity={0.7}
+            style={styles.visaMerBtn}
+          >
+            <Text style={{ fontSize: 12, color: isDark ? accentColor : verseColor }}>{expanded ? 'Visa mindre' : 'Visa mer'}</Text>
           </TouchableOpacity>
         )}
 
-        {/* Reference */}
-        <Text style={[styles.reference, { color: T.textMuted }]}>
+        <AccentDivider color={accentColor} small />
+
+        <Text style={[styles.reference, { color: verseColor }]}>
           {verse.surahName} · {verse.surahNumber}:{verse.ayahNumber}
         </Text>
       </Animated.View>
@@ -129,44 +154,63 @@ export default function DagensKoranversCard() {
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 16,
+    borderRadius: 18,
     borderWidth: 0.5,
-    paddingHorizontal: 18,
-paddingTop: 12,
-paddingBottom: 12,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 10,
     marginBottom: 12,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.10,
-    shadowRadius: 18,
-    elevation: 3,
+    elevation: 2,
   },
- title: {
-  fontSize: 15,
-  fontWeight: '700',
-  letterSpacing: 0.1,
-  textAlign: 'center',
-  marginBottom: 6,
-},
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 7,
+  },
+  dividerRowSmall: {
+    marginTop: 8,
+    marginBottom: 4,
+    alignSelf: 'center',
+    width: '50%',
+  },
+  dividerLine: {
+    flex: 1,
+    height: 0.5,
+    opacity: 0.55,
+  },
+  dividerDot: {
+    fontSize: 7,
+    marginHorizontal: 6,
+    opacity: 0.85,
+  },
+  title: {
+    fontSize: 19,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  verseContainer: {
+    height: 66,
+    overflow: 'hidden',
+  },
+  visaMerBtn: {
+    alignSelf: 'center',
+    marginTop: 4,
+  },
   swedish: {
-    fontSize: 14,
+    fontSize: 14.5,
     lineHeight: 22,
     fontWeight: '400',
-    marginBottom: 8,
-    minHeight: 66, // 3 lines × lineHeight 22 — keeps card height static
+    textAlign: 'center',
+    alignSelf: 'center',
+    width: '94%',
   },
   reference: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '500',
     fontStyle: 'italic',
-    opacity: 0.65,
-  },
-  hintRow: {
-    alignItems: 'center',
-    marginTop: 14,
-  },
-  hint: {
-    fontSize: 11,
-    fontWeight: '500',
-    opacity: 0.45,
+    textAlign: 'center',
+    opacity: 0.62,
   },
 });
