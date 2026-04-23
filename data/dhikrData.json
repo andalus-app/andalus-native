@@ -15354,7 +15354,11 @@
       "problem_tags": [],
       "situation_tags": [],
       "intent_tags": [],
-      "search_synonyms_sv": [],
+      "search_synonyms_sv": [
+        "sex",
+        "samlag",
+        "intimitet"
+      ],
       "priority_score": 40
     },
     {

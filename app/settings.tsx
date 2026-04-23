@@ -21,9 +21,7 @@ import {
   disableKahfReminder,
   enableAllahNamesReminder,
   disableAllahNamesReminder,
-  cancelAllUpcomingStreamNotifications,
   LIVE_NOTIF_ENABLED_KEY,
-  UPCOMING_REMIND_ENABLED_KEY,
 } from '../services/notifications';
 import {
   loadZakatReminderSettings,
@@ -125,8 +123,7 @@ export default function SettingsScreen() {
   const [kahfEnabled,            setKahfEnabled]            = useState(true);
   const [zakatEnabled,           setZakatEnabled]           = useState(false);
   const [allahNamesEnabled,      setAllahNamesEnabled]      = useState(true);
-  const [liveNotifEnabled,       setLiveNotifEnabled]       = useState(false);
-  const [upcomingReminderEnabled, setUpcomingReminderEnabled] = useState(false);
+  const [liveNotifEnabled, setLiveNotifEnabled] = useState(false);
   const [preferredName,    setPreferredName]    = useState<string | null>(null);
   const [nameModalVisible, setNameModalVisible] = useState(false);
   const nameSlideAnim = useRef(new Animated.Value(-400)).current;
@@ -153,8 +150,6 @@ export default function SettingsScreen() {
       setAllahNamesEnabled(allahNames !== 'false'); // null (never set) = default on
       const liveNotif = await AsyncStorage.getItem(LIVE_NOTIF_ENABLED_KEY);
       setLiveNotifEnabled(liveNotif === 'true'); // null (never set) = default off
-      const upcomingRemind = await AsyncStorage.getItem(UPCOMING_REMIND_ENABLED_KEY);
-      setUpcomingReminderEnabled(upcomingRemind === 'true'); // null (never set) = default off
       const zakat = await loadZakatReminderSettings();
       setZakatEnabled(zakat?.enabled ?? false);
       const name = await AsyncStorage.getItem('andalus_preferred_name');
@@ -387,28 +382,6 @@ export default function SettingsScreen() {
               }
               await AsyncStorage.setItem(LIVE_NOTIF_ENABLED_KEY, v ? 'true' : 'false');
               setLiveNotifEnabled(v);
-            }}
-            trackColor={{false:T.border,true:T.accent}} thumbColor="#fff" ios_backgroundColor={T.border}/>}/>
-
-        <Row T={T} iconName="bell" label="Påminnelse inför sändning" value="30 min innan en schemalagd direktsändning"
-          right={<Switch value={upcomingReminderEnabled}
-            onValueChange={async (v) => {
-              if (v) {
-                const granted = await requestNotificationPermission();
-                if (!granted) {
-                  Alert.alert(
-                    'Notiser nekade',
-                    'Aktivera notiser för Hidayah i iOS-inställningar.',
-                    [{ text: 'OK' }],
-                  );
-                  return;
-                }
-              } else {
-                // Cancel any already-scheduled upcoming reminders immediately
-                cancelAllUpcomingStreamNotifications().catch(() => {});
-              }
-              await AsyncStorage.setItem(UPCOMING_REMIND_ENABLED_KEY, v ? 'true' : 'false');
-              setUpcomingReminderEnabled(v);
             }}
             trackColor={{false:T.border,true:T.accent}} thumbColor="#fff" ios_backgroundColor={T.border}/>}/>
 

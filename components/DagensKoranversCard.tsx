@@ -4,20 +4,89 @@
  * Always shows a Quran verse (Bernström translation) on the home screen.
  * One new verse per day, deterministic — same date always returns same verse.
  * Tapping navigates to the Quran reader at the exact verse + page.
+ *
+ * Automatically updates at midnight with a fade-out/fade-in transition,
+ * even when the app stays open across midnight.
  */
 
-import React, { useMemo, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, AppState, AppStateStatus, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/context/ThemeContext';
 import { getDailyQuranVerse } from '@/services/dailyReminder';
 
+function todayStr(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function msUntilMidnight(): number {
+  const now = new Date();
+  const midnight = new Date(now);
+  midnight.setHours(24, 0, 0, 0);
+  return midnight.getTime() - now.getTime();
+}
+
 export default function DagensKoranversCard() {
   const { theme: T, isDark } = useTheme();
   const router = useRouter();
-  const verse = useMemo(() => getDailyQuranVerse(new Date()), []);
-  const [expanded, setExpanded] = useState(false);
+  const [dateKey, setDateKey] = useState<string>(todayStr);
+  const [expanded,  setExpanded]  = useState(false);
   const [truncated, setTruncated] = useState(false);
+  const opacity = useRef(new Animated.Value(1)).current;
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dateKeyRef = useRef<string>(dateKey);
+
+  const verse = useMemo(() => getDailyQuranVerse(new Date()), [dateKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const fadeAndUpdate = useCallback(() => {
+    Animated.timing(opacity, {
+      toValue: 0,
+      duration: 400,
+      useNativeDriver: true,
+    }).start(() => {
+      const newKey = todayStr();
+      dateKeyRef.current = newKey;
+      setDateKey(newKey);
+      setExpanded(false);
+      setTruncated(false);
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }).start();
+    });
+  }, [opacity]);
+
+  const scheduleMidnight = useCallback(() => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      fadeAndUpdate();
+      // Schedule next midnight after updating
+      scheduleMidnight();
+    }, msUntilMidnight());
+  }, [fadeAndUpdate]);
+
+  useEffect(() => {
+    scheduleMidnight();
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, [scheduleMidnight]);
+
+  // Catch midnight crossings while app was in background
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state: AppStateStatus) => {
+      if (state === 'active') {
+        const current = todayStr();
+        if (current !== dateKeyRef.current) {
+          fadeAndUpdate();
+          scheduleMidnight();
+        }
+      }
+    });
+    return () => sub.remove();
+  }, [fadeAndUpdate, scheduleMidnight]);
 
   return (
     <TouchableOpacity
@@ -32,27 +101,28 @@ export default function DagensKoranversCard() {
         },
       ]}
     >
-      <Text style={[styles.title, { color: T.text }]}>Dagens Koranvers</Text>
+      <Animated.View style={{ opacity }}>
+        <Text style={[styles.title, { color: T.text }]}>Dagens Koranvers</Text>
 
-      {/* Swedish verse text */}
-      <Text
-        style={[styles.swedish, { color: T.text }]}
-        numberOfLines={expanded ? undefined : 5}
-        onTextLayout={e => { if (!expanded) setTruncated(e.nativeEvent.lines.length >= 5); }}
-      >
-        {verse.swedish}
-      </Text>
-      {!expanded && truncated && (
-        <TouchableOpacity onPress={e => { e.stopPropagation?.(); setExpanded(true); }} activeOpacity={0.7} style={{ alignSelf: 'center', marginTop: -5 }}>
-          <Text style={{ fontSize: 12, color: T.accent }}>Visa mer</Text>
-        </TouchableOpacity>
-      )}
+        {/* Swedish verse text */}
+        <Text
+          style={[styles.swedish, { color: T.text }]}
+          numberOfLines={expanded ? undefined : 3}
+          onTextLayout={e => { if (!expanded) setTruncated(e.nativeEvent.lines.length > 3); }}
+        >
+          {verse.swedish}
+        </Text>
+        {!expanded && truncated && (
+          <TouchableOpacity onPress={e => { e.stopPropagation?.(); setExpanded(true); }} activeOpacity={0.7} style={{ alignSelf: 'center', marginTop: -5 }}>
+            <Text style={{ fontSize: 12, color: T.accent }}>Visa mer</Text>
+          </TouchableOpacity>
+        )}
 
-      {/* Reference */}
-      <Text style={[styles.reference, { color: T.textMuted }]}>
-        {verse.surahName} · {verse.surahNumber}:{verse.ayahNumber}
-      </Text>
-
+        {/* Reference */}
+        <Text style={[styles.reference, { color: T.textMuted }]}>
+          {verse.surahName} · {verse.surahNumber}:{verse.ayahNumber}
+        </Text>
+      </Animated.View>
     </TouchableOpacity>
   );
 }
@@ -82,6 +152,7 @@ paddingBottom: 12,
     lineHeight: 22,
     fontWeight: '400',
     marginBottom: 8,
+    minHeight: 66, // 3 lines × lineHeight 22 — keeps card height static
   },
   reference: {
     fontSize: 12,

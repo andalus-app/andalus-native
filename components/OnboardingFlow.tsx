@@ -99,7 +99,9 @@ const STEPS: StepDef[] = [
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function OnboardingFlow({ onDone, onNotificationsGranted }: { onDone: () => void; onNotificationsGranted?: () => void }) {
+type LocationPayload = { latitude: number; longitude: number; city: string; country: string };
+
+export default function OnboardingFlow({ onDone, onNotificationsGranted, onLocationGranted }: { onDone: () => void; onNotificationsGranted?: () => void; onLocationGranted?: (loc: LocationPayload) => void }) {
   const insets                            = useSafeAreaInsets();
   const [step,            setStep]        = useState(0);
   const [loading,         setLoading]     = useState(false);
@@ -178,6 +180,12 @@ export default function OnboardingFlow({ onDone, onNotificationsGranted }: { onD
           }));
           await AsyncStorage.setItem('andalus_settings_updated', Date.now().toString());
           setSelectedCity(city);
+          onLocationGranted?.({
+            latitude:  loc.coords.latitude,
+            longitude: loc.coords.longitude,
+            city,
+            country: geo.country,
+          });
         }
       } catch {}
       setLoading(false);
@@ -212,9 +220,15 @@ export default function OnboardingFlow({ onDone, onNotificationsGranted }: { onD
       await AsyncStorage.setItem('andalus_settings_updated', Date.now().toString());
     } catch {}
     setSelectedCity(r.city);
+    onLocationGranted?.({
+      latitude:  r.latitude,
+      longitude: r.longitude,
+      city:      r.city,
+      country:   r.country,
+    });
     setCityModal(false);
     goNext();
-  }, [goNext]);
+  }, [goNext, onLocationGranted]);
 
   // ── Render ───────────────────────────────────────────────────────────────────
 

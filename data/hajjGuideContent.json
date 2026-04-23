@@ -1,0 +1,598 @@
+{
+  "version": "1.2.0",
+  "locale": "sv-SE",
+  "namespace": "hajjGuide",
+  "lastUpdated": "2026-04-23",
+  "source": {
+    "title": "Hadjboken",
+    "notes": "Innehållet i denna guide är verifierat mot PDF-källan Hadjboken och följer Hajj at-Tamattu'."
+  },
+  "mediaUploadOrder": {
+    "instruction": "Ladda upp dessa bildfiler med exakt samma filnamn innan eller tillsammans med innehållet.",
+    "heroFilenames": [
+      "hajj_welcome_hero.jpg",
+      "hajj_virtues_hero.jpg",
+      "hajj_foundations_hero.jpg",
+      "hajj_transition_umrah_hero.jpg",
+      "hajj_day8_mina_hero.jpg",
+      "hajj_day9_arafah_hero.jpg",
+      "hajj_day10_eid_hero.jpg",
+      "hajj_tashriq_hero.jpg",
+      "hajj_daily_schedule_hero.jpg",
+      "hajj_common_mistakes_hero.jpg",
+      "hajj_complete_hero.jpg"
+    ]
+  },
+  "placement": {
+    "tab": "Visa mer",
+    "insertAfterKey": "umrah_guide",
+    "displayOrderHint": 4
+  },
+  "themeBehavior": {
+    "forceLightModeByDefault": true,
+    "allowManualDarkModeToggle": true,
+    "persistUserThemeChoice": true,
+    "firstOpenMessage": "För bättre läsbarhet i starkt ljus visas guiden i ljust läge.",
+    "allowSimplifiedView": true
+  },
+  "uiLabels": {
+    "startGuide": "Starta guide",
+    "continueGuide": "Fortsätt",
+    "resumeGuide": "Fortsätt där du slutade",
+    "nextStep": "Nästa steg",
+    "previousStep": "Tillbaka",
+    "markComplete": "Markera som klar",
+    "showDua": "Visa dua",
+    "hideDua": "Dölj dua",
+    "enableDarkMode": "Mörkt läge",
+    "enableSimplifiedView": "Förenklad vy",
+    "stepLabel": "Steg",
+    "ofLabel": "av",
+    "recommendedLabel": "Rekommenderat",
+    "requiredLabel": "Obligatoriskt",
+    "importantLabel": "Viktigt",
+    "warningLabel": "Undvik detta",
+    "completedHajj": "Min Hadj är klar",
+    "restartGuide": "Läs guiden igen",
+    "saveFavorite": "Spara som favorit",
+    "shareGuide": "Dela guide"
+  },
+  "heroImageMap": {
+    "welcome": "hajj_welcome_hero.jpg",
+    "virtues": "hajj_virtues_hero.jpg",
+    "foundations": "hajj_foundations_hero.jpg",
+    "transition_umrah": "hajj_transition_umrah_hero.jpg",
+    "day8_mina": "hajj_day8_mina_hero.jpg",
+    "day9_arafah": "hajj_day9_arafah_hero.jpg",
+    "day10_eid": "hajj_day10_eid_hero.jpg",
+    "tashriq": "hajj_tashriq_hero.jpg",
+    "daily_schedule": "hajj_daily_schedule_hero.jpg",
+    "common_mistakes": "hajj_common_mistakes_hero.jpg",
+    "complete": "hajj_complete_hero.jpg"
+  },
+  "steps": [
+    {
+      "id": "welcome",
+      "title": "En guide till hur man utför Hadj",
+      "subtitle": "Förord",
+      "heroImageKey": "welcome",
+      "stepNumber": 1,
+      "totalSteps": 10,
+      "showProgress": true,
+      "sections": [
+        {
+          "type": "summary",
+          "title": "Förord",
+          "body": "Den islamiska pilgrimsfärden, Hadj, är en av islams fem pelare vilket tyder på hur viktig den är och vilken hög status den har i vår religion. En accepterad korrekt Hadj leder till att man blir förlåten för alla sina tidigare synder och det är därför enormt viktigt att man utför den på ett korrekt sätt."
+        },
+        {
+          "type": "list",
+          "title": "För att en handling ska accepteras från Allah så måste den leva upp till två villkor",
+          "items": [
+            "Den ska göras uppriktigt för Allahs skull.",
+            "Den ska göras i enlighet med profeten Muhammads ﷺ sunnah."
+          ]
+        },
+        {
+          "type": "hadith",
+          "body": "Profeten Muhammad ﷺ har uppmanat oss specifikt vad gäller Hadj, att vi ska göra Hadj på det sättet han gjorde då han sade: \"Ta era Hadj-riter från mig.\""
+        },
+        {
+          "type": "summary",
+          "title": "Om denna guide",
+          "body": "Denna bok är en enkel guide för dig som vill utföra Hadj på ett korrekt sätt i enlighet med Koranen och sunnahn. Boken avser inte att gå in i djupa detaljer, utan att på ett pedagogiskt sätt förklara hur man kan göra Hadj på ett korrekt sätt. I vissa frågor har de lärda skiljt sig åt om vad som är rätt och det skulle vara komplicerat om vi skulle gå in i alla dessa detaljer."
+        },
+        {
+          "type": "summary",
+          "title": "De olika sätten att utföra Hadj",
+          "body": "Hadj kan utföras på tre olika sätt som i stort sätt liknar varandra, men skiljer sig i vissa detaljer. De olika sätten heter: Ifrad, Qiran och Tamattu'. Denna bok är baserad på det tredje sättet som kallas för Tamattu'. Det var detta sätt som profeten Muhammad ﷺ uppmanade sina följeslagare att göra Hadj på under sin sista pilgrimsfärd. Vid detta tillvägagångssätt gör man både Umrah och Hadj i en och samma resa. Först fullbordar man sin Umrah och därefter påbörjar man sin Hadj från Mecka."
+        }
+      ],
+      "primaryAction": {
+        "label": "Starta guide",
+        "action": "go_to_step",
+        "targetStepId": "virtues"
+      }
+    },
+    {
+      "id": "virtues",
+      "title": "Dygderna i att utföra Hadj",
+      "subtitle": "Dygderna i att utföra Hadj",
+      "heroImageKey": "virtues",
+      "stepNumber": 2,
+      "totalSteps": 10,
+      "showProgress": true,
+      "sections": [
+        {
+          "type": "summary",
+          "title": "Dygderna i att utföra Hadj",
+          "body": "Hadj utförs i den tolfte månaden i den islamiska kalendern som heter Dhul-Hidjah. Hadj börjar den åttonde dagen i månaden Dhul-Hidjah. Att utföra Hadj är bland de allra bästa handlingar en muslim kan utföra. Det är samtidigt fysiskt och materiellt krävande att bege sig ut på denna resa."
+        },
+        {
+          "type": "hadith",
+          "body": "Profeten ﷺ frågades vilken handling som är bäst? Han svarade då: \"Tron på Allah.\" Det sades; och sen då? Han svarade då: \"Att kämpa för Allahs skull.\" Det sades; och sen då? Han svarade: \"En accepterad Hadj.\""
+        },
+        {
+          "type": "hadith",
+          "body": "Profeten ﷺ sade: \"En accepterad Hadj har ingen annan belöning än paradiset.\""
+        },
+        {
+          "type": "hadith",
+          "body": "Profeten ﷺ sade även: \"Den som gör Hadj, utan dåligt tal eller att hamna i synder kommer att komma tillbaka likt den dagen hans moder födde honom [för att han blev av med alla sina synder].\""
+        },
+        {
+          "type": "summary",
+          "title": "Påminnelse",
+          "body": "I dessa tre hadither finner vi att Hadj är bland de bästa handlingarna en muslim kan utföra och att det leder till att man blir förlåten för sina synder och kommer till paradiset. När man läser detta och reflekterar över dess sanna innebörd, så förstår man att det är värt all den utmattning man kan känna av och varje krona som man spenderar. Må Allah acceptera från oss alla."
+        }
+      ],
+      "primaryAction": {
+        "label": "Nästa steg",
+        "action": "go_to_step",
+        "targetStepId": "foundations"
+      }
+    },
+    {
+      "id": "foundations",
+      "title": "Villkoren, pelarna, de obligatoriska och de rekommenderade handlingarna för Hadj",
+      "subtitle": "Hadjs grunder",
+      "heroImageKey": "foundations",
+      "stepNumber": 3,
+      "totalSteps": 10,
+      "showProgress": true,
+      "sections": [
+        {
+          "type": "dua",
+          "title": "Åkallan när man ska ut och resa",
+          "arabic": "سُبْحَانَ الَّذِي سَخَّرَ لَنَا هٰذَا وَمَا كُنَّا لَهُ مُقْرِنِينَ وَإِنَّا إِلَىٰ رَبِّنَا لَمُنْقَلِبُونَ، اللَّهُمَّ إِنَّا نَسْأَلُكَ فِي سَفَرِنَا هٰذَا الْبِرَّ وَالتَّقْوَىٰ، وَمِنَ الْعَمَلِ مَا تَرْضَى، اللَّهُمَّ هَوِّنْ عَلَيْنَا سَفَرَنَا هٰذَا وَاطْوِ عَنَّا بُعْدَهُ، اللَّهُمَّ أَنْتَ الصَّاحِبُ فِي السَّفَرِ، وَالْخَلِيفَةُ فِي الْأَهْلِ، اللَّهُمَّ إِنِّي أَعُوذُ بِكَ مِنْ وَعْثَاءِ السَّفَرِ، وَكَآبَةِ الْمَنْظَرِ، وَسُوءِ الْمُنْقَلَبِ فِي الْمَالِ وَالْأَهْلِ وَالْوَلَدِ",
+          "transliteration": "Subhanalladhi sakhara lana hadha wa ma kunna lahu muqrinin wa inna ila rabbina lamunqalibun, Allahumma inna nas'aluka fi safarina hadha al-birr wat-taqwa, wa minal-'amali ma tarda, Allahumma hawwin 'alayna safarana hadha watwi 'anna bu'dah, Allahumma antas-sahibu fis-safar, wal-khalifatu fil-ahl, Allahumma inni a'udhu bika min wu'atha'is-safar, wa ka'abatil-mandhar, wa su'il-munqalibi fil-mali wal-ahli wal-walad.",
+          "translation": "Fri från alla brister är Han som låter oss förfoga över detta [färdmedel]; själva skulle vi inte ha kunnat ta det i vår tjänst, och vi skall [en dag] vända tillbaka till vår Herre [efter döden]. Allah! Vi ber dig om fromhet, gudsfruktan och handlingar som behagar Dig under vår resa. Allah! Underlätta för oss vår resa och förkorta för oss det långa avståndet. Du är Den som vakar över oss under resan och bevarar familjen vi lämnat bakom oss. Allah! Jag söker skydd hos Dig mot resans svårigheter, en tragisk syn och en dålig återkomst till egendomen och familjen."
+        },
+        {
+          "type": "note",
+          "title": "När man återvänder från resan",
+          "body": "Och när man återvänder från resan säger man denna åkallan och lägger till: \"A'ibun ta'ibun 'abidun li rabbina hamidun.\" \"Vi återvänder, ångrar oss, dyrkar och lovprisar vår Herre.\""
+        },
+        {
+          "type": "summary",
+          "title": "Villkoren, pelarna, de obligatoriska och de rekommenderade handlingarna för Hadj",
+          "body": "Hadj bygger på villkor, pelare, obligatoriska och rekommenderade handlingar. Det är viktigt att du som skall göra Hadj bekantar dig med dessa och lär dig vad de innebär så att du kan utföra en korrekt Hadj. De är som följer:"
+        },
+        {
+          "type": "list",
+          "title": "Hadjs villkor",
+          "items": [
+            "Att man är muslim.",
+            "Att man har nått puberteten.",
+            "Att man är vid sina sinnes fulla bruk.",
+            "Att man är ekonomiskt och fysiskt kapabel att utföra den."
+          ]
+        },
+        {
+          "type": "list",
+          "title": "Hadjs pelare",
+          "items": [
+            "Al-ihram - vilket är avsikten att påbörja riterna.",
+            "Att stå på 'Arafah-platån.",
+            "Tawaf ul-ifadah - vilket är att man går sju varv runt Ka'bah.",
+            "As-sa'y - vilket är att man går fram och tillbaka längs as-Safa och al-Marwa sju gånger."
+          ]
+        },
+        {
+          "type": "list",
+          "title": "Hadjs obligatoriska handlingar",
+          "items": [
+            "Att man går in i al-ihram, dvs avser att börja sina riter från al-Miqat. Al-Miqat är de bestämda platser som man inte får passera utan att ha gått in i al-ihram.",
+            "Att man är kvar på 'Arafah tills solen har gått ned. Detta gäller för den som är på plats där på dagen.",
+            "Att man befinner sig i Muzdalifah på natten till den tionde dagen.",
+            "Att man befinner sig i Mina under tashriq-nätterna som är natten till den 11:e, 12:e och även den 13:e för den som stannar kvar tre dagar i Mina.",
+            "Att under Tashriq-dagarna slänga småstenarna på dess pelare i rätt ordning.",
+            "Att man rakar eller förkortar sitt hår när man är klar.",
+            "Att man gör avslutnings-tawaf. Detta gäller dock inte för kvinnan med mens eller blödningar som kommer efter födseln."
+          ]
+        },
+        {
+          "type": "important",
+          "title": "Viktigt",
+          "items": [
+            "Det är inte tillåtet att avsiktligt lämna någon av dessa obligatoriska handlingar, och den som skulle göra det måste slakta ett offerdjur. Hans Hadj blir då korrekt.",
+            "Utöver det är det obligatoriskt för den som gör Hadj al-Qiran och Hadj at-Tamattu' att slakta ett offerdjur.",
+            "Nuförtiden är det i princip omöjligt att slakta ett offerdjur själv, men det finns organisationer i Mecka som man betalar och som då utför det åt en.",
+            "'Arafah är en stor och vid platå som man står på. Det som avses här är inte berget som finns på platån som ibland kallas 'Arafah-berget, utan hela platån."
+          ]
+        },
+        {
+          "type": "summary",
+          "title": "Hadjs rekommenderade handlingar",
+          "body": "Alla de saker som har bekräftats från profeten Muhammad ﷺ som inte tidigare nämnts är rekommenderade handlingar. Det är bäst att göra dem, men om man inte skulle göra dem så är ingen skada skedd."
+        }
+      ],
+      "primaryAction": {
+        "label": "Nästa steg",
+        "action": "go_to_step",
+        "targetStepId": "umrah_transition"
+      }
+    },
+    {
+      "id": "umrah_transition",
+      "title": "Umrah före Hadj",
+      "subtitle": "Tamattu'",
+      "heroImageKey": "transition_umrah",
+      "stepNumber": 4,
+      "totalSteps": 10,
+      "showProgress": true,
+      "sections": [
+        {
+          "type": "summary",
+          "title": "Tamattu'",
+          "body": "Denna bok är baserad på det tredje sättet som kallas för Tamattu'. Det var detta sätt som profeten Muhammad ﷺ uppmanade sina följeslagare att göra Hadj på under sin sista pilgrimsfärd. Vid detta tillvägagångssätt gör man både Umrah och Hadj i en och samma resa. Först fullbordar man sin Umrah och därefter påbörjar man sin Hadj från Mecka."
+        }
+      ],
+      "primaryAction": {
+        "label": "Starta Umrah",
+        "action": "open_umrah_guide"
+      }
+    },
+    {
+      "id": "day8_mina",
+      "title": "Den 8:e dagen i månaden Dhul-Hidjah",
+      "subtitle": "Tarwiyah-dagen och att komma fram till Mina",
+      "heroImageKey": "day8_mina",
+      "stepNumber": 5,
+      "totalSteps": 10,
+      "showProgress": true,
+      "sections": [
+        {
+          "type": "summary",
+          "title": "Tarwiyah-dagen",
+          "body": "När man är klar med sin Umrah inväntar man den åttonde dagen i månaden Dhul-Hidjah. Den dagen gör man följande saker:"
+        },
+        {
+          "type": "list",
+          "title": "Det man gör den 8:e dagen",
+          "items": [
+            "Utför ghusl.",
+            "Sätter på sig parfym.",
+            "Tar på sig sin ihram-klädsel.",
+            "Därefter avser du med ditt hjärta att utföra Hadj och säger talbiyah.",
+            "Du skall säga detta flera gånger om.",
+            "Därefter ger du dig av till Mina."
+          ]
+        },
+        {
+          "type": "dua",
+          "title": "Talbiyah",
+          "arabic": "لَبَّيْكَ اللَّهُمَّ لَبَّيْكَ، لَبَّيْكَ لَا شَرِيكَ لَكَ لَبَّيْكَ، إِنَّ الْحَمْدَ وَالنِّعْمَةَ لَكَ وَالْمُلْكَ لَا شَرِيكَ لَكَ",
+          "transliteration": "Labbayka Allahumma Labbayk, Labbayka la sharika laka labbayk, inna al-hamda wan-ni'mata laka wal-mulk, la sharika lak.",
+          "translation": "Jag besvarar Ditt kall - Allah! - jag besvarar Ditt kall. Jag besvarar Ditt kall, det finns ingen [partner] vid Din sida. Jag besvarar ditt kall. Allt lovpris, alla gåvor och all makt hör till Dig, det finns ingen [partner] vid Din sida."
+        },
+        {
+          "type": "summary",
+          "title": "Att komma fram till Mina",
+          "items": [
+            "Du beger dig till Mina samtidigt som du gör mycket talbiyah.",
+            "Du skall be dhuhr två raka'at i dess tid i Mina.",
+            "Du skall be assr två raka'at i dess tid i Mina.",
+            "Du skall be maghrib tre raka'at i dess tid i Mina.",
+            "Du skall be isha två raka'at i dess tid i Mina.",
+            "Du skall be fajr två raka'at i dess tid på morgonen den nionde dagen i Mina."
+          ]
+        },
+        {
+          "type": "important",
+          "title": "Viktigt",
+          "items": [
+            "Under den åttonde dagen i Mina förkortar man alltså de böner som förkortas när man är resande, men man slår inte ihop dem utan ber varje bön i dess tid."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "day9_arafah_muzdalifah",
+      "title": "'Arafah och Muzdalifah",
+      "subtitle": "Den 9:e dagen i månaden Dhul-Hidjah",
+      "heroImageKey": "day9_arafah",
+      "stepNumber": 6,
+      "totalSteps": 10,
+      "showProgress": true,
+      "sections": [
+        {
+          "type": "summary",
+          "title": "Att bege sig till 'Arafah",
+          "items": [
+            "Du beger dig till 'Arafah efter att solen har gått upp den nionde dagen samtidigt som du gör mycket talbiyah.",
+            "Därefter slår du ihop och förkortar dhuhr och asr bönerna under tiden för dhuhr.",
+            "Man gör ett böneutrop och två iqamah; en för varje bön.",
+            "Varje bön är alltså två raka'at istället för fyra."
+          ]
+        },
+        {
+          "type": "important",
+          "title": "'Arafah",
+          "items": [
+            "För den som befinner sig på 'Arafah under denna dag är det obligatoriskt att vara kvar fram till solnedgången.",
+            "Under 'Arafahdagen skall du göra mycket åminnelser och du skall åkalla Allah mycket samtidigt som du är vänd mot qiblah, fram tills att solen går ned."
+          ]
+        },
+        {
+          "type": "dua",
+          "title": "På 'Arafah",
+          "arabic": "لَا إِلٰهَ إِلَّا اللَّهُ وَحْدَهُ لَا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ يُحْيِي وَيُمِيتُ وَهُوَ عَلَىٰ كُلِّ شَيْءٍ قَدِيرٌ",
+          "transliteration": "La ilaha illa-llaha wahdahu la sharika la, lahul-mulku wa lahul hamdu yuhyi wa yumitu wa huwa 'ala kulli sha'in qadir.",
+          "translation": "Ingen har rätt att dyrkas förutom Allah, Han är en, ingen partner har Han. Till Honom hör Herraväldet och all pris. Han ger liv och död och Han är kapabel till allting."
+        },
+        {
+          "type": "summary",
+          "title": "Att komma fram till Muzdalifah",
+          "items": [
+            "Därefter skall du på ett lugnt och stillsamt sätt bege dig till Muzdalifah, efter att solen gått ned på 'Arafahdagen.",
+            "Du ber maghrib tre raka'at och isha två raka'at. Du slår ihop bönerna med ett böneutrop och två iqamah.",
+            "Att befinna sig i Muzdalifah under natten är obligatoriskt.",
+            "Därefter skall du befinna dig i Muzdalifah under natten till slaktdagen och sova där.",
+            "Det är tillåtet för de svaga att bege sig därifrån vid midnatt.",
+            "Därefter ber du fajr i början av dess tid med ett böneutrop och en iqamah.",
+            "Därefter åminns du Allah, upphöjer och åkallar Honom samtidigt som du är vänd mot qiblah. Detta skall ske vid al-Mash'ar al-Haram om du kan, annars kan du göra det på vilken plats som helst i Muzdalifah. Fortsätt med detta tills det blir ljust ute."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "day10_eid",
+      "title": "Den 10:e dagen i månaden Dhul-Hidjah",
+      "subtitle": "De saker man skall göra under slaktdagen",
+      "heroImageKey": "day10_eid",
+      "stepNumber": 7,
+      "totalSteps": 10,
+      "showProgress": true,
+      "sections": [
+        {
+          "type": "summary",
+          "title": "Slaktdagen",
+          "items": [
+            "Därefter skall du bege dig till Mina under slaktdagen när det blivit riktigt ljust, men innan solen gått upp.",
+            "Därefter skall du kasta småstenar på jamrat ul-'Aqabah efter att solen har gått upp och du skall sluta göra talbiyah.",
+            "Du skall slänga sju småstenar och säga \"Allahu Akbar\" varje gång du slänger en sten.",
+            "Därefter skall du slakta offerdjuret.",
+            "De flesta slaktar inte själva utan har utsett och betalat någon att göra detta åt en.",
+            "Därefter skall männen raka av allt hår eller klippa från hela håret. Det är bäst att raka sig. Kvinnan skall klippa från sitt hår på samma sätt som det beskrevs när hon gjorde Umrah."
+          ]
+        },
+        {
+          "type": "dua",
+          "title": "Vid slakten",
+          "arabic": "بِسْمِ اللَّهِ وَاللَّهُ أَكْبَرُ، اللَّهُمَّ هٰذَا مِنْكَ وَلَكَ، اللَّهُمَّ تَقَبَّلْ مِنِّي",
+          "transliteration": "Bismillah wa Allahu Akbar, Allahumma hadha minka wa laka, Allahumma taqabbal minni.",
+          "translation": "I Allahs Namn och Allah är störst. Allah! Detta är från Dig och till Dig. Allah! Acceptera detta från mig."
+        },
+        {
+          "type": "important",
+          "title": "At-tahallul al-awal",
+          "items": [
+            "Efter att du slängt småsten på jamrat ul-'Aqabah och rakat eller klippt dig så har du gjort det som kallas at-tahallul al-awal.",
+            "Det är då tillåtet för personen att göra allt som var förbjudet för honom då han befann sig i ihram förutom att ha samlag eller förspel till samlag."
+          ]
+        },
+        {
+          "type": "summary",
+          "title": "Tawaf ul-ifadah och sa'y",
+          "items": [
+            "Därefter sätter du på dig parfym innan du skall göra tawaf ul-ifadah.",
+            "Därefter gör du tawaf ul-ifadah. Du skall göra på samma sätt som du gjort i din tawaf för Umrah förutom att småspringa.",
+            "Därefter skall du dricka zamzam vatten.",
+            "Därefter skall du promenera mellan as-Safa och al-Marwah.",
+            "Du skall göra på samma sätt som du gjorde första gången."
+          ]
+        },
+        {
+          "type": "important",
+          "title": "At-tahallul ath-thani",
+          "items": [
+            "Därmed har du gjort det som kallas at-tahallul ath-thani. Det är då tillåtet att göra alla saker som var förbjudet för dig då du hade ihram."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tashriq_days",
+      "title": "Tashriq-dagarna",
+      "subtitle": "Att kasta småsten och befinna sig i Mina under natten",
+      "heroImageKey": "tashriq",
+      "stepNumber": 8,
+      "totalSteps": 10,
+      "showProgress": true,
+      "sections": [
+        {
+          "type": "summary",
+          "title": "Tashriq-dagarna",
+          "body": "Tashriq-dagarna är den 11:e, den 12:e och även den 13:e dagen för den som fortsätter med Hadj till den sista dagen. Under dessa dagar skall du kasta småsten på de avsedda pelarna som finns där och man måste befinna sig i Mina under natten."
+        },
+        {
+          "type": "note",
+          "title": "Småstenarna",
+          "body": "Småstenarna man kastar ska vara ungefär lika stora som en kikärta."
+        },
+        {
+          "type": "summary",
+          "title": "Att kasta stenarna",
+          "items": [
+            "När du skall kasta dessa småstenar så vänder du dig mot qiblah och kastar sedan på de avsedda pelarna.",
+            "Du skall kasta småstenarna efter att solen nått sin högsta punkt på himlen.",
+            "Pelarna man kastar stenar på kallas \"jamarat\" och är tre till antalet. De kallas den lilla, den mellersta och den stora [al-'Aqabah].",
+            "Under Tashriq-dagarna skall du först kasta på den lilla, sedan på den mellersta och avslutningsvis på den stora [al-'Aqabah].",
+            "Du kastar stenarna en åt gången och säger Allahu Akbar varje gång du kastar.",
+            "När du kastat går du en bit bort från pelaren, vänder dig mot qiblah och gör mycket åkallan. Pelaren ska då vara på din högra sida.",
+            "Därefter skall du kasta sju småstenar på den andra pelaren på samma sätt du gjorde på den första och gör mycket åkallan.",
+            "Därefter skall du kasta sju småstenar på den tredje pelaren [al-'Aqabah] på samma sätt som de två första. När du kastat färdigt så går du dock därifrån utan att stå kvar vid pelaren.",
+            "Man ska kasta stenar på pelarna den 11:e och 12:e dagen och om man stannar den 13:e dagen så ska man kasta den dagen också."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "daily_schedule",
+      "title": "Ett dagligt schema för personen som gör Tamattu' Hadj",
+      "subtitle": "Komprimerad översikt dag för dag",
+      "heroImageKey": "daily_schedule",
+      "stepNumber": 9,
+      "totalSteps": 10,
+      "showProgress": true,
+      "sections": [
+        {
+          "type": "summary",
+          "title": "När man påbörjar Umrah",
+          "items": [
+            "Vid al-Miqat: Man skall gå in i ihram och avse att utföra Umrah.",
+            "I Mecka: Göra tawaf som en del av sin Umrah.",
+            "I Mecka: Göra sa'y [gå mellan as-Safa och al-Marwa] som en del av sin Umrah.",
+            "I Mecka: Att klippa håret.",
+            "I Mecka: Att gå ut ur ihram."
+          ]
+        },
+        {
+          "type": "summary",
+          "title": "Den 8:e dagen (tarwiyah-dagen)",
+          "items": [
+            "I Mecka: Att gå in i ihram och avse att göra Hadj och bege sig till Mina.",
+            "I Mina: Man skall be förkortade böner utan att slå ihop dem."
+          ]
+        },
+        {
+          "type": "summary",
+          "title": "Den 9:e dagen ('Arafah-dagen)",
+          "items": [
+            "I 'Arafah: Du skall be dhuhr och asr tillsammans i början av dhuhrs tid. Därefter skall du göra mycket åkallan fram tills solen gått ned.",
+            "I Muzdalifah: Du skall be maghrib tre raka'at och 'isha två raka'at tillsammans, direkt när du kommer fram till Muzdalifah. Du skall därefter befinna dig i Muzdalifah under natten för att sedan be fajr direkt när den kommit in."
+          ]
+        },
+        {
+          "type": "summary",
+          "title": "Den 10:e dagen (offerdagen)",
+          "items": [
+            "I Mina: Slänga småsten på jamarat ul-'Aqabah - den största pelaren.",
+            "I Mina: Att slakta offerdjuret.",
+            "I Mina: Att raka eller klippa håret.",
+            "I Mina: Att göra den första tahallul - då allt som varit förbjudet under tiden för ihram blir tillåtet förutom samlag och dess förspel.",
+            "I Mecka: Att göra tawaf ul-ifadah.",
+            "I Mecka: Att göra den sa'y man gör för Hadj.",
+            "I Mecka: Att göra den andra tahallul - då det även blir tillåtet att ha samlag.",
+            "I Mina: Befinna sig i Mina under natten."
+          ]
+        },
+        {
+          "type": "summary",
+          "title": "Den 11:e dagen (den första av Tashriq-dagarna)",
+          "items": [
+            "I Mina: Att slänga småsten på de tre pelarna efter att solen nått sin högsta punkt på himlen.",
+            "I Mina: Att befinna sig i Mina på natten."
+          ]
+        },
+        {
+          "type": "summary",
+          "title": "Den 12:e dagen (den andra tashriq-dagen)",
+          "items": [
+            "För den som kommer stanna kvar till den trettonde dagen gäller följande.",
+            "I Mina: Att slänga småsten på de tre pelarna efter att solen nått sin högsta punkt på himlen.",
+            "I Mina: Att befinna sig i Mina på natten."
+          ]
+        },
+        {
+          "type": "summary",
+          "title": "Den 13:e dagen (den tredje tashriq-dagen)",
+          "items": [
+            "För den som stannar kvar denna dag gäller följande.",
+            "I Mina: Att slänga småsten på de tre pelarna efter att solen nått sin högsta punkt på himlen.",
+            "Att du gör avskedstawaf då du vill bege dig av från Mecka. I och med det har du avklarat alla Hadjs riter."
+          ]
+        },
+        {
+          "type": "summary",
+          "title": "Efter den 13:e dagen",
+          "items": [
+            "För den som vill stanna kvar gäller följande:",
+            "Att du gör avskedstawaf då du vill bege dig av från Mecka. I och med det har du avklarat alla Hadjs riter.",
+            "Observera att avskedstawaf ska vara det sista man gör innan man beger sig av från Mecka."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "common_mistakes",
+      "title": "Vanliga misstag under Hadj",
+      "subtitle": "Vanliga misstag under Hadj",
+      "heroImageKey": "common_mistakes",
+      "stepNumber": 10,
+      "totalSteps": 10,
+      "showProgress": true,
+      "sections": [
+        {
+          "type": "warning",
+          "title": "Att man efter att ha gått in i ihram gör följande",
+          "items": [
+            "Tar bort hår, klipper naglarna eller att man använder parfym.",
+            "Att ha sexuellt umgänge eller förspel till det.",
+            "Att man dödar ett jaktdjur.",
+            "Att kvinnan sätter på sig niqab eller handskar.",
+            "Att mannen täcker håret.",
+            "Att man sätter på sig speciella sandaler för ihram.",
+            "Att man knyter sin ihram på samma sätt som man gör vid tawaf - vid andra tillfällen än tawaf."
+          ]
+        },
+        {
+          "type": "warning",
+          "title": "Andra vanliga misstag",
+          "items": [
+            "Att man beger sig till olika moskéer i och runt omkring Mecka som man avser besöka [för att de har en viss dygd], eller att man beger sig till olika berg och platser som man tror att man måste besöka under sin resa.",
+            "Att personen som skall göra Umrah börjar med att be tahiyyat ul-masjid.",
+            "Att man lyfter upp händerna då man rör vid den svarta stenen.",
+            "Att man pussar de andra hörnen på Ka'bah [förutom den svarta stenen som man skall pussa].",
+            "Att man smeker Ka'bahs väggar eller al-Maqam.",
+            "Att man söker välsignelse genom regnet som först faller på Ka'bah för att sedan komma ned på marken.",
+            "Att man lägger zamzam vatten på sina pengar och kläder.",
+            "Att man avser att göra en specifik åkallan då man gör tawaf - förutom \"Rabbana atina fid-dunya hasanah wa fil-akhirati hasanah wa qina adhaban-nar\" som man gör mellan ar-Rukn al-Yamani och den svarta stenen.",
+            "Att man uttalar sin avsikt då man skall utföra sina riter.",
+            "Att man står utanför 'Arafahs gränser.",
+            "Att man slösar sin tid när man egentligen bör fokusera sig på att göra dyrkan.",
+            "Att man avser att klättra upp på \"'Arafah-berget\".",
+            "Att man ber dhuhr och asr innan predikan.",
+            "Att man ber frivilliga böner mellan dhuhr och asrbönen på Arafahdagen.",
+            "Att man beger sig från 'Arafah innan solen gått ned.",
+            "Att man inte lägger vikt vid att vända sig mot qiblah när man ber i Muzdalifah.",
+            "Att man inte skyndar sig med att be maghribbönen så fort man kommer fram till Muzdalifah och att man istället skulle lägga vikt vid att leta småsten som man skall kasta dagen därpå.",
+            "Att be fajrbönen vid Muzdalifah innan dess tid har gått in.",
+            "Att man tvättar de småstenar man har plockat innan man kastar dem.",
+            "Att man kastar sandaler eller andra saker på pelarna.",
+            "Att man kastar på jamrat ul-'Aqabah bakifrån så att inte småstenarna hamnar inuti den avsedda platsen runt jamarat, som är likt en ring runt pelarna.",
+            "Att man inte lägger vikt vid villkoren som man måste uppfylla gällande slaktdjuret.",
+            "Att man slaktar utanför Meckas gränser.",
+            "Att man slaktar innan offerdagen (den tionde) eller efter Tashriq-dagarna.",
+            "Att man rakar sitt skägg.",
+            "Att man börjar raka sitt hår från vänster sida.",
+            "Att man under Tashriq-dagarna slänger småsten innan zawal.",
+            "Att man under dessa dagar slänger småsten på pelarna i fel ordning på så vis att man börjar med den största först.",
+            "Att man slänger alla stenar i samma kast."
+          ]
+        }
+      ]
+    }
+  ]
+}

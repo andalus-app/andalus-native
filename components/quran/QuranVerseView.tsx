@@ -440,10 +440,31 @@ const VerseCard = memo(function VerseCard({
   // Stable ref so the flash callback never becomes a memo dep.
   const onFlashDoneRef = useRef(onFlashDone);
   onFlashDoneRef.current = onFlashDone;
+  // Guard: skip the first-mount animation — Animated.Value is already initialised
+  // to the correct value (isHighlighted ? 1 : 0), so running a 0→0 or 1→1
+  // Animated.timing on mount needlessly creates native animation nodes across all
+  // ~45 VerseCards in the 3-page window, without any visible effect. Skipping it
+  // reduces native-thread work on every page visit.
+  const didMountRef = useRef(false);
 
   const shouldShow = isHighlighted;
 
   useEffect(() => {
+    // Cleanup: always stop the running animation when deps change or on unmount.
+    // Without this, swipe-away while a flash/highlight animation is in progress
+    // leaves orphaned native animation nodes alive on the UI thread. Over many
+    // page swipes these accumulate and slow the entire native animation system.
+    const cleanup = () => {
+      animRef.current?.stop();
+      animRef.current = null;
+    };
+
+    if (!didMountRef.current) {
+      // First render: value already at the correct initial state — no animation needed.
+      didMountRef.current = true;
+      return cleanup;
+    }
+
     animRef.current?.stop();
     if (shouldFlash) {
       // 2-cycle pulse: fade in → dim → in → dim → in (settle highlighted).
@@ -461,11 +482,12 @@ const VerseCard = memo(function VerseCard({
     } else {
       animRef.current = Animated.timing(highlightAnim, {
         toValue: shouldShow ? 1 : 0,
-        duration: shouldShow ? 180 : 180,
+        duration: 180,
         useNativeDriver: true,
       });
       animRef.current.start();
     }
+    return cleanup;
     // highlightAnim is a stable ref — safe to omit from deps
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shouldShow, shouldFlash]);

@@ -13,6 +13,7 @@ import React, { memo, useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
 import { UmrahTheme } from './umrahTheme';
+import ArabicText from '@/components/ArabicText';
 import SvgIcon from '@/components/SvgIcon';
 import type {
   SummarySection,
@@ -91,9 +92,9 @@ export const SummaryCard = memo(function SummaryCard({
         </Text>
       ) : null}
       {'arabic' in section && section.arabic ? (
-        <Text style={[styles.arabicText, { color: T.text, fontSize: fs(17, T.fontScale), lineHeight: lh(32, T.fontScale), marginTop: 6 }]}>
+        <ArabicText style={[styles.arabicText, { color: T.text, fontSize: fs(17, T.fontScale), lineHeight: lh(32, T.fontScale), marginTop: 6 }]}>
           {section.arabic}
-        </Text>
+        </ArabicText>
       ) : null}
       {section.items?.map((item, i) => (
         <Bullet key={i} T={T} text={item} color={T.textSecondary} />
@@ -191,9 +192,9 @@ export const DuaCard = memo(function DuaCard({
       </View>
 
       {section.arabic ? (
-        <Text style={[styles.arabicText, { color: T.text, fontSize: fs(17, T.fontScale), lineHeight: lh(32, T.fontScale) }]}>
+        <ArabicText style={[styles.arabicText, { color: T.text, fontSize: fs(17, T.fontScale), lineHeight: lh(32, T.fontScale) }]}>
           {section.arabic}
-        </Text>
+        </ArabicText>
       ) : null}
 
       <View style={[styles.duaDivider, { backgroundColor: T.duaBorder }]} />
@@ -376,9 +377,9 @@ export const QuranRefCard = memo(function QuranRefCard({
       {/* Title without badge — badge moves to bottom so it doesn't get clipped on large text */}
       <SectionTitle T={T} text={section.title} color={T.accent} />
       {section.arabic ? (
-        <Text style={[styles.arabicText, { color: T.text, fontSize: fs(17, T.fontScale), lineHeight: lh(32, T.fontScale) }]}>
+        <ArabicText style={[styles.arabicText, { color: T.text, fontSize: fs(17, T.fontScale), lineHeight: lh(32, T.fontScale) }]}>
           {section.arabic}
-        </Text>
+        </ArabicText>
       ) : null}
       <Text style={[styles.transliterationText, { color: T.accent, fontSize: fs(14, T.fontScale), lineHeight: lh(22, T.fontScale) }]}>
         {section.transliteration}

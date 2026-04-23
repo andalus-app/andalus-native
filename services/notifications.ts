@@ -325,85 +325,9 @@ export async function sendLiveNotification(videoId: string, title: string): Prom
   } catch {}
 }
 
-// ── YouTube upcoming stream notifications ─────────────────────────────────────
-// Uses DATE triggers — these are scheduled by the OS and fire even when the app
-// is killed or the screen is locked. Schedule on first detection of an upcoming
-// stream; cancel when the stream goes live or disappears.
-//
-// Two notifications per upcoming stream:
-//   1. 30-minute advance reminder   (identifier: andalus-upcoming-remind-{videoId})
-//   2. Notification at start time   (identifier: andalus-upcoming-start-{videoId})
-
-const UPCOMING_REMIND_PREFIX = 'andalus-upcoming-remind-';
-const UPCOMING_START_PREFIX  = 'andalus-upcoming-start-';
-
-export async function scheduleUpcomingStreamNotifications(
-  videoId: string,
-  title: string,
-  scheduledStart: string, // ISO 8601 date string from API
-): Promise<void> {
-  if (!N) return;
-  try {
-    const { status } = await N.getPermissionsAsync();
-    if (status !== 'granted') return;
-
-    const startMs  = new Date(scheduledStart).getTime();
-    const now      = Date.now();
-    const remindMs = startMs - 30 * 60_000;
-
-    // 30-minute advance reminder — only useful if the stream hasn't started yet.
-    // No start-time notification is scheduled here: the actual live notification
-    // is sent by the Edge Function (server push) or sendLiveNotification() when
-    // the stream transitions to live — not at the scheduled clock time.
-    if (remindMs > now) {
-      await N.scheduleNotificationAsync({
-        identifier: UPCOMING_REMIND_PREFIX + videoId,
-        content: {
-          title: 'Direktsändning om 30 min',
-          body:  title,
-          sound: true,
-          data:  { screen: 'youtube_live', videoId },
-        },
-        trigger: {
-          type: N.SchedulableTriggerInputTypes.DATE,
-          date: new Date(remindMs),
-        },
-      });
-      console.log('[YT] 30-min reminder scheduled for:', title, 'at', new Date(remindMs).toLocaleString('sv-SE'));
-    }
-  } catch (e) {
-    console.warn('[YT] scheduleUpcomingStreamNotifications error:', e);
-  }
-}
-
-export async function cancelUpcomingStreamNotifications(videoId: string): Promise<void> {
-  if (!N) return;
-  try {
-    await Promise.all([
-      N.cancelScheduledNotificationAsync(UPCOMING_REMIND_PREFIX + videoId).catch(() => {}),
-      N.cancelScheduledNotificationAsync(UPCOMING_START_PREFIX + videoId).catch(() => {}),
-    ]);
-  } catch {}
-}
-
-/** Cancels ALL scheduled upcoming-stream notifications regardless of videoId.
- *  Used when the user disables the upcoming reminder toggle in settings. */
-export async function cancelAllUpcomingStreamNotifications(): Promise<void> {
-  if (!N) return;
-  try {
-    const all  = await N.getAllScheduledNotificationsAsync();
-    const ours = all.filter(n =>
-      n.identifier.startsWith(UPCOMING_REMIND_PREFIX) ||
-      n.identifier.startsWith(UPCOMING_START_PREFIX),
-    );
-    await Promise.all(ours.map(n => N!.cancelScheduledNotificationAsync(n.identifier)));
-  } catch {}
-}
-
-// AsyncStorage keys for live-stream notification preferences.
-// Exported so settings.tsx can read/write them and useYoutubeLive can respect them.
-export const LIVE_NOTIF_ENABLED_KEY      = 'liveNotificationEnabled';
-export const UPCOMING_REMIND_ENABLED_KEY = 'upcomingReminderEnabled';
+// AsyncStorage key for live-stream notification preference.
+// Exported so settings.tsx can read/write it and useYoutubeLive can respect it.
+export const LIVE_NOTIF_ENABLED_KEY = 'liveNotificationEnabled';
 
 // ── Admin push token ─────────────────────────────────────────────────────────
 // Returns the Expo push token string, or null if unavailable.

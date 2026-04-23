@@ -193,6 +193,8 @@ function AppContent({ onFontsReady }: { onFontsReady: () => void }) {
         <Stack.Screen name="dhikr" options={{ fullScreenGestureEnabled: false }} />
         {/* Umrah Guide: swipe back fully disabled — internal step navigation handles all back */}
         <Stack.Screen name="umrah" options={{ gestureEnabled: false }} />
+        {/* Hadj Guide: edge-only swipe back — prevents accidental dismiss while navigating steps */}
+        <Stack.Screen name="hajj" options={{ fullScreenGestureEnabled: false }} />
       </Stack>
 
       {/* YouTube background audio player — always mounted outside the tab/stack
@@ -215,6 +217,14 @@ function AppContent({ onFontsReady }: { onFontsReady: () => void }) {
             // Activate dhikr reminder in live AppContext state so scheduling
             // kicks in immediately without waiting for next app restart.
             dispatch({ type: 'SET_SETTINGS', payload: { dhikrReminder: true } });
+          }}
+          onLocationGranted={(loc) => {
+            // Dispatch the location to AppContext immediately so prayer times
+            // start loading in the background before the user sees the home screen.
+            // Without this, state.location stays null after onboarding and the
+            // home screen shows no prayer times until the user visits the
+            // prayer times tab (which calls refreshLocation()).
+            dispatch({ type: 'SET_LOCATION', payload: loc });
           }}
         />
       )}

@@ -180,12 +180,12 @@ function YoutubeCard({ stream, isLive, isUpcoming }: YoutubeCardProps) {
   // No stream — render nothing
   if (!stream) return null;
 
-  // Only show upcoming streams within 6 hours of scheduled start.
+  // Only show upcoming streams within 1 hour of scheduled start.
   // Streams further away are noise — the card appears when it's actually relevant.
   if (
     stream.status === 'upcoming' &&
     stream.scheduledStart &&
-    new Date(stream.scheduledStart).getTime() > Date.now() + 6 * 60 * 60_000
+    new Date(stream.scheduledStart).getTime() > Date.now() + 60 * 60_000
   ) {
     return null;
   }
@@ -211,7 +211,15 @@ function YoutubeCard({ stream, isLive, isUpcoming }: YoutubeCardProps) {
   }
 
   return (
-    <View style={{ marginBottom: 12, borderRadius: 16, overflow: 'hidden', borderWidth: 0.5, borderColor: T.border }}>
+    <View>
+      <Text style={{
+        fontSize: 12, fontWeight: '600', color: T.textMuted,
+        letterSpacing: 0.6, textTransform: 'uppercase',
+        marginTop: 4, marginBottom: 10,
+      }}>
+        Föreläsning
+      </Text>
+      <View style={{ marginBottom: 12, borderRadius: 16, overflow: 'hidden', borderWidth: 0.5, borderColor: T.border }}>
       {/* Thumbnail area — always shown. The single background WebView overlays this
           area at root level when in inline mode (inlineFrame set). The card itself
           just shows the thumbnail / background-playing indicator. */}
@@ -323,6 +331,7 @@ function YoutubeCard({ stream, isLive, isUpcoming }: YoutubeCardProps) {
           </TouchableOpacity>
         )}
       </View>
+    </View>
     </View>
   );
 }
@@ -585,6 +594,9 @@ export default function HomeScreen() {
   const readTimerRef              = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scrollRef                 = useRef<ScrollView>(null);
   const youtubeCardYRef           = useRef<number>(0);
+  // Set to true when a live-notification tap is pending. Triggers scroll either
+  // immediately (card already rendered) or from onLayout when card first appears.
+  const pendingScrollToYoutubeRef = useRef(false);
   const announcementsLoadingRef   = useRef(false);
   const lastAnnouncementsLoadRef  = useRef(0);
   const ANNOUNCEMENTS_COOLDOWN_MS = 30_000;
@@ -652,13 +664,20 @@ export default function HomeScreen() {
     // Reload name on every focus so edits made in Settings are reflected instantly.
     AsyncStorage.getItem('andalus_preferred_name').then(n => setPreferredName(n ?? null));
     // If the user tapped a YouTube LIVE notification, scroll to the YouTube card.
+    // Two paths:
+    //   Warm start: card already rendered → youtubeCardYRef.current > 0 → scroll immediately.
+    //   Cold start: stream not yet loaded → card hasn't rendered → set pendingScrollToYoutubeRef
+    //               so the onLayout of the YouTube card wrapper fires the scroll instead.
     AsyncStorage.getItem('islamnu_live_notif_tap').then(tap => {
       if (!tap) return;
       AsyncStorage.removeItem('islamnu_live_notif_tap').catch(() => {});
-      // Delay lets the layout settle before scrolling.
-      setTimeout(() => {
-        scrollRef.current?.scrollTo({ y: youtubeCardYRef.current - 16, animated: true });
-      }, 350);
+      if (youtubeCardYRef.current > 0) {
+        setTimeout(() => {
+          scrollRef.current?.scrollTo({ y: youtubeCardYRef.current - 16, animated: true });
+        }, 200);
+      } else {
+        pendingScrollToYoutubeRef.current = true;
+      }
     });
     const interval = setInterval(refresh, 30 * 1000);
     return () => clearInterval(interval);
@@ -1134,7 +1153,15 @@ export default function HomeScreen() {
           );
         })()}
 
-        <View onLayout={e => { youtubeCardYRef.current = e.nativeEvent.layout.y; }}>
+        <View onLayout={e => {
+          youtubeCardYRef.current = e.nativeEvent.layout.y;
+          if (pendingScrollToYoutubeRef.current && e.nativeEvent.layout.y > 0) {
+            pendingScrollToYoutubeRef.current = false;
+            setTimeout(() => {
+              scrollRef.current?.scrollTo({ y: e.nativeEvent.layout.y - 16, animated: true });
+            }, 200);
+          }
+        }}>
           <YoutubeCard stream={stream} isLive={isLive} isUpcoming={isUpcoming} />
         </View>
 

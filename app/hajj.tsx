@@ -1,11 +1,15 @@
 /**
- * Umrah Guide — main screen.
+ * Hajj Guide — main screen.
  *
  * - Opens in LIGHT MODE by default, independent of app theme.
  * - User can toggle dark mode; choice persists across visits.
  * - Simplified view toggle hides supplementary content.
  * - Step-based flow with progress, counters, checklists.
  * - Auto-resumes at last active step.
+ * - 'open_umrah_guide' passes explicit entry context to Umrah Guide so it
+ *   returns here at 'day8_mina' on completion instead of going to FAQ.
+ * - Accepts '?targetStep=<id>' param on entry to override the stored step
+ *   (used when Umrah Guide returns the user here after completion).
  */
 
 import React, {
@@ -13,7 +17,7 @@ import React, {
 } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView, StyleSheet,
-  StatusBar, Share, Switch,
+  StatusBar, Switch,
 } from 'react-native';
 import SvgIcon from '@/components/SvgIcon';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -23,7 +27,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 
 import { umrahLight, umrahDark, UmrahTheme } from '@/components/umrah/umrahTheme';
-import UmrahHeroHeader from '@/components/umrah/UmrahHeroHeader';
+import HajjHeroHeader from '@/components/hajj/HajjHeroHeader';
 import {
   SummaryCard, SpiritualIntroCard, DuaCard, ImportantCard, WarningCard,
   NoteCard, HadithCard, SplitInfoCard, QuranRefCard, CelebrationCard, ReflectionCard,
@@ -31,30 +35,18 @@ import {
 import UmrahAccordionCard from '@/components/umrah/UmrahAccordionCard';
 import UmrahCounter from '@/components/umrah/UmrahCounter';
 import UmrahChecklist from '@/components/umrah/UmrahChecklist';
-import UmrahFAQAccordion from '@/components/umrah/UmrahFAQAccordion';
 
 import {
-  UMRAH_STEPS, UI_LABELS, getStepIndex,
-  UmrahStep, UmrahSection,
-  HERO_IMAGE_SOURCES,
-} from '@/data/umrahGuideData';
+  HAJJ_STEPS, HAJJ_UI_LABELS, getHajjStepIndex,
+  HAJJ_HERO_IMAGE_SOURCES,
+} from '@/data/hajjGuideData';
 
-// ── Guide entry context ───────────────────────────────────────────────────────
-// Passed as URL params when another guide opens the Umrah Guide.
-// Never guessed — always derived from explicit params.
-
-type GuideContext = {
-  entryPoint:          string;  // e.g. 'hajj'
-  returnGuide:         string;  // route name to navigate back to
-  returnStepId:        string;  // step id to land on in the return guide
-  skipFaqOnCompletion: boolean;
-};
+import type { UmrahStep, UmrahSection } from '@/data/umrahGuideData';
 
 // ── AsyncStorage key ──────────────────────────────────────────────────────────
 
-const STORAGE_KEY = 'andalus_umrah_progress_v1';
+const STORAGE_KEY = 'andalus_hajj_progress_v1';
 
-// Font scale steps — index 0 is the minimum (current default size)
 const FONT_SCALE_STEPS = [1, 1.15, 1.3, 1.45, 1.6] as const;
 
 type PersistedState = {
@@ -63,8 +55,8 @@ type PersistedState = {
   isGuideDark:     boolean;
   isSimplified:    boolean;
   fontScaleIndex?: number;
-  counterValues:  Record<string, number>;
-  checklistState: Record<string, boolean[]>;
+  counterValues:   Record<string, number>;
+  checklistState:  Record<string, boolean[]>;
 };
 
 // ── Simplified view — which section types to hide ─────────────────────────────
@@ -74,17 +66,16 @@ const SIMPLIFIED_HIDE = new Set([
   'spiritual_intro', 'quran_reference', 'reflection',
 ]);
 
-// Non-content steps where simplified mode doesn't apply
 const NO_SIMPLIFY_STEPS = new Set(['welcome', 'complete', 'faq']);
 
 // ── StepRenderer ──────────────────────────────────────────────────────────────
 
 type StepRendererProps = {
-  T:              UmrahTheme;
-  step:           UmrahStep;
-  isSimplified:   boolean;
-  counterValue:   number;
-  checklistState: boolean[];
+  T:               UmrahTheme;
+  step:            UmrahStep;
+  isSimplified:    boolean;
+  counterValue:    number;
+  checklistState:  boolean[];
   onCounterChange: (v: number) => void;
   onChecklistChange: (index: number, value: boolean) => void;
 };
@@ -122,12 +113,11 @@ const StepRenderer = memo(function StepRenderer({
       case 'important':
         return <ImportantCard key={i} T={T} section={section} />;
       case 'warning':
-        // Always show warnings regardless of simplified mode
         return <WarningCard key={i} T={T} section={section} />;
       case 'quran_reference':
         return <QuranRefCard key={i} T={T} section={section} />;
       case 'faq':
-        return <UmrahFAQAccordion key={i} T={T} items={section.items} />;
+        return null;
       case 'celebration':
         return <CelebrationCard key={i} T={T} section={section} />;
       case 'reflection':
@@ -141,7 +131,6 @@ const StepRenderer = memo(function StepRenderer({
     <>
       {step.sections.map((section, i) => renderSection(section, i))}
 
-      {/* Counter (Tawaf / Sa'i) */}
       {step.counter && (
         <UmrahCounter
           T={T}
@@ -151,7 +140,6 @@ const StepRenderer = memo(function StepRenderer({
         />
       )}
 
-      {/* Checklist */}
       {step.checklist && step.checklist.length > 0 && (
         <UmrahChecklist
           T={T}
@@ -197,10 +185,9 @@ const SettingsPanel = memo(function SettingsPanel({
         shadowColor:     T.shadow,
       },
     ]}>
-      {/* Dark mode */}
       <View style={styles.settingsRow}>
         <Text style={[styles.settingsLabel, { color: T.text }]}>
-          {UI_LABELS.enableDarkMode}
+          {HAJJ_UI_LABELS.enableDarkMode}
         </Text>
         <Switch
           value={isGuideDark}
@@ -212,11 +199,10 @@ const SettingsPanel = memo(function SettingsPanel({
 
       <View style={[styles.settingsDivider, { backgroundColor: T.separator }]} />
 
-      {/* Simplified view */}
       <View style={styles.settingsRow}>
         <View style={{ flex: 1 }}>
           <Text style={[styles.settingsLabel, { color: T.text }]}>
-            {UI_LABELS.enableSimplifiedView}
+            {HAJJ_UI_LABELS.enableSimplifiedView}
           </Text>
           <Text style={[styles.settingsHint, { color: T.textMuted }]}>
             Visa bara vad du ska göra och säga
@@ -232,11 +218,9 @@ const SettingsPanel = memo(function SettingsPanel({
 
       <View style={[styles.settingsDivider, { backgroundColor: T.separator }]} />
 
-      {/* Font size */}
       <View style={styles.settingsRow}>
         <Text style={[styles.settingsLabel, { color: T.text }]}>Textstorlek</Text>
         <View style={styles.fontSizeRow}>
-          {/* Decrease button — small A */}
           <TouchableOpacity
             onPress={onFontScaleDecrease}
             disabled={atMin}
@@ -247,7 +231,6 @@ const SettingsPanel = memo(function SettingsPanel({
             <Text style={{ fontSize: 13, fontWeight: '700', color: atMin ? T.textMuted : T.text }}>A</Text>
           </TouchableOpacity>
 
-          {/* Level dots */}
           <View style={styles.fontScaleDots}>
             {FONT_SCALE_STEPS.map((_, i) => (
               <View
@@ -260,7 +243,6 @@ const SettingsPanel = memo(function SettingsPanel({
             ))}
           </View>
 
-          {/* Increase button — large A */}
           <TouchableOpacity
             onPress={onFontScaleIncrease}
             disabled={atMax}
@@ -278,50 +260,52 @@ const SettingsPanel = memo(function SettingsPanel({
 
 // ── Main screen ───────────────────────────────────────────────────────────────
 
-export default function UmrahScreen() {
-  const router  = useRouter();
-  const insets  = useSafeAreaInsets();
+export default function HajjScreen() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
 
-  // ── Entry context (explicit — never guessed) ─────────────────────────────────
-  // Present when another guide opens the Umrah Guide via router params.
-  const { from, returnStep } = useLocalSearchParams<{ from?: string; returnStep?: string }>();
-  const guideContext: GuideContext | null = from === 'hajj'
-    ? { entryPoint: 'hajj', returnGuide: 'hajj', returnStepId: returnStep ?? 'day8_mina', skipFaqOnCompletion: true }
-    : null;
-  const isHajjFlow = guideContext?.entryPoint === 'hajj';
+  // When returning from the Umrah Guide, '?targetStep=<id>' overrides the stored step.
+  const { targetStep } = useLocalSearchParams<{ targetStep?: string }>();
+  const targetStepRef         = useRef(targetStep); // stable ref — captured at mount, used in load effect
+  // Set to true inside the load effect when targetStep=day8_mina — i.e. we arrived
+  // from the hajj-transition screen. Used to route the back button on day8_mina
+  // back to the transition screen (router.back) instead of the previous guide step.
+  const arrivedViaTransitionRef = useRef(false);
 
-  // ── Local state ─────────────────────────────────────────────────────────────
-  const [stepIndex,       setStepIndex]       = useState(0);
-  const [completedSteps,  setCompletedSteps]  = useState<string[]>([]);
-  const [isGuideDark,     setIsGuideDark]     = useState(false);
-  const [isSimplified,    setIsSimplified]    = useState(false);
-  const [fontScaleIndex,  setFontScaleIndex]  = useState(0);
-  const [counterValues,   setCounterValues]   = useState<Record<string, number>>({});
-  const [checklistState,  setChecklistState]  = useState<Record<string, boolean[]>>({});
-  const [showSettings,    setShowSettings]    = useState(false);
-  const [loaded,          setLoaded]          = useState(false);
+  const [stepIndex,      setStepIndex]      = useState(0);
+  const [completedSteps, setCompletedSteps] = useState<string[]>([]);
+  const [isGuideDark,    setIsGuideDark]    = useState(false);
+  const [isSimplified,   setIsSimplified]   = useState(false);
+  const [fontScaleIndex, setFontScaleIndex] = useState(0);
+  const [counterValues,  setCounterValues]  = useState<Record<string, number>>({});
+  const [checklistState, setChecklistState] = useState<Record<string, boolean[]>>({});
+  const [showSettings,   setShowSettings]   = useState(false);
+  const [loaded,         setLoaded]         = useState(false);
 
-  const scrollRef    = useRef<ScrollView>(null);
+  const scrollRef      = useRef<ScrollView>(null);
   const [topBarHeight, setTopBarHeight] = useState(0);
 
   const T: UmrahTheme = { ...(isGuideDark ? umrahDark : umrahLight), fontScale: FONT_SCALE_STEPS[fontScaleIndex] };
-  const step          = UMRAH_STEPS[stepIndex];
-  const isFirst       = stepIndex === 0;
-  const isLast        = stepIndex === UMRAH_STEPS.length - 1;
+  const step   = HAJJ_STEPS[stepIndex];
+  const isFirst = stepIndex === 0;
+  const isLast  = stepIndex === HAJJ_STEPS.length - 1;
 
-  // ── Preload all hero images into memory on mount (silent, fire-and-forget) ───
+  // ── Preload all hero images on mount ────────────────────────────────────────
   useEffect(() => {
-    const sources = Object.values(HERO_IMAGE_SOURCES).filter((s): s is number => s != null);
+    const sources = Object.values(HAJJ_HERO_IMAGE_SOURCES).filter((s): s is number => s != null);
     Asset.loadAsync(sources).catch(() => {});
   }, []);
 
   // ── Load persisted state ────────────────────────────────────────────────────
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY).then(raw => {
+    (async () => {
+      const raw = await AsyncStorage.getItem(STORAGE_KEY);
+      let savedStepIndex = 0;
       if (raw) {
         try {
           const saved: PersistedState = JSON.parse(raw);
-          setStepIndex(saved.stepIndex ?? 0);
+          savedStepIndex = saved.stepIndex ?? 0;
+          setStepIndex(savedStepIndex);
           setCompletedSteps(saved.completedSteps ?? []);
           setIsGuideDark(saved.isGuideDark ?? false);
           setIsSimplified(saved.isSimplified ?? false);
@@ -330,9 +314,44 @@ export default function UmrahScreen() {
           setChecklistState(saved.checklistState ?? {});
         } catch { /* corrupt storage — use defaults */ }
       }
+
+      // targetStep param takes priority over stored step (e.g. returning from Umrah Guide).
+      const override = targetStepRef.current;
+      if (override) {
+        const idx = getHajjStepIndex(override);
+        if (idx >= 0) {
+          setStepIndex(idx);
+          // Mark that we arrived at day8_mina via the transition screen so the
+          // back button on that step returns to the transition screen (router.back)
+          // rather than decrementing to transition_umrah step.
+          if (override === 'day8_mina') {
+            arrivedViaTransitionRef.current = true;
+          }
+        }
+        setLoaded(true);
+        return;
+      }
+
+      // Auto-resume Umrah Guide: if the saved step is umrah_transition and
+      // Umrah has in-progress state (stepIndex > 0), navigate directly to
+      // Umrah so the user doesn't have to press "Starta Umrah" again.
+      if (HAJJ_STEPS[savedStepIndex]?.id === 'umrah_transition') {
+        try {
+          const umrahRaw = await AsyncStorage.getItem('andalus_umrah_progress_v1');
+          if (umrahRaw) {
+            const umrahState = JSON.parse(umrahRaw);
+            if ((umrahState.stepIndex ?? 0) > 0) {
+              setLoaded(true);
+              router.push('/umrah?from=hajj&returnStep=day8_mina' as any);
+              return;
+            }
+          }
+        } catch { /* corrupt Umrah state — fall through to normal load */ }
+      }
+
       setLoaded(true);
-    });
-  }, []);
+    })();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Persist on every relevant change ───────────────────────────────────────
   const mountedRef = useRef(true);
@@ -357,37 +376,31 @@ export default function UmrahScreen() {
 
   // ── Navigation ──────────────────────────────────────────────────────────────
   const goToStep = useCallback((targetStepId: string) => {
-    const idx = getStepIndex(targetStepId);
+    const idx = getHajjStepIndex(targetStepId);
     if (idx >= 0) {
       setStepIndex(idx);
       setShowSettings(false);
     }
   }, []);
 
-  // Shared helper — used by every exit point at the completion step in Hajj flow.
-  // Routes to the transition screen (not directly to Hajj) and uses replace so
-  // the Umrah Guide is not left on the stack.
-  const returnToHajj = useCallback(() => {
-    if (!guideContext) return;
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    router.replace(`/hajj-transition?targetStep=${guideContext.returnStepId}` as any);
-  }, [guideContext, router]);
-
   const handleNext = useCallback(() => {
-    if (stepIndex < UMRAH_STEPS.length - 1) {
+    if (stepIndex < HAJJ_STEPS.length - 1) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      // In Hajj flow at the completion step: skip FAQ and return to Hajj Guide.
-      if (isHajjFlow && step.id === 'complete') { returnToHajj(); return; }
       setStepIndex(i => i + 1);
     }
-  }, [stepIndex, isHajjFlow, step.id, returnToHajj]);
+  }, [stepIndex]);
 
   const handlePrev = useCallback(() => {
+    if (arrivedViaTransitionRef.current && step.id === 'day8_mina') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      router.back();
+      return;
+    }
     if (stepIndex > 0) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       setStepIndex(i => i - 1);
     }
-  }, [stepIndex]);
+  }, [step.id, stepIndex, router]);
 
   const handleMarkComplete = useCallback(() => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -395,23 +408,23 @@ export default function UmrahScreen() {
     if (!completedSteps.includes(id)) {
       setCompletedSteps(prev => [...prev, id]);
     }
-    // In Hajj flow at the completion step: skip FAQ and return to Hajj Guide.
-    if (isHajjFlow && step.id === 'complete') { returnToHajj(); return; }
-    if (stepIndex < UMRAH_STEPS.length - 1) {
+    if (stepIndex < HAJJ_STEPS.length - 1) {
       setStepIndex(i => i + 1);
     }
-  }, [step.id, completedSteps, stepIndex, isHajjFlow, returnToHajj]);
+  }, [step.id, completedSteps, stepIndex]);
 
   const handlePrimaryAction = useCallback(() => {
     if (!step.primaryAction) return;
-    // In Hajj flow at the completion step: skip FAQ and return to Hajj Guide.
-    if (isHajjFlow && step.id === 'complete') { returnToHajj(); return; }
     const { action, targetStepId } = step.primaryAction;
     if (action === 'go_to_step' && targetStepId) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       goToStep(targetStepId);
+    } else if (action === 'open_umrah_guide') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      // Pass explicit entry context so Umrah Guide returns here at day8_mina on completion.
+      router.push('/umrah?from=hajj&returnStep=day8_mina' as any);
     }
-  }, [step, goToStep, isHajjFlow, returnToHajj]);
+  }, [step, goToStep, router]);
 
   const handleStepAction = useCallback((action: string) => {
     if (action === 'restart_guide') {
@@ -420,10 +433,8 @@ export default function UmrahScreen() {
       setCompletedSteps([]);
       setCounterValues({});
       setChecklistState({});
-    } else if (action === 'share') {
-      Share.share({
-        message: 'Umrah Guide — Steg för steg genom din Umrah. Andalus App.',
-      });
+      // Reset Umrah guide too so it starts from the beginning next time.
+      AsyncStorage.removeItem('andalus_umrah_progress_v1').catch(() => {});
     }
   }, []);
 
@@ -464,12 +475,11 @@ export default function UmrahScreen() {
   }, []);
 
   // ── Derived values ──────────────────────────────────────────────────────────
-  const counterValue    = counterValues[step.id]    ?? step.counter?.startValue ?? 1;
-  const stepChecklist   = checklistState[step.id]   ?? Array(step.checklist?.length ?? 0).fill(false);
-  const isCompleted = completedSteps.includes(step.id);
+  const counterValue  = counterValues[step.id]  ?? step.counter?.startValue ?? 1;
+  const stepChecklist = checklistState[step.id] ?? Array(step.checklist?.length ?? 0).fill(false);
+  const isCompleted   = completedSteps.includes(step.id);
 
-  // Progress bar width percentage
-  const progressPct = ((stepIndex) / (UMRAH_STEPS.length - 1)) * 100;
+  const progressPct = ((stepIndex) / (HAJJ_STEPS.length - 1)) * 100;
 
   if (!loaded) return null;
 
@@ -486,8 +496,8 @@ export default function UmrahScreen() {
         style={[
           styles.topBar,
           {
-            paddingTop:      insets.top + 8,
-            backgroundColor: T.bg,
+            paddingTop:        insets.top + 8,
+            backgroundColor:   T.bg,
             borderBottomColor: T.separator,
           },
         ]}>
@@ -502,7 +512,7 @@ export default function UmrahScreen() {
 
         <View style={styles.topCenter}>
           <Text style={[styles.topTitle, { color: T.text }]} numberOfLines={1}>
-            Umrah Guide
+            Hadj Guide
           </Text>
           {!isFirst && (
             <Text style={[styles.topSubtitle, { color: T.textMuted }]}>
@@ -514,13 +524,7 @@ export default function UmrahScreen() {
         <TouchableOpacity
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            if (isHajjFlow) {
-              // Opened from Hajj Guide — skip back to More directly so the user
-              // doesn't have to press X twice (Umrah → Hajj → More).
-              router.navigate('/(tabs)/more' as any);
-            } else {
-              router.back();
-            }
+            router.navigate('/(tabs)/more' as any);
           }}
           activeOpacity={0.7}
           style={[styles.iconBtn, { borderColor: T.border, backgroundColor: T.card }]}
@@ -566,8 +570,7 @@ export default function UmrahScreen() {
         contentContainerStyle={{ paddingBottom: insets.bottom + 120 }}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Hero */}
-        <UmrahHeroHeader
+        <HajjHeroHeader
           T={T}
           heroKey={step.heroImageKey}
           title={step.title}
@@ -578,7 +581,6 @@ export default function UmrahScreen() {
           isWelcome={isFirst}
         />
 
-        {/* Section cards */}
         <View style={styles.sectionsContainer}>
           <StepRenderer
             T={T}
@@ -600,7 +602,7 @@ export default function UmrahScreen() {
               style={[styles.startBtn, { backgroundColor: T.accent }]}
             >
               <Text style={[styles.startBtnText, { color: '#FFFFFF' }]}>
-                {UI_LABELS.startGuide}
+                {HAJJ_UI_LABELS.startGuide}
               </Text>
             </TouchableOpacity>
           </View>
@@ -633,7 +635,7 @@ export default function UmrahScreen() {
           </View>
         )}
 
-        {/* Primary action (e.g. "Min Umrah är klar") */}
+        {/* Primary action (non-welcome steps) */}
         {step.primaryAction && !isFirst && (
           <View style={{ paddingHorizontal: 16, marginTop: 4 }}>
             <TouchableOpacity
@@ -642,9 +644,7 @@ export default function UmrahScreen() {
               style={[styles.primaryActionBtn, { backgroundColor: T.accent }]}
             >
               <Text style={styles.primaryActionText}>
-                {(isHajjFlow && step.id === 'complete')
-                  ? 'Fortsätt till Hadj ›'
-                  : step.primaryAction.label}
+                {step.primaryAction.label}
               </Text>
             </TouchableOpacity>
           </View>
@@ -661,24 +661,16 @@ export default function UmrahScreen() {
             paddingBottom:   insets.bottom + 8,
           },
         ]}>
-          {/* Previous */}
           <TouchableOpacity
             onPress={handlePrev}
             activeOpacity={0.7}
-            style={[
-              styles.navBtn,
-              {
-                borderColor: T.border,
-                backgroundColor: T.card,
-              },
-            ]}
+            style={[styles.navBtn, { borderColor: T.border, backgroundColor: T.card }]}
           >
             <Text style={[styles.navBtnText, { color: T.text }]}>
-              ‹ {UI_LABELS.previousStep}
+              ‹ {HAJJ_UI_LABELS.previousStep}
             </Text>
           </TouchableOpacity>
 
-          {/* Mark complete / Next */}
           {!isLast ? (
             <View style={styles.navRight}>
               <TouchableOpacity
@@ -696,19 +688,19 @@ export default function UmrahScreen() {
                   styles.completeBtnText,
                   { color: isCompleted ? T.important : T.accent },
                 ]}>
-                  {isCompleted ? '✓ Klar' : UI_LABELS.markComplete}
+                  {isCompleted ? '✓ Klar' : HAJJ_UI_LABELS.markComplete}
                 </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                onPress={handleNext}
+                onPress={step.primaryAction?.action === 'open_umrah_guide' ? handlePrimaryAction : handleNext}
                 activeOpacity={0.7}
                 style={[styles.nextBtn, { backgroundColor: T.accent }]}
               >
                 <Text style={[styles.nextBtnText, { color: '#FFFFFF' }]}>
-                  {(isHajjFlow && step.id === 'complete')
-                    ? 'Fortsätt till Hadj ›'
-                    : `${step.nextButtonLabel ?? UI_LABELS.nextStep} ›`}
+                  {step.primaryAction?.action === 'open_umrah_guide'
+                    ? step.primaryAction.label
+                    : (step.nextButtonLabel ?? HAJJ_UI_LABELS.nextStep) + ' ›'}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -719,7 +711,7 @@ export default function UmrahScreen() {
               style={[styles.nextBtn, { backgroundColor: T.accent }]}
             >
               <Text style={[styles.nextBtnText, { color: '#FFFFFF' }]}>
-                {UI_LABELS.restartGuide}
+                {HAJJ_UI_LABELS.restartGuide}
               </Text>
             </TouchableOpacity>
           )}
@@ -755,25 +747,22 @@ export default function UmrahScreen() {
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-  },
+  root: { flex: 1 },
 
-  // Top bar
   topBar: {
-    flexDirection:  'row',
-    alignItems:     'center',
+    flexDirection:     'row',
+    alignItems:        'center',
     paddingHorizontal: 16,
-    paddingBottom:  10,
+    paddingBottom:     10,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   topCenter: {
-    flex:      1,
+    flex:       1,
     alignItems: 'center',
   },
   topTitle: {
-    fontSize:   17,
-    fontWeight: '600',
+    fontSize:      17,
+    fontWeight:    '600',
     letterSpacing: -0.2,
   },
   topSubtitle: {
@@ -796,20 +785,20 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     marginTop:  -1,
   },
-  // Settings panel
+
   settingsPanel: {
-    borderRadius:     14,
-    borderWidth:      0.5,
+    borderRadius:      14,
+    borderWidth:       0.5,
     paddingHorizontal: 16,
-    shadowOffset:     { width: 0, height: 6 },
-    shadowOpacity:    0.18,
-    shadowRadius:     16,
-    elevation:        8,
-    zIndex:           100,
+    shadowOffset:      { width: 0, height: 6 },
+    shadowOpacity:     0.18,
+    shadowRadius:      16,
+    elevation:         8,
+    zIndex:            100,
   },
   settingsRow: {
-    flexDirection:  'row',
-    alignItems:     'center',
+    flexDirection:   'row',
+    alignItems:      'center',
     paddingVertical: 14,
   },
   settingsLabel: {
@@ -825,9 +814,9 @@ const styles = StyleSheet.create({
     height: StyleSheet.hairlineWidth,
   },
   fontSizeRow: {
-    flexDirection:  'row',
-    alignItems:     'center',
-    gap:            10,
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           10,
   },
   fontSizeBtn: {
     width:          32,
@@ -848,10 +837,9 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
 
-  // Progress bar
   progressTrack: {
-    height:   3,
-    width:    '100%',
+    height:    3,
+    width:     '100%',
     marginTop: 1,
   },
   progressFill: {
@@ -859,17 +847,15 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
 
-  // Sections
   sectionsContainer: {
     paddingHorizontal: 16,
     paddingTop:        16,
   },
 
-  // Welcome CTAs
   welcomeActions: {
     paddingHorizontal: 16,
     paddingTop:        8,
-    gap:              10,
+    gap:               10,
   },
   startBtn: {
     height:         54,
@@ -878,15 +864,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   startBtnText: {
-    fontSize:   17,
-    fontWeight: '600',
+    fontSize:      17,
+    fontWeight:    '600',
     letterSpacing: -0.2,
   },
-  // Complete step actions
+
   completeActions: {
     paddingHorizontal: 16,
     paddingTop:        8,
-    gap:              10,
+    gap:               10,
   },
   completeActionBtn: {
     height:         50,
@@ -900,7 +886,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // Primary action button (e.g. "Min Umrah är klar")
   primaryActionBtn: {
     height:         52,
     borderRadius:   16,
@@ -913,55 +898,54 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // Bottom nav
   bottomNav: {
-    flexDirection:  'row',
-    alignItems:     'center',
+    flexDirection:     'row',
+    alignItems:        'center',
     paddingHorizontal: 16,
-    paddingTop:     12,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    gap:            8,
+    paddingTop:        12,
+    borderTopWidth:    StyleSheet.hairlineWidth,
+    gap:               8,
   },
   navBtn: {
-    height:         46,
+    height:            46,
     paddingHorizontal: 16,
-    borderRadius:   14,
-    borderWidth:    0.5,
-    alignItems:     'center',
-    justifyContent: 'center',
-    flexShrink:     0,
+    borderRadius:      14,
+    borderWidth:       0.5,
+    alignItems:        'center',
+    justifyContent:    'center',
+    flexShrink:        0,
   },
   navBtnText: {
     fontSize:   14,
     fontWeight: '500',
   },
   navRight: {
-    flex:          1,
-    flexDirection: 'row',
-    alignItems:    'center',
-    gap:           8,
+    flex:           1,
+    flexDirection:  'row',
+    alignItems:     'center',
+    gap:            8,
     justifyContent: 'flex-end',
   },
   completeBtn: {
-    height:         46,
+    height:            46,
     paddingHorizontal: 12,
-    borderRadius:   14,
-    borderWidth:    0.5,
-    alignItems:     'center',
-    justifyContent: 'center',
-    flexShrink:     1,
-    minWidth:       0,
+    borderRadius:      14,
+    borderWidth:       0.5,
+    alignItems:        'center',
+    justifyContent:    'center',
+    flexShrink:        1,
+    minWidth:          0,
   },
   completeBtnText: {
     fontSize:   13,
     fontWeight: '600',
   },
   nextBtn: {
-    height:         46,
+    height:            46,
     paddingHorizontal: 18,
-    borderRadius:   14,
-    alignItems:     'center',
-    justifyContent: 'center',
+    borderRadius:      14,
+    alignItems:        'center',
+    justifyContent:    'center',
   },
   nextBtnText: {
     fontSize:   15,

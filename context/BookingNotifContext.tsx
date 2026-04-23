@@ -249,6 +249,8 @@ export function BookingNotifProvider({ children }: { children: React.ReactNode }
     }
 
     setBookingNotifs([...bookingNotifsList, ...excNotifs]);
+    } catch {
+      // Network error or Supabase unavailable — silent, polling will retry
     } finally {
       fetchingRef.current = false;
     }
@@ -294,33 +296,37 @@ export function BookingNotifProvider({ children }: { children: React.ReactNode }
     const userRole = Storage.getItem('islamnu_user_role') ?? 'user';
     if (!userId) return;
     (async () => {
-      // Never request notification permission automatically — only register the push
-      // token if the user has already granted permission (e.g. via onboarding).
-      let N: typeof import('expo-notifications') | null = null;
-      try { N = require('expo-notifications'); } catch {}
-      if (N) {
-        const { status } = await N.getPermissionsAsync().catch(() => ({ status: 'denied' }));
-        if (status !== 'granted') return;
-      }
-      const token = await getExpoPushToken();
-      if (!token) return; // network unavailable or permission missing — silent, savePushToken retries
-      // Read announcement notification preference from saved settings
-      let announcementNotif = true;
       try {
-        const s = await AsyncStorage.getItem('andalus_app_state');
-        if (s) announcementNotif = JSON.parse(s)?.settings?.announcementNotifications ?? true;
-      } catch {}
+        // Never request notification permission automatically — only register the push
+        // token if the user has already granted permission (e.g. via onboarding).
+        let N: typeof import('expo-notifications') | null = null;
+        try { N = require('expo-notifications'); } catch {}
+        if (N) {
+          const { status } = await N.getPermissionsAsync().catch(() => ({ status: 'denied' }));
+          if (status !== 'granted') return;
+        }
+        const token = await getExpoPushToken();
+        if (!token) return; // network unavailable or permission missing — silent, savePushToken retries
+        // Read announcement notification preference from saved settings
+        let announcementNotif = true;
+        try {
+          const s = await AsyncStorage.getItem('andalus_app_state');
+          if (s) announcementNotif = JSON.parse(s)?.settings?.announcementNotifications ?? true;
+        } catch {}
 
-      // Remove any stale row for this token under a different user_id (e.g. the
-      // anonymous device_id row created by savePushToken before the user logged in).
-      await supabase.from('push_tokens').delete().eq('token', token).neq('user_id', userId);
+        // Remove any stale row for this token under a different user_id (e.g. the
+        // anonymous device_id row created by savePushToken before the user logged in).
+        await supabase.from('push_tokens').delete().eq('token', token).neq('user_id', userId);
 
-      const { error } = await supabase.from('push_tokens').upsert(
-        { user_id: userId, token, role: userRole, announcement_notif: announcementNotif, updated_at: new Date().toISOString() },
-        { onConflict: 'user_id' }
-      );
-      if (error) console.warn('[PushToken] upsert error:', error);
-      else console.log('[PushToken] saved successfully for', userId);
+        const { error } = await supabase.from('push_tokens').upsert(
+          { user_id: userId, token, role: userRole, announcement_notif: announcementNotif, updated_at: new Date().toISOString() },
+          { onConflict: 'user_id' }
+        );
+        if (error) console.warn('[PushToken] upsert error:', error.message);
+        else console.log('[PushToken] saved successfully for', userId);
+      } catch {
+        // Network error — token will be registered on next app open
+      }
     })();
   }, []); // run once on mount — role is read synchronously from Storage inside
 
