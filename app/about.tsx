@@ -98,6 +98,7 @@ export default function AboutScreen() {
             resizeMode="contain"
           />
           <Text style={[styles.heroTitle, { color: T.text }]}>Hidayah</Text>
+          <Text style={[styles.heroVersion, { color: T.textMuted }]}>Version 1.0.7</Text>
         </View>
 
         {/* Sections */}
@@ -162,6 +163,10 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     marginTop: 14,
     letterSpacing: -0.3,
+  },
+  heroVersion: {
+    fontSize: 13,
+    marginTop: 4,
   },
   heroSub: {
     fontSize: 13,
