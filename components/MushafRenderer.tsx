@@ -73,7 +73,7 @@
  * NO FALLBACK: if any required font fails to load, an error is shown.
  */
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { memo, useEffect, useRef, useState } from 'react';
 import { View, Text, ActivityIndicator, StyleSheet, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, {
@@ -186,6 +186,97 @@ function computeSlotLayouts(height: number, verticalShift = 0, shortPage = false
   });
 }
 
+// ── BannerOrnament — memoized SVG ornament for surah header banners ──────────
+//
+// The KNUT banner consists of 60 clip-paths + 178 groups with Path/Line/Rect
+// children — potentially 400–600 SVG elements per surah header slot. Without
+// memoization this entire subtree is re-created on every MushafRenderer render,
+// including each activeVerseKey change (1/s during audio) and every touch event.
+//
+// Props only change when page, width/height, or theme changes — never during
+// audio playback or touch events. memo() keeps the heavy Core Text reconciliation
+// off the critical swipe and audio paths.
+
+type BannerOrnamentProps = {
+  transform: string;
+  color:     string;
+  opacity:   number;
+};
+
+const BannerOrnament = memo(function BannerOrnament({
+  transform,
+  color,
+  opacity,
+}: BannerOrnamentProps) {
+  // ── DEV: verify BannerOrnament is NOT re-rendering during audio/touch ─────
+  // Expected: render #1 on mount. Then ONLY on page-change, orientation-change,
+  // or theme-change. Must NOT log during activeVerseKey updates (audio ticks).
+  if (__DEV__) {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    const _rc = useRef(0);
+    _rc.current += 1;
+    if (_rc.current <= 5) {
+      console.log(`[BannerOrnament] render #${_rc.current} color=${color.slice(0, 7)}`);
+    } else {
+      // Any render beyond #5 is unexpected during normal audio/touch usage.
+      console.warn(`[BannerOrnament] UNEXPECTED re-render #${_rc.current} — check memo comparator`);
+    }
+  }
+
+  return (
+    <G transform={transform}>
+      {KNUT_GROUPS.map((g, gi) => (
+          <G key={gi} clipPath={g.clip ? `url(#knut-${g.clip})` : undefined}>
+            {g.children.map((c, ci) => {
+              if (c.tag === 'path') {
+                return (
+                  <Path
+                    key={ci}
+                    d={c.d}
+                    fill={color}
+                    fillOpacity={opacity}
+                    stroke={color}
+                    strokeOpacity={opacity}
+                    strokeWidth={0.12}
+                  />
+                );
+              }
+              if (c.tag === 'line') {
+                return (
+                  <SvgLine
+                    key={ci}
+                    x1={c.x1} y1={c.y1} x2={c.x2} y2={c.y2}
+                    stroke={color}
+                    strokeOpacity={opacity}
+                    strokeWidth={0.12}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                );
+              }
+              if (c.tag === 'rect') {
+                const rProps = c.transform ? { transform: c.transform } : {};
+                return (
+                  <Rect
+                    key={ci}
+                    x={parseFloat(c.x)}
+                    y={parseFloat(c.y)}
+                    width={parseFloat(c.w)}
+                    height={parseFloat(c.h)}
+                    fill={color}
+                    fillOpacity={opacity}
+                    {...rProps}
+                  />
+                );
+              }
+              return null;
+            })}
+          </G>
+      ))}
+    </G>
+  );
+});
+
 // ── Slot renderers ────────────────────────────────────────────────────────────
 
 function renderVerseLineSlot(
@@ -272,29 +363,12 @@ function renderSurahHeaderSlot(
 
   return (
     <G key={`sh-${slot.slotNumber}`}>
-      {/* ── Banner ornament (clip-paths in root Defs) ────────────────── */}
-      <G transform={bannerTransform}>
-        {KNUT_GROUPS.map((g, gi) => {
-          const clipProp = g.clip ? { clipPath: `url(#knut-${g.clip})` } : {};
-          return (
-            <G key={gi} {...clipProp}>
-              {g.children.map((c, ci) => {
-                if (c.tag === 'path') {
-                  return <Path key={ci} d={c.d} fill={bannerColor} fillOpacity={bannerOpacity} stroke={bannerColor} strokeOpacity={bannerOpacity} strokeWidth={0.12} />;
-                }
-                if (c.tag === 'line') {
-                  return <SvgLine key={ci} x1={c.x1} y1={c.y1} x2={c.x2} y2={c.y2} stroke={bannerColor} strokeOpacity={bannerOpacity} strokeWidth={0.12} strokeLinecap="round" strokeLinejoin="round" />;
-                }
-                if (c.tag === 'rect') {
-                  const rProps = c.transform ? { transform: c.transform } : {};
-                  return <Rect key={ci} x={parseFloat(c.x)} y={parseFloat(c.y)} width={parseFloat(c.w)} height={parseFloat(c.h)} fill={bannerColor} fillOpacity={bannerOpacity} {...rProps} />;
-                }
-                return null;
-              })}
-            </G>
-          );
-        })}
-      </G>
+      {/* ── Banner ornament — memoized, only re-renders on page/size/theme change */}
+      <BannerOrnament
+        transform={bannerTransform}
+        color={bannerColor}
+        opacity={bannerOpacity}
+      />
 
       {/* ── Surah name calligraphy — on top of banner ───────────────── */}
       {entry && nameTransform && (
@@ -452,7 +526,7 @@ type HighlightRect = { x: number; y: number; w: number; h: number };
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function MushafRenderer({
+function MushafRenderer({
   page,
   width,
   height,
@@ -474,6 +548,28 @@ export default function MushafRenderer({
   // Using the viewport height (393 pt) instead gives padV ≈ 29 pt, so
   // content starts near the top where the reader expects it.
   const padVHeight = viewportHeight ?? height;
+
+  // ── DEV: render counter — remove after perf verification ─────────────────
+  // Expected per-page pattern:
+  //   • Cold open: 1–2 renders (font loading → ready)
+  //   • Audio tick: 1 render per verse change (activeVerseKey changed → correct)
+  //   • Touch press/release on THIS page: 1–2 renders (pendingKey changed → correct)
+  //   • Touch press on ANOTHER page: 0 renders (memo blocked → correct)
+  //   • Long-press on any page: 1 render (longPressedVerse context changed → expected)
+  //   • BannerOrnament re-renders: should be 0 during audio/touch (only on page/size/theme change)
+  if (__DEV__) {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    const _rc = useRef(0);
+    _rc.current += 1;
+    if (_rc.current <= 3 || _rc.current % 20 === 0) {
+      console.log(
+        `[MR p${page.pageNumber}] render #${_rc.current}` +
+        ` active=${activeVerseKey ?? '-'}` +
+        ` km=${khatmahMarkers ? khatmahMarkers.startVerseKey.slice(0,6) : '-'}`,
+      );
+    }
+  }
+
   // Lazy init: if the parent (QuranPager) has pre-loaded this page's font,
   // start in 'ready' immediately — no loading spinner, no async setState.
   const [fontState, setFontState] = useState<FontState>(() => {
@@ -1720,3 +1816,32 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
 });
+
+// ── Memoized export ───────────────────────────────────────────────────────────
+//
+// Custom comparator: MushafRenderer re-renders only when props that affect
+// its visual output actually change. This prevents re-renders triggered by
+// QuranPageView parent state changes that are irrelevant to the SVG canvas:
+//
+//   - pressedVerseKey (touch feedback handled by SlotZone overlay, not SVG)
+//   - pressedSurahId  (same — handled by SurahHeaderZone overlay)
+//   - longPressedVerse from context (other pages re-render unnecessarily)
+//   - bookmarkFlashKey (only bookmark stripe visibility, not SVG canvas)
+//
+// activeVerseKey IS included — highlight rects depend on it.
+// khatmahMarkers IS included — khatmah highlight rects depend on them.
+// page reference equality is used — fetchComposedMushafPage always returns
+// the same object from _composedPageCache for a given pageNumber, so reference
+// equality is a reliable proxy for "same page data".
+export default memo(MushafRenderer, (prev, next) =>
+  prev.page         === next.page         &&
+  prev.width        === next.width        &&
+  prev.height       === next.height       &&
+  prev.viewportHeight === next.viewportHeight &&
+  prev.screenWidth  === next.screenWidth  &&
+  prev.isDark       === next.isDark       &&
+  prev.activeVerseKey === next.activeVerseKey &&
+  prev.fontSize     === next.fontSize     &&
+  prev.khatmahMarkers?.startVerseKey === next.khatmahMarkers?.startVerseKey &&
+  prev.khatmahMarkers?.endVerseKey   === next.khatmahMarkers?.endVerseKey
+);

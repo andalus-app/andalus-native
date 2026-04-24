@@ -115,6 +115,9 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { pageCache }           from './quranPageLRU';
+import { isPageCached }        from './quranOfflineManifest';
+import { readPage, writePage } from './quranPageFileStore';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -153,20 +156,36 @@ const _surahMetaCache = new Map<number, SurahMeta>();
 
 // ── In-memory cache for composed pages ───────────────────────────────────────
 //
-// AsyncStorage reads (even cache hits) are async I/O and take 50–500 ms each.
-// fetchComposedMushafPage also calls fetchSurahMeta multiple times per page.
-// With FlatList windowSize=5, five pages waiting for AsyncStorage produces a
-// batch settle time of several seconds — triggering VirtualizedList warnings.
+// Previously an unbounded Map<number, ComposedMushafPage>. Replaced by pageCache
+// (LRU, max 25 entries) from quranPageLRU.ts. The LRU bounds heap to ≈25 pages
+// (≈1.25 MB) instead of accumulating all 604 during background prefetch (≈30 MB).
 //
-// This in-memory Map short-circuits the AsyncStorage layer for already-fetched
-// pages. QuranPager pre-warms adjacent pages so by the time FlatList renders a
-// QuranPageView, fetchComposedMushafPage returns a synchronously-resolved
-// Promise (microtask) → QuranPageView settles in the same JS frame.
+// Resolution order in fetchComposedMushafPage:
+//   1. pageCache (LRU in-memory)    — < 1 ms, synchronous
+//   2. quranPageFileStore (disk)    — ~2–5 ms async, offline-first
+//   3. AsyncStorage (verse data)    — existing fallback, unchanged
+//   4. Network fetch                — existing fallback, unchanged
 //
 // _composedPageInFlight deduplicates concurrent calls (e.g. pre-warm racing
-// QuranPageView's own load) so only one network/AsyncStorage round-trip fires.
-const _composedPageCache    = new Map<number, ComposedMushafPage>();
+// QuranPageView's own load) so only one FileStore/AsyncStorage/network round-trip
+// fires for each page.
 const _composedPageInFlight = new Map<number, Promise<ComposedMushafPage>>();
+
+// ── In-flight deduplication for raw verse API responses ──────────────────────
+//
+// When QuranPager pre-warms pages N-3 to N+3 simultaneously (7 pages), each
+// page's fetchMushafPageVerses fires overflow fetches for N-1 and N+1.
+// Without deduplication, adjacent pre-warm calls hit the same URL 2-3 times:
+//
+//   fetchMushafPageVerses(5) fires: fetch(url(4)), fetch(url(5)), fetch(url(6))
+//   fetchMushafPageVerses(6) fires: fetch(url(5)), fetch(url(6)), fetch(url(7))
+//   → url(5) and url(6) each fire twice from this pair alone.
+//
+// _rawVersePageInFlight ensures each page URL is fetched at most once at a time.
+// AbortSignal is intentionally NOT forwarded to overflow fetches — these are
+// shared between callers and must not be cancelled when one caller unmounts.
+// On network error the promise resolves to [] (non-fatal — same as before).
+const _rawVersePageInFlight = new Map<number, Promise<ApiVerse[]>>();
 
 /**
  * Synchronous cache probe — returns the composed page if already in memory,
@@ -174,7 +193,7 @@ const _composedPageInFlight = new Map<number, Promise<ComposedMushafPage>>();
  * state cycle in QuranPageView when the page was pre-warmed by QuranPager.
  */
 export function getComposedPageSync(pageNumber: number): ComposedMushafPage | null {
-  return _composedPageCache.get(pageNumber) ?? null;
+  return pageCache.get(pageNumber) ?? null;
 }
 
 // Surahs that do NOT have a bismillah prefix (Al-Fatihah has it as verse 1:1;
@@ -387,6 +406,41 @@ function groupWordsByLine(words: MushafWord[]): MushafLine[] {
   return lines;
 }
 
+// ── Verse API URL ─────────────────────────────────────────────────────────────
+//
+// Defined at module scope so fetchRawVersePage can use it without duplication.
+const versesUrl = (n: number): string =>
+  `${API_BASE}/verses/by_page/${n}` +
+  `?words=true` +
+  `&word_fields=code_v2,char_type_name,page_number,line_number,position,verse_key,text_uthmani` +
+  `&mushaf=1` +
+  `&per_page=300`;
+
+/**
+ * Fetches and parses the raw verse array for a given page number.
+ * Concurrent calls for the same page share a single in-flight Promise —
+ * the HTTP request fires exactly once regardless of how many callers race.
+ *
+ * Used for overflow pages (N-1 and N+1) only. The main page fetch (N) uses
+ * the native fetch() directly so it can carry an AbortSignal.
+ * Non-fatal on network error: returns [] so overflow words are simply absent.
+ */
+function fetchRawVersePage(n: number): Promise<ApiVerse[]> {
+  const existing = _rawVersePageInFlight.get(n);
+  if (existing) return existing;
+  const p = fetch(versesUrl(n))
+    .then((r): Promise<ApiVerse[]> => {
+      if (!r.ok) return Promise.resolve([]);
+      return (r.json() as Promise<{ verses?: ApiVerse[] }>)
+        .then((j) => j.verses ?? [])
+        .catch(() => []);
+    })
+    .catch((): ApiVerse[] => [])
+    .finally(() => _rawVersePageInFlight.delete(n));
+  _rawVersePageInFlight.set(n, p);
+  return p;
+}
+
 async function fetchMushafPageVerses(
   pageNumber: number,
   signal?:    AbortSignal,
@@ -404,7 +458,10 @@ async function fetchMushafPageVerses(
       const hasWrongPageWords = cachedPage.lines.some(
         (line) => line.words.some((w) => w.pageNumber !== pageNumber),
       );
-      if (!hasWrongPageWords) return cachedPage;
+      if (!hasWrongPageWords) {
+        if (__DEV__) console.log(`[mushafApi] p${pageNumber}: AsyncStorage hit`);
+        return cachedPage;
+      }
       // Stale cache — delete it so next load fetches fresh data
       AsyncStorage.removeItem(cacheKey).catch(() => {});
     }
@@ -413,35 +470,25 @@ async function fetchMushafPageVerses(
   }
 
   // ── Fetch from network ─────────────────────────────────────────────────
-  const versesUrl = (n: number) =>
-    `${API_BASE}/verses/by_page/${n}` +
-    `?words=true` +
-    `&word_fields=code_v2,char_type_name,page_number,line_number,position,verse_key,text_uthmani` +
-    `&mushaf=1` +
-    `&per_page=300`;
-
-  // Fetch page N, N-1, and N+1 concurrently.
+  if (__DEV__) console.log(`[mushafApi] p${pageNumber}: Network fetch`);
   //
-  // The Quran Foundation API has two classes of overflow anomaly (see CACHE_KEY
-  // comment above for the full list):
+  // Main page (N): fetched with AbortSignal so the request is cancelled if the
+  // page view unmounts before the response arrives.
   //
-  //   N-1 (backward): words with page_number===N only appear in by_page/{N-1}.
-  //     Example: 80:41-42 → page_number=586 but only in by_page/585.
-  //
-  //   N+1 (forward): words with page_number===N only appear in by_page/{N+1}.
-  //     Example: 69:35 → page_number=567 but only in by_page/568.
-  //
-  // Fetching all three and filtering by page_number===N ensures complete
-  // coverage of every verse word on the physical Mushaf page.
-  const [res, prevRes, nextRes] = await Promise.all([
+  // Overflow pages (N-1, N+1): fetched via fetchRawVersePage which deduplicates
+  // concurrent calls. The Quran Foundation API overflow anomaly requires us to
+  // check adjacent pages for words whose page_number === N (see CACHE_KEY comment
+  // for the full list). No AbortSignal — these fetches are shared between callers
+  // and must not be cancelled when one caller's signal aborts.
+  const [mainRes, prevVerses, nextVerses] = await Promise.all([
     fetch(versesUrl(pageNumber), { signal }),
-    pageNumber > 1   ? fetch(versesUrl(pageNumber - 1), { signal }) : Promise.resolve(null),
-    pageNumber < 604 ? fetch(versesUrl(pageNumber + 1), { signal }) : Promise.resolve(null),
+    pageNumber > 1   ? fetchRawVersePage(pageNumber - 1) : Promise.resolve([] as ApiVerse[]),
+    pageNumber < 604 ? fetchRawVersePage(pageNumber + 1) : Promise.resolve([] as ApiVerse[]),
   ]);
 
-  if (!res.ok) throw new Error(`Verse API HTTP ${res.status} for page ${pageNumber}`);
+  if (!mainRes.ok) throw new Error(`Verse API HTTP ${mainRes.status} for page ${pageNumber}`);
 
-  const json = (await res.json()) as { verses: ApiVerse[] };
+  const json = (await mainRes.json()) as { verses: ApiVerse[] };
   if (!json.verses?.length) throw new Error(`Page ${pageNumber}: no verses`);
 
   const allWords: MushafWord[] = [];
@@ -466,25 +513,11 @@ async function fetchMushafPageVerses(
   // Main page words
   extractWords(json.verses);
 
-  // Backward overflow: words claimed by page N but only returned by page N-1
-  if (prevRes?.ok) {
-    try {
-      const prevJson = (await prevRes.json()) as { verses: ApiVerse[] };
-      extractWords(prevJson.verses ?? []);
-    } catch {
-      // Non-fatal — proceed without backward overflow words
-    }
-  }
+  // Backward overflow: words with page_number===N that only appear in N-1 response
+  extractWords(prevVerses);
 
-  // Forward overflow: words claimed by page N but only returned by page N+1
-  if (nextRes?.ok) {
-    try {
-      const nextJson = (await nextRes.json()) as { verses: ApiVerse[] };
-      extractWords(nextJson.verses ?? []);
-    } catch {
-      // Non-fatal — proceed without forward overflow words
-    }
-  }
+  // Forward overflow: words with page_number===N that only appear in N+1 response
+  extractWords(nextVerses);
 
   if (!allWords.length) throw new Error(`Page ${pageNumber}: no code_v2 words`);
 
@@ -784,23 +817,77 @@ export function fetchComposedMushafPage(
   pageNumber: number,
   signal?:    AbortSignal,
 ): Promise<ComposedMushafPage> {
-  // In-memory cache hit — instant resolution, zero I/O.
-  if (_composedPageCache.has(pageNumber)) {
-    return Promise.resolve(_composedPageCache.get(pageNumber)!);
+  // ── Layer 1: LRU in-memory cache ──────────────────────────────────────────
+  // pageCache.get() promotes the entry to MRU — correct for frequently accessed pages.
+  const memCached = pageCache.get(pageNumber);
+  if (memCached) {
+    if (__DEV__) console.log(`[mushafApi] p${pageNumber}: LRU hit`);
+    return Promise.resolve(memCached);
   }
 
-  // In-flight deduplication — join an existing fetch rather than firing a
-  // duplicate AsyncStorage + network round-trip for the same page.
+  // ── In-flight deduplication ────────────────────────────────────────────────
+  // Join an existing fetch rather than firing a duplicate I/O round-trip.
   const existing = _composedPageInFlight.get(pageNumber);
   if (existing) return existing;
 
-  const promise = _fetchComposedMushafPageImpl(pageNumber, signal).then((result) => {
-    _composedPageCache.set(pageNumber, result);
+  // ── Layers 2–4: FileStore → AsyncStorage → Network ────────────────────────
+  const promise = _fetchWithFileStoreFallback(pageNumber, signal).then((result) => {
+    // Cache in LRU regardless of which layer supplied the result.
+    pageCache.set(pageNumber, result);
     return result;
   });
   _composedPageInFlight.set(pageNumber, promise);
   promise.finally(() => _composedPageInFlight.delete(pageNumber));
   return promise;
+}
+
+/**
+ * Layer 2: FileStore (disk, offline-first).
+ * Layer 3+4: existing _fetchComposedMushafPageImpl (AsyncStorage + network).
+ *
+ * The FileStore layer is skipped if:
+ *   • initManifest() has not been called yet (manifest not loaded — isPageCached
+ *     returns false immediately, falling through to existing path), OR
+ *   • the page is not yet cached on disk.
+ *
+ * After a network hit, the result is written to FileStore so subsequent opens
+ * use layer 2 instead of hitting the network again.
+ *
+ * Quran text: ComposedMushafPage is returned verbatim from whichever layer
+ * supplies it. code_v2 and all Arabic text are never transformed here.
+ */
+async function _fetchWithFileStoreFallback(
+  pageNumber: number,
+  signal?:    AbortSignal,
+): Promise<ComposedMushafPage> {
+  // ── Layer 2: FileStore ─────────────────────────────────────────────────────
+  // isPageCached() is O(1) — reads from the in-memory manifest Map.
+  // Returns false if initManifest() has not completed yet, which gracefully
+  // falls through to the existing AsyncStorage + network path.
+  if (isPageCached(pageNumber)) {
+    const diskPage = await readPage(pageNumber);
+    if (diskPage) {
+      if (__DEV__) console.log(`[mushafApi] p${pageNumber}: FileStore hit`);
+      return diskPage;
+    }
+    // File is gone despite manifest saying cached (e.g. device restore).
+    // Fall through to re-fetch and rebuild the cache entry below.
+    if (__DEV__) console.warn(`[mushafApi] p${pageNumber}: manifest=cached but file missing — re-fetching`);
+  }
+
+  // ── Layers 3+4: existing path (AsyncStorage + network) ────────────────────
+  // _fetchComposedMushafPageImpl is unchanged — it reads from AsyncStorage
+  // (andalus_mushaf_cache_v4_*) and falls back to the network if not cached.
+  // This path is the exact same behavior as before this integration.
+  const result = await _fetchComposedMushafPageImpl(pageNumber, signal);
+
+  // Persist to FileStore for future sessions (non-blocking, fire-and-forget).
+  // If writePage throws (disk full, etc.) we swallow the error — the page is
+  // still usable from memory / AsyncStorage on this session and next.
+  if (__DEV__) console.log(`[mushafApi] p${pageNumber}: writing to FileStore`);
+  writePage(pageNumber, result).catch(() => {});
+
+  return result;
 }
 
 async function _fetchComposedMushafPageImpl(

@@ -54,7 +54,13 @@ import QuranPageView from './QuranPageView';
 import { useQuranContext } from '../../context/QuranContext';
 import { loadQCFPageFont, loadBismillahFont } from '../../services/mushafFontManager';
 import { fetchComposedMushafPage } from '../../services/mushafApi';
-import { startMushafPrefetch, stopMushafPrefetch } from '../../services/mushafPrefetchService';
+import {
+  initOfflineManager,
+  stopOfflineManager,
+  prioritize as prioritizeOffline,
+  pauseDownloads,
+  resumeDownloads,
+} from '../../services/quranOfflineManager';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -193,21 +199,21 @@ function QuranPager() {
   // running 4 concurrent loads immediately on mount is what caused the 5-6 s
   // unresponsive period before first swipe worked.
   useEffect(() => {
-    const t = setTimeout(() => { startMushafPrefetch(); }, 4000);
+    // initOfflineManager handles the startup delay (4 s) internally and manages
+    // the background download queue. Replaces startMushafPrefetch/stopMushafPrefetch.
+    // Pause/resume during scroll is handled by onScrollBeginDrag / onMomentumScrollEnd.
+    initOfflineManager(currentPage);
     return () => {
-      clearTimeout(t);
-      // Stop the background prefetch when the Quran screen unmounts so it does
-      // not keep running (and blocking the JS thread in bundled-font mode) after
-      // the user has navigated away. startMushafPrefetch() will restart it the
-      // next time the user opens the Quran screen.
-      stopMushafPrefetch();
+      stopOfflineManager();
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── External navigation (picker / contents / bookmark) ───────────────────
 
   // Scroll to page when it changes from outside (picker, contents menu, bookmark).
+  // Also boost download priority for the new page and its neighbours.
   useEffect(() => {
+    prioritizeOffline(currentPage);
     if (visiblePageRef.current === currentPage) return;
     visiblePageRef.current = currentPage;
     // Mark as programmatic so onViewableItemsChanged ignores intermediate pages
@@ -292,6 +298,9 @@ function QuranPager() {
         // Update visiblePageRef BEFORE calling goToPage so the effect
         // sees visiblePageRef.current === currentPage and skips the scroll.
         visiblePageRef.current = page;
+        // Boost download priority for the newly visible page and its neighbours.
+        // prioritizeOffline is a module function — safe to call from a stable ref.
+        prioritizeOffline(page);
         // Only clear the explicit surah override when the user manually
         // swiped to a DIFFERENT page. When the page hasn't changed (e.g.
         // viewability fires after a programmatic scroll settles on the same
@@ -312,6 +321,15 @@ function QuranPager() {
     },
     [],
   );
+
+  // ── Prefetch pause/resume during swipe ───────────────────────────────────
+  // Font.loadAsync() (called by the background prefetch) is JS-thread-heavy.
+  // Pause it the moment the user begins a drag so the animation frame budget
+  // is fully available for the swipe gesture and page transition.
+  // Resume only when momentum fully ends (page has settled) — not on drag end,
+  // because momentum still uses the JS thread after the finger lifts.
+  const onScrollBeginDrag   = useCallback(() => { pauseDownloads(); },  []);
+  const onMomentumScrollEnd = useCallback(() => { resumeDownloads(); }, []);
 
   // ── Item renderer ────────────────────────────────────────────────────────
   // STABLE across orientation changes — no width/height/pageWidth/pageHeight
@@ -363,6 +381,8 @@ function QuranPager() {
         viewabilityConfig={viewabilityConfig}
         onViewableItemsChanged={onViewableItemsChanged}
         scrollEventThrottle={16}
+        onScrollBeginDrag={onScrollBeginDrag}
+        onMomentumScrollEnd={onMomentumScrollEnd}
       />
     </View>
   );

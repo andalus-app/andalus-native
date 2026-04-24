@@ -21,12 +21,18 @@ import { loadQCFPageFont, loadBismillahFont } from './mushafFontManager';
 
 const TOTAL_PAGES = 604;
 
-// Number of pages fetched concurrently. Keep at 4–5 to avoid CDN throttling
-// while still making good progress in the background.
-const CONCURRENCY = 4;
+// Number of pages fetched concurrently.
+// Reduced from 4 to 2: each Font.loadAsync() call is JS-thread-heavy
+// (parses TTF, registers with Core Text). Running 4 in parallel saturated
+// the JS thread during the 16ms window, blocking swipe gestures and taps.
+// 2 concurrent loads keep the JS thread 50–60% lighter between yields.
+const CONCURRENCY = 2;
 
 let _started = false;
 let _stopped = false;
+// When true, _run() waits at each batch boundary until resumed.
+// Set by pauseMushafPrefetch() at scroll start; cleared by resumeMushafPrefetch().
+let _paused  = false;
 
 /**
  * Starts the background pre-cache pass. Safe to call multiple times —
@@ -36,6 +42,7 @@ export function startMushafPrefetch(): void {
   if (_started && !_stopped) return;
   _started = true;
   _stopped = false;
+  _paused  = false;
   _run().catch(() => undefined);
 }
 
@@ -51,6 +58,28 @@ export function startMushafPrefetch(): void {
 export function stopMushafPrefetch(): void {
   _stopped = true;
   _started = false;
+  _paused  = false;
+}
+
+/**
+ * Pauses the background pre-cache at the next batch boundary.
+ * Call from QuranPager when a swipe gesture begins so prefetch Font.loadAsync()
+ * calls do not compete with the JS thread during page transitions.
+ */
+export function pauseMushafPrefetch(): void {
+  if (_paused) return; // already paused — skip log spam on rapid drag events
+  _paused = true;
+  if (__DEV__) console.log('[Prefetch] paused (swipe started)');
+}
+
+/**
+ * Resumes the background pre-cache after a pause.
+ * Call from QuranPager when momentum scroll ends (page has fully settled).
+ */
+export function resumeMushafPrefetch(): void {
+  if (!_paused) return; // already running — skip log spam
+  _paused = false;
+  if (__DEV__) console.log('[Prefetch] resumed (page settled)');
 }
 
 async function _prefetchPage(page: number): Promise<void> {
@@ -70,22 +99,34 @@ async function _run(): Promise<void> {
   loadBismillahFont().catch(() => undefined);
 
   // Process all 604 pages in sequential batches of CONCURRENCY.
-  // A short yield (setTimeout 0) between batches hands control back to the JS
-  // event loop so UI interactions (swipes, taps) are never starved by sustained
-  // Font.loadAsync() calls even after the 4-second startup delay elapses.
+  // Between every batch:
+  //   1. If a swipe is in progress (_paused), wait in 100ms ticks until resumed.
+  //   2. Yield 100ms (up from 16ms) so the JS event loop gets ~6 full render
+  //      cycles between Font.loadAsync() batches instead of just 1. This keeps
+  //      swipe and touch response crisp even mid-prefetch.
   for (let i = 1; i <= TOTAL_PAGES; i += CONCURRENCY) {
-    // Check cancellation flag before each batch. stopMushafPrefetch() sets this
-    // when the Quran screen unmounts so we don't keep running after navigation.
     if (_stopped) return;
+
+    // Pause at batch boundary while the user is swiping pages. Font.loadAsync()
+    // is JS-thread-heavy; running it during a swipe gesture competes with the
+    // animation frame budget and causes visible jank.
+    if (_paused) {
+      if (__DEV__) console.log(`[Prefetch] waiting at page ${i} (swipe in progress)`);
+      while (_paused && !_stopped) {
+        await new Promise<void>((r) => setTimeout(r, 100));
+      }
+      if (__DEV__ && !_stopped) console.log(`[Prefetch] resuming from page ${i}`);
+    }
+    if (_stopped) return;
+
     const batch: Promise<void>[] = [];
     for (let j = i; j < i + CONCURRENCY && j <= TOTAL_PAGES; j++) {
       batch.push(_prefetchPage(j));
     }
     await Promise.all(batch);
-    // Yield one frame to the JS event loop between every batch.
-    // 16ms (vs. 0ms) ensures the UI thread gets a full render cycle between
-    // batches of Font.loadAsync() calls, which are JS-thread-heavy and would
-    // otherwise make scrolling and taps sluggish during the prefetch.
-    await new Promise<void>((r) => setTimeout(r, 16));
+
+    // Yield between batches — 100ms gives the JS thread ~6 render cycles
+    // to process swipes, taps, and audio position callbacks without competition.
+    await new Promise<void>((r) => setTimeout(r, 100));
   }
 }
