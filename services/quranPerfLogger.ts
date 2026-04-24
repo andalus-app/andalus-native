@@ -18,7 +18,7 @@
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ↓ Toggle this to enable / disable all Quran performance logs
-const ENABLE_QURAN_PERF_LOGS = true;
+const ENABLE_QURAN_PERF_LOGS = false;
 // ─────────────────────────────────────────────────────────────────────────────
 
 const PREFIX = '[QURAN_PERF]';

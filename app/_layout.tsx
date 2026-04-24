@@ -132,6 +132,9 @@ function AppContent({ onFontsReady }: { onFontsReady: () => void }) {
         // Allahs namn-påminnelse — öppna Asmaul Husna-sidan med det aktuella namnet.
         const nameNr = data.nameNr ? `?nameNr=${data.nameNr}` : '';
         router.push(`/asmaul${nameNr}` as any);
+      } else if (data?.screen === 'prayer') {
+        // Bönetids-notis — öppna Bönetider-fliken direkt.
+        router.navigate('/(tabs)/index' as any);
       } else if (data?.screen === 'dhikr') {
         // Dhikr-påminnelse — öppna Dhikr-sidan direkt.
         router.push('/dhikr' as any);

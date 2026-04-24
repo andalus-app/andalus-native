@@ -118,8 +118,9 @@ function RuqyahCategoryScreen() {
     >
       {/* ── Hero banner image ── */}
       <View style={styles.heroWrap}>
+        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
         <Image
-          source={image}
+          source={image as any}
           style={styles.heroImage}
           resizeMode="cover"
         />

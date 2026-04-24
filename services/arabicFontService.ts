@@ -228,15 +228,17 @@ async function downloadFont(spec: FontSpec): Promise<boolean> {
 
       if (!(await isValidFont(path))) {
         const info = await FileSystem.getInfoAsync(path).catch(() => null);
+        const infoSize = info?.exists ? (info as { size?: number }).size ?? 0 : 0;
         console.warn(
-          `[ArabicFont] ${spec.displayName}: file too small (${info?.size ?? 0} bytes) — likely an error page`,
+          `[ArabicFont] ${spec.displayName}: file too small (${infoSize} bytes) — likely an error page`,
         );
         await FileSystem.deleteAsync(path, { idempotent: true });
         continue;
       }
 
       const info = await FileSystem.getInfoAsync(path);
-      console.log(`[ArabicFont] ${spec.displayName}: saved to disk (${info.size} bytes) ✓`);
+      const savedSize = info.exists ? (info as { size?: number }).size ?? 0 : 0;
+      console.log(`[ArabicFont] ${spec.displayName}: saved to disk (${savedSize} bytes) ✓`);
       return true;
     } catch (e) {
       console.warn(`[ArabicFont] ${spec.displayName}: error on ${url} —`, (e as Error).message);

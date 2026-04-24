@@ -61,13 +61,16 @@ function serialOrientation(fn: () => Promise<void>) {
 
 // ── Inner screen (consumes context) ──────────────────────────────────────────
 
-function QuranScreen({ deepLinkVerseKey }: { deepLinkVerseKey?: string }) {
+function QuranScreen({ deepLinkVerseKey, deepLinkNonce }: { deepLinkVerseKey?: string; deepLinkNonce?: string }) {
   const { isDark } = useTheme();
   const { chromeVisible, goToVerse } = useQuranContext();
 
   const chromeAnim = useRef(new Animated.Value(1)).current;
-  // Guard: only handle the deep-link once per mount.
-  const deepLinkHandledRef = useRef(false);
+  // Tracks the last-handled navigation key: "<verseKey>:<nonce>" or "<verseKey>:initial".
+  // A new nonce on every tap means repeated taps on the same verse (even 20× in a row)
+  // always re-trigger the deep-link fetch and re-set pendingVerseHighlight, regardless
+  // of whether the QuranProvider was remounted or is being reused from the stack.
+  const handledNavKeyRef = useRef('');
 
   useEffect(() => {
     Animated.timing(chromeAnim, {
@@ -88,9 +91,24 @@ function QuranScreen({ deepLinkVerseKey }: { deepLinkVerseKey?: string }) {
   //
   // If the network is unavailable or slow, the timeout aborts and the user stays
   // on the approximate page (surah's first page) with no error — they can scroll manually.
+  //
+  // The nonce in deepLinkNonce ensures this effect re-runs on every tap from
+  // DagensKoranversCard even when the verseKey is the same and the Quran screen
+  // was not unmounted (reused from the navigation stack).
   useEffect(() => {
-    if (!deepLinkVerseKey || deepLinkHandledRef.current) return;
-    deepLinkHandledRef.current = true;
+    if (!deepLinkVerseKey) return;
+
+    // Build a unique key for this navigation event.
+    // nonce present (DagensKoranvers): each tap has a unique timestamp → different key → re-runs.
+    // nonce absent (other callers, e.g. Asmaul Husna): key = "<verseKey>:initial" → runs once per mount.
+    const navKey = `${deepLinkVerseKey}:${deepLinkNonce ?? 'initial'}`;
+    if (handledNavKeyRef.current === navKey) return;
+    handledNavKeyRef.current = navKey;
+
+    // Navigate to the approximate page immediately (surah first page, no network needed).
+    // This re-sets pendingVerseHighlight even if the QuranProvider was not remounted
+    // (i.e. the screen was reused from the stack and its pendingVerseHighlight is null).
+    goToVerse(deepLinkVerseKey, approxPageForVerseKey(deepLinkVerseKey));
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 8000);
@@ -115,9 +133,10 @@ function QuranScreen({ deepLinkVerseKey }: { deepLinkVerseKey?: string }) {
       clearTimeout(timeoutId);
       controller.abort();
     };
-  // goToVerse is stable (useCallback in QuranContext); deepLinkVerseKey never changes after mount.
+  // goToVerse is stable (useCallback in QuranContext) — omitted to avoid re-runs
+  // on unrelated QuranProvider re-renders. deepLinkNonce is the real trigger.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [deepLinkVerseKey, deepLinkNonce]);
 
   return (
     <View style={styles.root}>
@@ -158,7 +177,7 @@ function QuranScreen({ deepLinkVerseKey }: { deepLinkVerseKey?: string }) {
 // ── Entry point with provider ─────────────────────────────────────────────────
 
 export default function QuranRoute() {
-  const params = useLocalSearchParams<{ page?: string; verseKey?: string }>();
+  const params = useLocalSearchParams<{ page?: string; verseKey?: string; nonce?: string }>();
   const initialVerseKey = params.verseKey ?? undefined;
 
   // Determine the initial page immediately — no blocking network call:
@@ -190,7 +209,7 @@ export default function QuranRoute() {
       initialReadingMode={initialVerseKey ? 'verse' : undefined}
     >
       <Stack.Screen options={{ gestureEnabled: false, fullScreenGestureEnabled: false }} />
-      <QuranScreen deepLinkVerseKey={initialVerseKey} />
+      <QuranScreen deepLinkVerseKey={initialVerseKey} deepLinkNonce={params.nonce} />
     </QuranProvider>
   );
 }

@@ -237,7 +237,8 @@ export default function OnboardingFlow({ onDone, onNotificationsGranted, onLocat
 
   return (
     <Modal animationType="slide" presentationStyle="fullScreen" statusBarTranslucent>
-      <ImageBackground source={current.image} style={styles.bg} resizeMode="cover">
+      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+      <ImageBackground source={current.image as any} style={styles.bg} resizeMode="cover">
 
         <View style={[styles.container, { paddingTop: insets.top + 20 }]}>
 

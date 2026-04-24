@@ -113,7 +113,7 @@ const VerseRow = memo(function VerseRow({
 
       {/* Center: QCF Arabic text — same Svg/SvgText pattern as QuranVerseView */}
       <View style={styles.arabicContainer}>
-        <Svg width={arabicAreaW} height={svgH} overflow="visible">
+        <Svg width={arabicAreaW} height={svgH} {...{ overflow: 'visible' } as object}>
           <SvgText
             x={arabicAreaW}
             y={baselineY}

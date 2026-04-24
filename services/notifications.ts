@@ -91,6 +91,7 @@ export async function schedulePrayerNotifications(
           title: `Det är dags för ${name}`,
           body:  `i ${cityName}`,
           sound: true,
+          data:  { screen: 'prayer' },
         },
         trigger: {
           type: N!.SchedulableTriggerInputTypes.DATE,

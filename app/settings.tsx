@@ -2,7 +2,8 @@ import {
   View, Text, ScrollView, TouchableOpacity, Switch,
   Modal, Alert, ActivityIndicator, Platform, TextInput, Animated, Easing,
 } from 'react-native';
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, type ReactNode } from 'react';
+import type { Theme } from '../theme/colors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -43,15 +44,16 @@ export const SETTINGS_KEY = 'andalus_settings';
 const LOCATION_KEY = 'andalus_location';
 
 const DEFAULT_SETTINGS = {
-  autoLocation:             true,
-  calculationMethod:        3,
-  school:                   0,
-  notifications:            true,
+  autoLocation:              true,
+  calculationMethod:         3,
+  school:                    0,
+  notifications:             true,
   announcementNotifications: true,
-  dhikrReminder:            false,
+  dhikrReminder:             false,
+  fridayDuaReminder:         true,
 };
 
-function SectionLabel({ label, T }) {
+function SectionLabel({ label, T }: { label: string; T: Theme }) {
   return (
     <Text style={{fontSize:11,fontWeight:'700',color:T.textMuted,letterSpacing:1.2,marginBottom:8,marginTop:20,paddingHorizontal:4}}>
       {label.toUpperCase()}
@@ -59,14 +61,17 @@ function SectionLabel({ label, T }) {
   );
 }
 
-function Row({ iconName, customIcon, label, value, onPress, right, T }) {
+function Row({ iconName, customIcon, label, value, onPress, right, T }: {
+  iconName?: string; customIcon?: string; label: string; value?: string;
+  onPress?: () => void; right?: ReactNode; T: Theme;
+}) {
   // When both onPress and right (e.g. Switch) are present, only the label/value
   // area is tappable — the right control handles its own interaction.
   const hasRightControl = right !== undefined;
   return (
     <View style={{flexDirection:'row',alignItems:'center',backgroundColor:T.card,borderRadius:14,borderWidth:0.5,borderColor:T.border,padding:14,marginBottom:8,gap:12}}>
       <View style={{width:32,height:32,borderRadius:8,backgroundColor:T.accentGlow,alignItems:'center',justifyContent:'center'}}>
-        {customIcon ? <SvgXml xml={customIcon} width={18} height={18}/> : <SvgIcon name={iconName} size={18} color={T.accent}/>}
+        {customIcon ? <SvgXml xml={customIcon} width={18} height={18}/> : <SvgIcon name={iconName as any} size={18} color={T.accent}/>}
       </View>
       <TouchableOpacity style={{flex:1}} onPress={onPress} activeOpacity={onPress ? 0.7 : 1} disabled={!onPress}>
         <Text style={{fontSize:15,fontWeight:'600',color:T.text}}>{label}</Text>
@@ -79,7 +84,9 @@ function Row({ iconName, customIcon, label, value, onPress, right, T }) {
   );
 }
 
-function Sheet({ visible, title, subtitle, onClose, children, T }) {
+function Sheet({ visible, title, subtitle, onClose, children, T }: {
+  visible: boolean; title: string; subtitle?: string; onClose: () => void; children: ReactNode; T: Theme;
+}) {
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <TouchableOpacity style={{flex:1,backgroundColor:'transparent'}} activeOpacity={1} onPress={onClose}/>
@@ -101,7 +108,9 @@ function Sheet({ visible, title, subtitle, onClose, children, T }) {
   );
 }
 
-function OptionRow({ label, sub, active, onPress, T, isLast }) {
+function OptionRow({ label, sub, active, onPress, T, isLast }: {
+  label: string; sub?: string; active: boolean; onPress: () => void; T: Theme; isLast: boolean;
+}) {
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.6}
       style={{paddingVertical:14,paddingHorizontal:20,flexDirection:'row',alignItems:'center',backgroundColor:active?T.accent+'12':'transparent',borderBottomWidth:isLast?0:0.5,borderBottomColor:T.separator||T.border}}>
@@ -176,7 +185,7 @@ export default function SettingsScreen() {
     } catch {}
   }
 
-  function saveSettings(partial) {
+  function saveSettings(partial: Partial<typeof DEFAULT_SETTINGS>) {
     const updated = { ...settings, ...partial };
     setSettings(updated);
     AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(updated)).catch(() => {});
@@ -245,7 +254,7 @@ export default function SettingsScreen() {
     setDetecting(false);
   }
 
-  async function handleSelectCity(r) {
+  async function handleSelectCity(r: { latitude: number; longitude: number; city: string; country: string }) {
     const locData = { lat: r.latitude, lng: r.longitude, city: r.city, country: r.country };
     await AsyncStorage.setItem(LOCATION_KEY, JSON.stringify(locData));
     // Viktigt: triggar bönetider att ladda om med ny plats
@@ -254,7 +263,9 @@ export default function SettingsScreen() {
     setCityModal(false);
   }
 
-  const themeOptions = [
+  type Mode = 'dark' | 'light' | 'system';
+  type IconName = 'moon' | 'sun' | 'smartphone';
+  const themeOptions: { label: string; icon: IconName; value: Mode }[] = [
     { label:'Mörkt',  icon:'moon',       value:'dark'   },
     { label:'Ljust',  icon:'sun',        value:'light'  },
     { label:'System', icon:'smartphone', value:'system' },
@@ -307,7 +318,7 @@ export default function SettingsScreen() {
 
         <SectionLabel label="Bönetider" T={T}/>
         <Row T={T} iconName="ruler" label="Beräkningsmetod"
-          value={CALC_METHODS[settings.calculationMethod]||'Muslim World League'}
+          value={(CALC_METHODS as Record<number, string>)[settings.calculationMethod]||'Muslim World League'}
           onPress={() => setMethodModal(true)}/>
         <Row T={T} iconName="book" label="Rättsskola"
           value={settings.school===0?"Standard (Shafi'i, Maliki, Hanbali)":'Hanafi'}
@@ -519,7 +530,7 @@ export default function SettingsScreen() {
 
       <Sheet visible={methodModal} T={T}
         title="Beräkningsmetod"
-        subtitle={'Vald: '+(CALC_METHODS[settings.calculationMethod]||'Muslim World League')}
+        subtitle={'Vald: '+((CALC_METHODS as Record<number, string>)[settings.calculationMethod]||'Muslim World League')}
         onClose={() => setMethodModal(false)}>
         {Object.entries(CALC_METHODS).map(([key,name],idx,arr) => (
           <OptionRow key={key} label={name}

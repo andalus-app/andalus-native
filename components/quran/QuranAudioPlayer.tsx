@@ -1155,7 +1155,10 @@ function QuranAudioPlayer() {
         }
       }
     },
-    [skipSurah, loadAndPlay, loadAndPlayFromVerse],
+    // loadAndPlayFromVerse is declared below; use its stable ref to avoid
+    // forward-reference TDZ errors while still calling the latest version.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [skipSurah, loadAndPlay],
   );
 
   const seekTo = useCallback((positionMs: number) => {

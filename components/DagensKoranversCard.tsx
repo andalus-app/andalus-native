@@ -105,7 +105,7 @@ export default function DagensKoranversCard() {
   return (
     <TouchableOpacity
       activeOpacity={0.75}
-      onPress={() => router.push(verse.navigationPath as any)}
+      onPress={() => router.push(`${verse.navigationPath}&nonce=${Date.now()}` as any)}
       style={[
         styles.card,
         {

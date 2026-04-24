@@ -288,7 +288,7 @@ const KnutBannerSvg = memo(function KnutBannerSvg({ svgW, color }: KnutBannerSvg
         {KNUT_GROUPS.map((g, gi) => {
           const clipProp = g.clip ? { clipPath: `url(#knut-vv-${g.clip})` } : {};
           return (
-            <G key={gi} {...clipProp}>
+            <G key={gi} {...clipProp as object}>
               {g.children.map((c, ci) => {
                 if (c.tag === 'path') return <Path key={ci} d={c.d} fill={color} fillOpacity={0.16} stroke={color} strokeOpacity={0.16} strokeWidth={0.12} />;
                 if (c.tag === 'line') return <SvgLine key={ci} x1={c.x1} y1={c.y1} x2={c.x2} y2={c.y2} stroke={color} strokeOpacity={0.16} strokeWidth={0.12} strokeLinecap="round" strokeLinejoin="round" />;
@@ -582,7 +582,7 @@ const VerseCard = memo(function VerseCard({
             style={[StyleSheet.absoluteFill, styles.highlightOverlay, { backgroundColor: highlightBg, opacity: highlightAnim }]}
             pointerEvents="none"
           />
-          <Svg width={cardInnerW} height={bsmSvgH} overflow="visible">
+          <Svg width={cardInnerW} height={bsmSvgH} {...{ overflow: 'visible' } as object}>
             <SvgText
               x={cardInnerW / 2}
               y={Math.round(bsmSvgH * 0.72)}

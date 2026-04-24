@@ -47,7 +47,7 @@ export type BookingNotif = {
   activity: string;
   startDate: string;
   timeSlot: string;
-  status: 'approved' | 'rejected' | 'cancelled' | 'edited';
+  status: 'approved' | 'rejected' | 'cancelled' | 'edited' | 'pending' | 'edit_pending';
   adminComment: string | null;
   isNew: boolean;
   isException?: boolean;
@@ -68,6 +68,7 @@ type BookingNotifContextType = {
   bookingNotifs: BookingNotif[];
   totalUnread: number;
   isAdmin: boolean;
+  isLoggedIn: boolean;
   dismissNotif: (id: string, status: string) => Promise<void>;
   markAllSeen: () => Promise<void>;
   refresh: () => Promise<void>;

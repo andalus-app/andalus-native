@@ -247,7 +247,7 @@ function VersePicker({
           {/* QCF Arabic text */}
           <View style={[pickerStyles.verseArabicArea, { width: arabicAreaW }]}>
             {v.firstLineGlyph ? (
-              <Svg width={arabicAreaW} height={svgH} overflow="visible">
+              <Svg width={arabicAreaW} height={svgH} {...{ overflow: 'visible' } as object}>
                 <SvgText
                   x={arabicAreaW}
                   y={baselineY}

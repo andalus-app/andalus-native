@@ -151,7 +151,7 @@ export const DuaCard = memo(function DuaCard({
     }
 
     if (!playerRef.current) {
-      await setAudioModeAsync({ playsInSilentModeIOS: true }).catch(() => {});
+      await setAudioModeAsync({ playsInSilentMode: true }).catch(() => {});
       const player = createAudioPlayer(audioSource);
       playerRef.current = player;
       player.addListener('playbackStatusUpdate', status => {

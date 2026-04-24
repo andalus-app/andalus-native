@@ -812,7 +812,7 @@ function UserLogin({ onSuccess, T }: { onSuccess: (user: any) => void; T: any })
                 caretHidden
                 style={{ height: 1, opacity: 0 }}
               />
-              <TouchableOpacity style={[btn, { marginTop: 8 }]} onPress={handleInviteSubmit} disabled={loading || inviteCode.length < 6}>
+              <TouchableOpacity style={[btn, { marginTop: 8 }]} onPress={() => handleInviteSubmit()} disabled={loading || inviteCode.length < 6}>
                 <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>{loading ? 'Kontrollerar...' : 'Verifiera kod →'}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={{ marginTop: 10, padding: 12, alignItems: 'center' }} onPress={() => { setStep('phone'); setError(''); setInviteCode(''); }}>
@@ -2173,7 +2173,7 @@ function MyBookings({ bookings, exceptions, myBookingIds, onCancel, onBack, init
     ['approved',  'Godkända',  approvedBookings.length],
     ['rejected',  'Avböjda',   rejectedBookings.length],
     ['cancelled', 'Inställda', cancelledBookings.length],
-  ].filter(([, , count]) => count > 0) as [MyFilter, string, number][];
+  ].filter(([, , count]) => (count as number) > 0) as [MyFilter, string, number][];
 
   // Auto-open booking detail when navigated from a notification
   useEffect(() => {

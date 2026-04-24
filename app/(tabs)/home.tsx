@@ -31,9 +31,11 @@ type YoutubeCardProps = {
   stream: import('../../hooks/useYoutubeLive').YTStream | null;
   isLive: boolean;
   isUpcoming: boolean;
+  flash?: boolean;
+  onFlashEnd?: () => void;
 };
 
-function YoutubeCard({ stream, isLive, isUpcoming }: YoutubeCardProps) {
+function YoutubeCard({ stream, isLive, isUpcoming, flash = false, onFlashEnd }: YoutubeCardProps) {
   const { theme: T } = useTheme();
   const { width } = useWindowDimensions();
   const { videoId: activeVideoId, isPlaying, play, stop, inlineFrame, setInlineFrame } = useYoutubePlayer();
@@ -85,6 +87,30 @@ function YoutubeCard({ stream, isLive, isUpcoming }: YoutubeCardProps) {
   const ringOpacity = useMemo(() => pulseAnim.interpolate({ inputRange: [0, 0.4, 1], outputRange: [0.75, 0.2, 0] }), [pulseAnim]);
   const dotScale    = useMemo(() => pulseAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 1.25, 1] }), [pulseAnim]);
 
+  // One-shot flash animation — triggered when user taps a YouTube live notification.
+  // A single scale 1→1.04→1 combined with a brief glow overlay (opacity 0→0.35→0).
+  const flashScaleAnim = useRef(new Animated.Value(1)).current;
+  const flashGlowAnim  = useRef(new Animated.Value(0)).current;
+  const onFlashEndRef  = useRef(onFlashEnd);
+  onFlashEndRef.current = onFlashEnd;
+  useEffect(() => {
+    if (!flash) return;
+    flashScaleAnim.setValue(1);
+    flashGlowAnim.setValue(0);
+    Animated.parallel([
+      Animated.sequence([
+        Animated.timing(flashScaleAnim, { toValue: 1.04, duration: 220, useNativeDriver: true }),
+        Animated.timing(flashScaleAnim, { toValue: 1,    duration: 220, useNativeDriver: true }),
+      ]),
+      Animated.sequence([
+        Animated.timing(flashGlowAnim, { toValue: 0.35, duration: 180, useNativeDriver: true }),
+        Animated.timing(flashGlowAnim, { toValue: 0,    duration: 260, useNativeDriver: true }),
+      ]),
+    ]).start(({ finished }) => {
+      if (finished) onFlashEndRef.current?.();
+    });
+  }, [flash]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // No stream — render nothing
   if (!stream) return null;
 
@@ -119,7 +145,7 @@ function YoutubeCard({ stream, isLive, isUpcoming }: YoutubeCardProps) {
   }
 
   return (
-    <View>
+    <Animated.View style={{ transform: [{ scale: flashScaleAnim }] }}>
       <Text style={{
         fontSize: 12, fontWeight: '600', color: T.textMuted,
         letterSpacing: 0.6, textTransform: 'uppercase',
@@ -239,8 +265,14 @@ function YoutubeCard({ stream, isLive, isUpcoming }: YoutubeCardProps) {
           </TouchableOpacity>
         )}
       </View>
+      {/* Flash glow — briefly visible when user taps YouTube live notification.
+          Sits inside the card (overflow:hidden) so it clips to the rounded corners. */}
+      <Animated.View
+        pointerEvents="none"
+        style={[StyleSheet.absoluteFill, { backgroundColor: '#FFFFFF', opacity: flashGlowAnim, borderRadius: 16 }]}
+      />
     </View>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -503,6 +535,8 @@ export default function HomeScreen() {
   // Set to true when a live-notification tap is pending. Triggers scroll either
   // immediately (card already rendered) or from onLayout when card first appears.
   const pendingScrollToYoutubeRef = useRef(false);
+  // Triggers the one-shot flash animation on the YouTube card after scroll lands.
+  const [flashYoutubeCard, setFlashYoutubeCard] = useState(false);
   const announcementsLoadingRef   = useRef(false);
   const lastAnnouncementsLoadRef  = useRef(0);
   const ANNOUNCEMENTS_COOLDOWN_MS = 30_000;
@@ -575,6 +609,8 @@ export default function HomeScreen() {
       if (youtubeCardYRef.current > 0) {
         setTimeout(() => {
           scrollRef.current?.scrollTo({ y: youtubeCardYRef.current - 16, animated: true });
+          // Flash the card after the scroll animation finishes (~400 ms).
+          setTimeout(() => setFlashYoutubeCard(true), 400);
         }, 200);
       } else {
         pendingScrollToYoutubeRef.current = true;
@@ -1049,10 +1085,18 @@ export default function HomeScreen() {
             pendingScrollToYoutubeRef.current = false;
             setTimeout(() => {
               scrollRef.current?.scrollTo({ y: e.nativeEvent.layout.y - 16, animated: true });
+              // Flash the card after the scroll animation finishes (~400 ms).
+              setTimeout(() => setFlashYoutubeCard(true), 400);
             }, 200);
           }
         }}>
-          <YoutubeCard stream={stream} isLive={isLive} isUpcoming={isUpcoming} />
+          <YoutubeCard
+            stream={stream}
+            isLive={isLive}
+            isUpcoming={isUpcoming}
+            flash={flashYoutubeCard}
+            onFlashEnd={() => setFlashYoutubeCard(false)}
+          />
         </View>
 
         {/* Admin — individual pending booking cards, one per booking */}

@@ -9,7 +9,6 @@ export default function RuqyahCategoryLayout() {
         gestureEnabled: true,
         fullScreenGestureEnabled: false,
         animation: 'slide_from_right',
-        detachPreviousScreen: false,
         contentStyle: { backgroundColor: RO_BG },
       }}
     />
