@@ -5,483 +5,23 @@
  * Lets the user configure an annual Hijri-based Zakat reminder.
  *
  * When OFF: minimal toggle row.
- * When ON:  tappable Hijri date → picker modal + advance selector + help notes.
+ * When ON:  tappable date+time row → HijriDatePickerModal.
  */
 
 import {
   View, Text, Switch, TouchableOpacity,
-  ActivityIndicator, Alert, Modal, ScrollView,
-  Platform, UIManager,
+  ActivityIndicator, Alert, Platform, UIManager,
 } from 'react-native';
 import { useState, useCallback } from 'react';
 import { useTheme } from '../context/ThemeContext';
 import { useZakatReminder } from '../hooks/useZakatReminder';
 import { ADVANCE_OPTIONS } from '../services/zakatReminderService';
-import { HIJRI_MONTH_NAMES } from '../services/hijriCalendarService';
 import { requestNotificationPermission } from '../services/notifications';
+import HijriDatePickerModal from './HijriDatePickerModal';
 
-// Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
-
-// ── Hijri calendar data ─────────────────────────────────────────────────────
-// Standard (approximate) max days per Hijri month.
-// Odd months = 30 days, even months = 29 days; Dhul-Hijjah shown as 30.
-const HIJRI_MONTH_MAX_DAYS: Record<number, number> = {
-  1: 30, 2: 29, 3: 30, 4: 29, 5: 30, 6: 29,
-  7: 30, 8: 29, 9: 30, 10: 29, 11: 30, 12: 30,
-};
-
-const ALL_MONTHS = Object.entries(HIJRI_MONTH_NAMES).map(([num, name]) => ({
-  num: parseInt(num, 10),
-  name,
-}));
-
-// ── Sub-component: Hijri date picker modal ──────────────────────────────────
-
-function HijriDatePickerModal({
-  visible,
-  currentDay,
-  currentMonth,
-  onConfirm,
-  onClose,
-}: {
-  visible: boolean;
-  currentDay: number;
-  currentMonth: number;
-  onConfirm: (day: number, month: number, monthName: string) => void;
-  onClose: () => void;
-}) {
-  const { theme: T } = useTheme();
-  const [selMonth, setSelMonth] = useState(currentMonth);
-  const [selDay,   setSelDay]   = useState(currentDay);
-
-  const maxDays = HIJRI_MONTH_MAX_DAYS[selMonth] ?? 30;
-
-  const handleMonthSelect = (month: number) => {
-    setSelMonth(month);
-    // Clamp day to new month's maximum
-    const max = HIJRI_MONTH_MAX_DAYS[month] ?? 30;
-    if (selDay > max) setSelDay(max);
-  };
-
-  const handleConfirm = () => {
-    onConfirm(selDay, selMonth, HIJRI_MONTH_NAMES[selMonth] ?? '');
-    onClose();
-  };
-
-  // Build day cells: 1..maxDays, laid out in rows of 5
-  const dayCells = Array.from({ length: 30 }, (_, i) => i + 1);
-
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
-      {/* Backdrop */}
-      <TouchableOpacity
-        style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' }}
-        activeOpacity={1}
-        onPress={onClose}
-      />
-
-      {/* Sheet */}
-      <View style={{
-        backgroundColor: T.card,
-        borderTopLeftRadius: 22,
-        borderTopRightRadius: 22,
-        maxHeight: '88%',
-        paddingBottom: Platform.OS === 'ios' ? 34 : 20,
-        borderWidth: 0.5,
-        borderBottomWidth: 0,
-        borderColor: T.border,
-      }}>
-        {/* Drag handle */}
-        <View style={{
-          width: 36, height: 4, borderRadius: 2,
-          backgroundColor: T.border,
-          alignSelf: 'center',
-          marginTop: 10, marginBottom: 14,
-        }} />
-
-        {/* Header */}
-        <View style={{
-          paddingHorizontal: 20,
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: 4,
-        }}>
-          <Text style={{ fontSize: 18, fontWeight: '700', color: T.text }}>
-            Välj Hijri-datum
-          </Text>
-          <TouchableOpacity
-            onPress={onClose}
-            style={{
-              width: 28, height: 28, borderRadius: 14,
-              backgroundColor: T.accentGlow,
-              alignItems: 'center', justifyContent: 'center',
-            }}
-          >
-            <Text style={{ fontSize: 16, color: T.textMuted, lineHeight: 20, marginTop: -1 }}>×</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={{ height: 0.5, backgroundColor: T.border, marginTop: 10 }} />
-
-        <ScrollView showsVerticalScrollIndicator={false}>
-
-          {/* ── Month section ─────────────────────────────────────── */}
-          <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 4 }}>
-            <Text style={{
-              fontSize: 11, fontWeight: '700',
-              color: T.textMuted, letterSpacing: 1.1,
-              marginBottom: 10,
-            }}>
-              MÅNAD
-            </Text>
-          </View>
-
-          {ALL_MONTHS.map((m, idx) => {
-            const active = selMonth === m.num;
-            const isLast = idx === ALL_MONTHS.length - 1;
-            return (
-              <TouchableOpacity
-                key={m.num}
-                onPress={() => handleMonthSelect(m.num)}
-                activeOpacity={0.6}
-                style={{
-                  paddingVertical: 13,
-                  paddingHorizontal: 20,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  backgroundColor: active ? T.accent + '12' : 'transparent',
-                  borderBottomWidth: isLast ? 0 : 0.5,
-                  borderBottomColor: T.border,
-                }}
-              >
-                <Text style={{
-                  flex: 1,
-                  fontSize: 15,
-                  fontWeight: active ? '600' : '400',
-                  color: T.text,
-                }}>
-                  {m.name}
-                </Text>
-                <View style={{
-                  width: 22, height: 22, borderRadius: 11,
-                  backgroundColor: active ? T.accent : 'transparent',
-                  borderWidth: active ? 0 : 1.5,
-                  borderColor: T.border,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}>
-                  {active && (
-                    <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>✓</Text>
-                  )}
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-
-          {/* ── Day section ───────────────────────────────────────── */}
-          <View style={{
-            height: 0.5, backgroundColor: T.border,
-            marginTop: 4, marginBottom: 0,
-          }} />
-
-          <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
-            <Text style={{
-              fontSize: 11, fontWeight: '700',
-              color: T.textMuted, letterSpacing: 1.1,
-              marginBottom: 14,
-            }}>
-              DAG
-            </Text>
-
-            {/* 5-column day grid */}
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-              {dayCells.map(d => {
-                const valid  = d <= maxDays;
-                const active = selDay === d && valid;
-                return (
-                  <TouchableOpacity
-                    key={d}
-                    onPress={() => valid && setSelDay(d)}
-                    activeOpacity={valid ? 0.7 : 1}
-                    style={{
-                      width: 48, height: 42,
-                      borderRadius: 10,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      backgroundColor: active
-                        ? T.accent
-                        : valid
-                          ? T.bg
-                          : 'transparent',
-                      borderWidth: valid ? 0.5 : 0,
-                      borderColor: active ? T.accent : T.border,
-                      opacity: valid ? 1 : 0,
-                    }}
-                  >
-                    <Text style={{
-                      fontSize: 15,
-                      fontWeight: active ? '700' : '400',
-                      color: active ? '#fff' : T.text,
-                    }}>
-                      {d}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-
-          {/* Confirm button */}
-          <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 4 }}>
-            <TouchableOpacity
-              onPress={handleConfirm}
-              activeOpacity={0.85}
-              style={{
-                height: 50,
-                borderRadius: 14,
-                backgroundColor: T.accent,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Text style={{ fontSize: 15, fontWeight: '700', color: '#fff' }}>
-                Välj datum
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={{ height: 12 }} />
-        </ScrollView>
-      </View>
-    </Modal>
-  );
-}
-
-// ── Sub-component: Time picker modal ───────────────────────────────────────
-
-const MINUTE_OPTIONS = [0, 15, 30, 45];
-
-function TimePickerModal({
-  visible,
-  currentHour,
-  currentMinute,
-  onConfirm,
-  onClose,
-}: {
-  visible: boolean;
-  currentHour: number;
-  currentMinute: number;
-  onConfirm: (hour: number, minute: number) => void;
-  onClose: () => void;
-}) {
-  const { theme: T } = useTheme();
-  const [selHour,   setSelHour]   = useState(currentHour);
-  const [selMinute, setSelMinute] = useState(currentMinute);
-
-  const handleConfirm = () => {
-    onConfirm(selHour, selMinute);
-    onClose();
-  };
-
-  const fmt = (h: number, m: number) =>
-    `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
-      <TouchableOpacity
-        style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' }}
-        activeOpacity={1}
-        onPress={onClose}
-      />
-
-      <View style={{
-        backgroundColor: T.card,
-        borderTopLeftRadius: 22,
-        borderTopRightRadius: 22,
-        maxHeight: '80%',
-        paddingBottom: Platform.OS === 'ios' ? 34 : 20,
-        borderWidth: 0.5,
-        borderBottomWidth: 0,
-        borderColor: T.border,
-      }}>
-        {/* Drag handle */}
-        <View style={{
-          width: 36, height: 4, borderRadius: 2,
-          backgroundColor: T.border,
-          alignSelf: 'center',
-          marginTop: 10, marginBottom: 14,
-        }} />
-
-        {/* Header */}
-        <View style={{
-          paddingHorizontal: 20,
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: 4,
-        }}>
-          <Text style={{ fontSize: 18, fontWeight: '700', color: T.text }}>
-            Välj tid
-          </Text>
-          <TouchableOpacity
-            onPress={onClose}
-            style={{
-              width: 28, height: 28, borderRadius: 14,
-              backgroundColor: T.accentGlow,
-              alignItems: 'center', justifyContent: 'center',
-            }}
-          >
-            <Text style={{ fontSize: 16, color: T.textMuted, lineHeight: 20, marginTop: -1 }}>×</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={{ height: 0.5, backgroundColor: T.border, marginTop: 10 }} />
-
-        <ScrollView showsVerticalScrollIndicator={false}>
-
-          {/* ── Hour section ─────────────────────────────────────── */}
-          <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 4 }}>
-            <Text style={{
-              fontSize: 11, fontWeight: '700',
-              color: T.textMuted, letterSpacing: 1.1,
-              marginBottom: 10,
-            }}>
-              TIMME
-            </Text>
-          </View>
-
-          {Array.from({ length: 24 }, (_, h) => h).map((h, idx) => {
-            const active = selHour === h;
-            const isLast = h === 23;
-            return (
-              <TouchableOpacity
-                key={h}
-                onPress={() => setSelHour(h)}
-                activeOpacity={0.6}
-                style={{
-                  paddingVertical: 13,
-                  paddingHorizontal: 20,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  backgroundColor: active ? T.accent + '12' : 'transparent',
-                  borderBottomWidth: isLast ? 0 : 0.5,
-                  borderBottomColor: T.border,
-                }}
-              >
-                <Text style={{
-                  flex: 1,
-                  fontSize: 15,
-                  fontWeight: active ? '600' : '400',
-                  color: T.text,
-                }}>
-                  {String(h).padStart(2, '0')}:00
-                </Text>
-                <View style={{
-                  width: 22, height: 22, borderRadius: 11,
-                  backgroundColor: active ? T.accent : 'transparent',
-                  borderWidth: active ? 0 : 1.5,
-                  borderColor: T.border,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}>
-                  {active && (
-                    <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>✓</Text>
-                  )}
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-
-          {/* ── Minute section ────────────────────────────────────── */}
-          <View style={{ height: 0.5, backgroundColor: T.border, marginTop: 4 }} />
-
-          <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
-            <Text style={{
-              fontSize: 11, fontWeight: '700',
-              color: T.textMuted, letterSpacing: 1.1,
-              marginBottom: 12,
-            }}>
-              MINUT
-            </Text>
-            <View style={{ flexDirection: 'row', gap: 10 }}>
-              {MINUTE_OPTIONS.map(m => {
-                const active = selMinute === m;
-                return (
-                  <TouchableOpacity
-                    key={m}
-                    onPress={() => setSelMinute(m)}
-                    activeOpacity={0.7}
-                    style={{
-                      flex: 1,
-                      height: 44,
-                      borderRadius: 10,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      backgroundColor: active ? T.accent : T.bg,
-                      borderWidth: 0.5,
-                      borderColor: active ? T.accent : T.border,
-                    }}
-                  >
-                    <Text style={{
-                      fontSize: 15,
-                      fontWeight: active ? '700' : '400',
-                      color: active ? '#fff' : T.text,
-                    }}>
-                      :{String(m).padStart(2, '0')}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-
-          {/* Preview + confirm */}
-          <View style={{ paddingHorizontal: 20, paddingTop: 4, paddingBottom: 4 }}>
-            <Text style={{
-              fontSize: 13, color: T.textMuted, textAlign: 'center',
-              marginBottom: 12,
-            }}>
-              Påminnelse skickas kl. {fmt(selHour, selMinute)}
-            </Text>
-            <TouchableOpacity
-              onPress={handleConfirm}
-              activeOpacity={0.85}
-              style={{
-                height: 50,
-                borderRadius: 14,
-                backgroundColor: T.accent,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Text style={{ fontSize: 15, fontWeight: '700', color: '#fff' }}>
-                Välj tid
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={{ height: 12 }} />
-        </ScrollView>
-      </View>
-    </Modal>
-  );
-}
-
-// ── Main card ───────────────────────────────────────────────────────────────
 
 export default function ZakatReminderCard() {
   const { theme: T } = useTheme();
@@ -490,8 +30,7 @@ export default function ZakatReminderCard() {
     enable, disable, updateAdvanceDays, updateHijriDate, updateReminderTime,
   } = useZakatReminder();
 
-  const [pickerVisible,     setPickerVisible]     = useState(false);
-  const [timePickerVisible, setTimePickerVisible] = useState(false);
+  const [pickerVisible, setPickerVisible] = useState(false);
 
   const isEnabled = settings?.enabled ?? false;
 
@@ -521,15 +60,20 @@ export default function ZakatReminderCard() {
     }
   };
 
-  const handleDateConfirm = (day: number, month: number, monthName: string) => {
-    updateHijriDate(day, month, monthName);
-  };
-
-  const handleTimeConfirm = useCallback((hour: number, minute: number) => {
-    updateReminderTime(hour, minute);
-  }, [updateReminderTime]);
+  // Sequential await prevents the race condition where both functions call
+  // loadZakatReminderSettings() concurrently and overwrite each other's saves.
+  const handlePickerConfirm = useCallback(async (
+    day: number, month: number, monthName: string, hour: number, minute: number,
+  ) => {
+    await updateHijriDate(day, month, monthName);
+    await updateReminderTime(hour, minute);
+  }, [updateHijriDate, updateReminderTime]);
 
   // ── Render ─────────────────────────────────────────────────────────────────
+
+  const timeFmt = settings
+    ? `${String(settings.reminderTimeHour).padStart(2, '0')}:${String(settings.reminderTimeMinute).padStart(2, '0')}`
+    : '';
 
   return (
     <>
@@ -544,10 +88,8 @@ export default function ZakatReminderCard() {
       }}>
         {/* Section label */}
         <Text style={{
-          fontSize: 11,
-          fontWeight: '700',
-          color: T.textMuted,
-          letterSpacing: 1.1,
+          fontSize: 11, fontWeight: '700',
+          color: T.textMuted, letterSpacing: 1.1,
           marginBottom: 12,
         }}>
           ÅRLIG PÅMINNELSE
@@ -576,7 +118,7 @@ export default function ZakatReminderCard() {
           <>
             <View style={{ height: 0.5, backgroundColor: T.border, marginVertical: 14 }} />
 
-            {/* Hijri date — tappable row */}
+            {/* Combined date + time row — tappable */}
             <TouchableOpacity
               onPress={() => setPickerVisible(true)}
               activeOpacity={0.7}
@@ -594,49 +136,17 @@ export default function ZakatReminderCard() {
             >
               <View style={{ flex: 1 }}>
                 <Text style={{ fontSize: 12, color: T.textMuted, marginBottom: 2 }}>
-                  Hijri-datum
+                  Datum &amp; tid
                 </Text>
                 <Text style={{ fontSize: 16, fontWeight: '600', color: T.text }}>
-                  {settings.hijriDay} {settings.hijriMonthName}
-                </Text>
-              </View>
-              <Text style={{ fontSize: 20, color: T.textMuted }}>›</Text>
-            </TouchableOpacity>
-
-            {/* Time of day — tappable row */}
-            <TouchableOpacity
-              onPress={() => setTimePickerVisible(true)}
-              activeOpacity={0.7}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                backgroundColor: T.bg,
-                borderRadius: 10,
-                borderWidth: 0.5,
-                borderColor: T.border,
-                paddingVertical: 12,
-                paddingHorizontal: 14,
-                marginBottom: 14,
-              }}
-            >
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 12, color: T.textMuted, marginBottom: 2 }}>
-                  Tid på dagen
-                </Text>
-                <Text style={{ fontSize: 16, fontWeight: '600', color: T.text }}>
-                  {String(settings.reminderTimeHour).padStart(2, '0')}:{String(settings.reminderTimeMinute).padStart(2, '0')}
+                  {settings.hijriDay} {settings.hijriMonthName} · {timeFmt}
                 </Text>
               </View>
               <Text style={{ fontSize: 20, color: T.textMuted }}>›</Text>
             </TouchableOpacity>
 
             {/* Advance selector */}
-            <Text style={{
-              fontSize: 13,
-              color: T.textMuted,
-              fontWeight: '500',
-              marginBottom: 10,
-            }}>
+            <Text style={{ fontSize: 13, color: T.textMuted, fontWeight: '500', marginBottom: 10 }}>
               Påminn mig
             </Text>
 
@@ -649,10 +159,8 @@ export default function ZakatReminderCard() {
                     onPress={() => updateAdvanceDays(opt.days)}
                     activeOpacity={0.7}
                     style={{
-                      paddingHorizontal: 11,
-                      paddingVertical: 7,
-                      borderRadius: 9,
-                      borderWidth: 0.5,
+                      paddingHorizontal: 11, paddingVertical: 7,
+                      borderRadius: 9, borderWidth: 0.5,
                       borderColor: active ? T.accent : T.border,
                       backgroundColor: active ? T.accentGlow : 'transparent',
                     }}
@@ -685,27 +193,15 @@ export default function ZakatReminderCard() {
         )}
       </View>
 
-      {/* Date picker modal */}
-      {isEnabled && settings && (
-        <HijriDatePickerModal
-          visible={pickerVisible}
-          currentDay={settings.hijriDay}
-          currentMonth={settings.hijriMonth}
-          onConfirm={handleDateConfirm}
-          onClose={() => setPickerVisible(false)}
-        />
-      )}
-
-      {/* Time picker modal */}
-      {isEnabled && settings && (
-        <TimePickerModal
-          visible={timePickerVisible}
-          currentHour={settings.reminderTimeHour}
-          currentMinute={settings.reminderTimeMinute}
-          onConfirm={handleTimeConfirm}
-          onClose={() => setTimePickerVisible(false)}
-        />
-      )}
+      <HijriDatePickerModal
+        visible={pickerVisible}
+        currentDay={settings?.hijriDay ?? 1}
+        currentMonth={settings?.hijriMonth ?? 1}
+        currentHour={settings?.reminderTimeHour ?? 10}
+        currentMinute={settings?.reminderTimeMinute ?? 0}
+        onConfirm={handlePickerConfirm}
+        onClose={() => setPickerVisible(false)}
+      />
     </>
   );
 }

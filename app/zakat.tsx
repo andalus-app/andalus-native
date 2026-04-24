@@ -459,9 +459,11 @@ function InfoBox({ text }: { text: string }) {
 function YesNoRow({
   label, value, onChange, T,
 }: { label: string; value: boolean | null; onChange: (v: boolean) => void; T: any }) {
+  const fs = useContext(ZakatFontCtx);
+  const sf = (n: number) => Math.round(n * fs / 14);
   return (
     <View style={{ marginBottom: 14 }}>
-      <Text style={{ fontSize: 14, color: T.text, marginBottom: 8, fontWeight: '500' }}>{label}</Text>
+      <Text style={{ fontSize: sf(14), color: T.text, marginBottom: 8, fontWeight: '500' }}>{label}</Text>
       <View style={{ flexDirection: 'row', gap: 10 }}>
         {([true, false] as const).map(v => (
           <TouchableOpacity
@@ -474,7 +476,7 @@ function YesNoRow({
               borderColor: value === v ? T.accent : T.border,
             }}
           >
-            <Text style={{ fontSize: 13, fontWeight: '600', color: value === v ? '#fff' : T.textMuted }}>
+            <Text style={{ fontSize: sf(13), fontWeight: '600', color: value === v ? '#fff' : T.textMuted }}>
               {v ? 'Ja' : 'Nej'}
             </Text>
           </TouchableOpacity>
@@ -491,32 +493,36 @@ function InputRow({
   placeholder?: string; keyboardType?: 'decimal-pad' | 'number-pad';
   unit?: string; T: any;
 }) {
+  const fs = useContext(ZakatFontCtx);
+  const sf = (n: number) => Math.round(n * fs / 14);
   return (
     <View style={{ marginBottom: 14 }}>
-      <Text style={{ fontSize: 13, color: T.textMuted, marginBottom: 6, fontWeight: '500' }}>{label}</Text>
+      <Text style={{ fontSize: sf(13), color: T.textMuted, marginBottom: 6, fontWeight: '500' }}>{label}</Text>
       <View style={{
         flexDirection: 'row', alignItems: 'center',
         backgroundColor: T.card, borderRadius: 10, borderWidth: 0.5, borderColor: T.border,
         paddingHorizontal: 12, height: 44,
       }}>
         <TextInput
-          style={{ flex: 1, fontSize: 15, color: T.text }}
+          style={{ flex: 1, fontSize: sf(15), color: T.text }}
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder ?? '0'}
           placeholderTextColor={T.textMuted}
           keyboardType={keyboardType}
         />
-        {unit && <Text style={{ fontSize: 13, color: T.textMuted, marginLeft: 6 }}>{unit}</Text>}
+        {unit && <Text style={{ fontSize: sf(13), color: T.textMuted, marginLeft: 6 }}>{unit}</Text>}
       </View>
     </View>
   );
 }
 
 function KaratPicker({ value, onChange, T }: { value: number; onChange: (k: number) => void; T: any }) {
+  const fs = useContext(ZakatFontCtx);
+  const sf = (n: number) => Math.round(n * fs / 14);
   return (
     <View style={{ marginBottom: 14 }}>
-      <Text style={{ fontSize: 13, color: T.textMuted, marginBottom: 8, fontWeight: '500' }}>Karat</Text>
+      <Text style={{ fontSize: sf(13), color: T.textMuted, marginBottom: 8, fontWeight: '500' }}>Karat</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -2 }}>
         {KARAT_OPTIONS.map(o => (
           <TouchableOpacity
@@ -529,7 +535,7 @@ function KaratPicker({ value, onChange, T }: { value: number; onChange: (k: numb
               borderWidth: 0.5, borderColor: value === o.value ? T.accent : T.border,
             }}
           >
-            <Text style={{ fontSize: 12, fontWeight: '600', color: value === o.value ? '#fff' : T.textMuted }}>
+            <Text style={{ fontSize: sf(12), fontWeight: '600', color: value === o.value ? '#fff' : T.textMuted }}>
               {o.value}k
             </Text>
           </TouchableOpacity>
@@ -545,6 +551,8 @@ function StepButtons({
   onBack?: () => void; onNext: () => void;
   backLabel?: string; nextLabel?: string; T: any;
 }) {
+  const fs = useContext(ZakatFontCtx);
+  const sf = (n: number) => Math.round(n * fs / 14);
   return (
     <View style={{ flexDirection: 'row', gap: 12, marginTop: 8, marginBottom: 24 }}>
       {onBack && (
@@ -555,7 +563,7 @@ function StepButtons({
             backgroundColor: T.card, borderWidth: 0.5, borderColor: T.border,
           }}
         >
-          <Text style={{ fontSize: 15, fontWeight: '600', color: T.textMuted }}>{backLabel}</Text>
+          <Text style={{ fontSize: sf(15), fontWeight: '600', color: T.textMuted }}>{backLabel}</Text>
         </TouchableOpacity>
       )}
       <TouchableOpacity
@@ -566,7 +574,7 @@ function StepButtons({
           backgroundColor: T.accent,
         }}
       >
-        <Text style={{ fontSize: 15, fontWeight: '700', color: '#fff' }}>{nextLabel}</Text>
+        <Text style={{ fontSize: sf(15), fontWeight: '700', color: '#fff' }}>{nextLabel}</Text>
       </TouchableOpacity>
     </View>
   );
@@ -575,18 +583,20 @@ function StepButtons({
 function ResultRow({
   label, value, accent = false, large = false, T,
 }: { label: string; value: string; accent?: boolean; large?: boolean; T: any }) {
+  const fs = useContext(ZakatFontCtx);
+  const sf = (n: number) => Math.round(n * fs / 14);
   return (
     <View style={{
       flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
       paddingVertical: 10, borderBottomWidth: 0.5, borderColor: T.border,
     }}>
       <Text style={{
-        fontSize: large ? 15 : 13,
+        fontSize: large ? sf(15) : sf(13),
         fontWeight: large ? '700' : '500',
         color: T.text, flex: 1,
       }}>{label}</Text>
       <Text style={{
-        fontSize: large ? 16 : 14,
+        fontSize: large ? sf(16) : sf(14),
         fontWeight: '700',
         color: accent ? T.accent : T.text,
       }}>{value}</Text>
@@ -604,6 +614,8 @@ function AnnualZakatWizard({
   initialStep?: number;
 }) {
   const { theme: T } = useTheme();
+  const fs = useContext(ZakatFontCtx);
+  const sf = (n: number) => Math.round(n * fs / 14);
   const [step, setStep] = useState(initialStep);
   const TOTAL_STEPS = 6;
 
@@ -730,9 +742,9 @@ function AnnualZakatWizard({
           borderWidth: 0.5, borderColor: T.border,
         }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <Text style={{ fontSize: 13, fontWeight: '700', color: T.text }}>Rekommenderat pris</Text>
+            <Text style={{ fontSize: sf(13), fontWeight: '700', color: T.text }}>Rekommenderat pris</Text>
             <TouchableOpacity onPress={livePrices.refetch} disabled={livePrices.loading} style={{ padding: 4 }}>
-              <Text style={{ fontSize: 12, color: livePrices.loading ? T.textMuted : T.accent, fontWeight: '600' }}>
+              <Text style={{ fontSize: sf(12), color: livePrices.loading ? T.textMuted : T.accent, fontWeight: '600' }}>
                 {livePrices.loading ? 'Hämtar…' : 'Uppdatera'}
               </Text>
             </TouchableOpacity>
@@ -741,7 +753,7 @@ function AnnualZakatWizard({
           {livePrices.loading && (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <ActivityIndicator size="small" color={T.accent} />
-              <Text style={{ fontSize: 12, color: T.textMuted }}>
+              <Text style={{ fontSize: sf(12), color: T.textMuted }}>
                 Hämtar priser från Yahoo Finance…
               </Text>
             </View>
@@ -749,7 +761,7 @@ function AnnualZakatWizard({
 
           {/* Error without cache: ask user to enter manually */}
           {!!livePrices.error && !livePrices.loading && !livePrices.fromCache && (
-            <Text style={{ fontSize: 12, color: '#FF3B30', lineHeight: 17 }}>
+            <Text style={{ fontSize: sf(12), color: '#FF3B30', lineHeight: 17 }}>
               {livePrices.error}. Ange priset manuellt nedan.
             </Text>
           )}
@@ -757,14 +769,14 @@ function AnnualZakatWizard({
           {livePrices.goldSEKPerGram !== null && !livePrices.loading && (
             <>
               <View style={{ gap: 4, marginBottom: livePrices.fromCache ? 8 : 12 }}>
-                <Text style={{ fontSize: 14, color: T.text }}>
+                <Text style={{ fontSize: sf(14), color: T.text }}>
                   {'Guld: '}
                   <Text style={{ fontWeight: '700', color: T.accent }}>
                     {livePrices.goldSEKPerGram.toFixed(2)} kr/g
                   </Text>
                 </Text>
                 {livePrices.silverSEKPerGram !== null && (
-                  <Text style={{ fontSize: 14, color: T.text }}>
+                  <Text style={{ fontSize: sf(14), color: T.text }}>
                     {'Silver: '}
                     <Text style={{ fontWeight: '700', color: T.accent }}>
                       {livePrices.silverSEKPerGram.toFixed(2)} kr/g
@@ -773,13 +785,13 @@ function AnnualZakatWizard({
                 )}
                 {!livePrices.fromCache && (
                   <>
-                    <Text style={{ fontSize: 11, color: T.textMuted, marginTop: 4 }}>
+                    <Text style={{ fontSize: sf(11), color: T.textMuted, marginTop: 4 }}>
                       {`USD/SEK: ${livePrices.usdSEK?.toFixed(4)}`}
                       {livePrices.fetchedAt
                         ? ` · Uppdaterad ${livePrices.fetchedAt.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' })}`
                         : ''}
                     </Text>
-                    <Text style={{ fontSize: 11, color: T.textMuted, fontStyle: 'italic' }}>
+                    <Text style={{ fontSize: sf(11), color: T.textMuted, fontStyle: 'italic' }}>
                       Källa: Yahoo Finance (GC=F, SI=F, USDSEK=X)
                     </Text>
                   </>
@@ -793,7 +805,7 @@ function AnnualZakatWizard({
                   borderRadius: 8, padding: 10, marginBottom: 12,
                   borderWidth: 0.5, borderColor: '#FF9500' + '50',
                 }}>
-                  <Text style={{ fontSize: 12, color: '#FF9500', lineHeight: 17 }}>
+                  <Text style={{ fontSize: sf(12), color: '#FF9500', lineHeight: 17 }}>
                     {'⚠ Kunde inte hämta aktuellt pris. Visar senast hämtade pris'}
                     {livePrices.cachedAt
                       ? ` (${livePrices.cachedAt.toLocaleDateString('sv-SE')})`
@@ -810,7 +822,7 @@ function AnnualZakatWizard({
                   backgroundColor: T.accentGlow, borderWidth: 0.5, borderColor: T.accent,
                 }}
               >
-                <Text style={{ fontSize: 13, fontWeight: '600', color: T.accent }}>
+                <Text style={{ fontSize: sf(13), fontWeight: '600', color: T.accent }}>
                   Använd rekommenderat pris
                 </Text>
               </TouchableOpacity>
@@ -823,7 +835,7 @@ function AnnualZakatWizard({
           backgroundColor: '#FF3B3012', borderRadius: 10, padding: 12, marginBottom: 14,
           borderWidth: 0.5, borderColor: '#FF3B3030',
         }}>
-          <Text style={{ fontSize: 12, color: '#FF3B30', lineHeight: 18 }}>
+          <Text style={{ fontSize: sf(12), color: '#FF3B30', lineHeight: 18 }}>
             {'Kontrollera alltid det senaste guld- och silverpriset per gram — priset varierar dagligen.\n'}
             <Text style={{ fontWeight: '600' }}>Rekommenderade källor: </Text>
             {'goldprice.org  ·  metals.live  ·  kitco.com'}
@@ -852,19 +864,19 @@ function AnnualZakatWizard({
             backgroundColor: T.card, borderRadius: 12, padding: 14, marginBottom: 12,
             borderWidth: 0.5, borderColor: T.border,
           }}>
-            <Text style={{ fontSize: 13, fontWeight: '700', color: T.text, marginBottom: 8 }}>Beräknat nisab</Text>
+            <Text style={{ fontSize: sf(13), fontWeight: '700', color: T.text, marginBottom: 8 }}>Beräknat nisab</Text>
             {nisabG !== null && (
-              <Text style={{ fontSize: 13, color: T.textMuted, marginBottom: 4 }}>
+              <Text style={{ fontSize: sf(13), color: T.textMuted, marginBottom: 4 }}>
                 {`Guld (${NISAB_GOLD_GRAMS} g): ${fmtSEK(nisabG)}`}
               </Text>
             )}
             {nisabS !== null && (
-              <Text style={{ fontSize: 13, color: T.textMuted, marginBottom: 4 }}>
+              <Text style={{ fontSize: sf(13), color: T.textMuted, marginBottom: 4 }}>
                 {`Silver (${NISAB_SILVER_GRAMS} g): ${fmtSEK(nisabS)}`}
               </Text>
             )}
             {nisabG !== null && nisabS !== null && (
-              <Text style={{ fontSize: 13, fontWeight: '700', color: T.accent, marginTop: 4 }}>
+              <Text style={{ fontSize: sf(13), fontWeight: '700', color: T.accent, marginTop: 4 }}>
                 {`Tillämpas: ${fmtSEK(Math.min(nisabG, nisabS))} (${nisabS < nisabG ? 'silver' : 'guld'})`}
               </Text>
             )}
@@ -885,16 +897,16 @@ function AnnualZakatWizard({
       />
       <InfoBox text="Zakatsformeln för guld: Rent guld (g) = total vikt ÷ 24 × karat. Alla guldtyper inkluderas — smycken, mynt och tackor." />
 
-      <Text style={{ fontSize: 15, fontWeight: '600', color: T.text, marginBottom: 10 }}>Guld</Text>
+      <Text style={{ fontSize: sf(15), fontWeight: '600', color: T.text, marginBottom: 10 }}>Guld</Text>
       {state.goldItems.map((item, idx) => (
         <View key={item.id} style={{
           backgroundColor: T.card, borderRadius: 12, padding: 12, marginBottom: 10,
           borderWidth: 0.5, borderColor: T.border,
         }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-            <Text style={{ fontSize: 13, fontWeight: '600', color: T.text }}>Guldföremål {idx + 1}</Text>
+            <Text style={{ fontSize: sf(13), fontWeight: '600', color: T.text }}>Guldföremål {idx + 1}</Text>
             <TouchableOpacity onPress={() => removeGoldItem(item.id)}>
-              <Text style={{ fontSize: 13, color: '#FF3B30' }}>Ta bort</Text>
+              <Text style={{ fontSize: sf(13), color: '#FF3B30' }}>Ta bort</Text>
             </TouchableOpacity>
           </View>
           <InputRow
@@ -906,7 +918,7 @@ function AnnualZakatWizard({
           />
           <KaratPicker value={item.karat} onChange={k => updateGoldItem(item.id, { karat: k })} T={T} />
           {num(item.weightGrams) > 0 && (
-            <Text style={{ fontSize: 12, color: T.accent }}>
+            <Text style={{ fontSize: sf(12), color: T.accent }}>
               Rent guld: {fmt(pureGoldGrams(num(item.weightGrams), item.karat), 2)} g
               {num(state.goldPricePerGram) > 0 && ` · ${fmtSEK(goldItemValue(item, num(state.goldPricePerGram)))}`}
             </Text>
@@ -920,13 +932,13 @@ function AnnualZakatWizard({
           borderWidth: 1, borderColor: T.accent, borderStyle: 'dashed', marginBottom: 16,
         }}
       >
-        <Text style={{ fontSize: 13, fontWeight: '600', color: T.accent }}>+ Lägg till guldföremål</Text>
+        <Text style={{ fontSize: sf(13), fontWeight: '600', color: T.accent }}>+ Lägg till guldföremål</Text>
       </TouchableOpacity>
 
-      <Text style={{ fontSize: 15, fontWeight: '600', color: T.text, marginBottom: 10 }}>Silver</Text>
+      <Text style={{ fontSize: sf(15), fontWeight: '600', color: T.text, marginBottom: 10 }}>Silver</Text>
       <InputRow label="Total silvervikt" value={state.silverGrams} onChangeText={v => set('silverGrams', v)} unit="g" T={T} />
       {num(state.silverGrams) > 0 && num(state.silverPricePerGram) > 0 && (
-        <Text style={{ fontSize: 12, color: T.accent, marginTop: -8, marginBottom: 12 }}>
+        <Text style={{ fontSize: sf(12), color: T.accent, marginTop: -8, marginBottom: 12 }}>
           Värde: {fmtSEK(num(state.silverGrams) * num(state.silverPricePerGram))}
         </Text>
       )}
@@ -944,12 +956,12 @@ function AnnualZakatWizard({
       />
       <InfoBox text="Skulder du är skyldig dras INTE av från zakatsunderlaget. Zakat betalas på det man äger, inte på nettotillgångar." />
 
-      <Text style={{ fontSize: 14, fontWeight: '600', color: T.text, marginBottom: 10 }}>Pengar</Text>
+      <Text style={{ fontSize: sf(14), fontWeight: '600', color: T.text, marginBottom: 10 }}>Pengar</Text>
       <InputRow label="Kontanter" value={state.cashSEK} onChangeText={v => set('cashSEK', v)} unit="kr" T={T} />
       <InputRow label="Banktillgångar" value={state.bankSEK} onChangeText={v => set('bankSEK', v)} unit="kr" T={T} />
 
       <View style={{ height: 1, backgroundColor: T.border, marginVertical: 12 }} />
-      <Text style={{ fontSize: 14, fontWeight: '600', color: T.text, marginBottom: 10 }}>Handelsgods & Företag</Text>
+      <Text style={{ fontSize: sf(14), fontWeight: '600', color: T.text, marginBottom: 10 }}>Handelsgods & Företag</Text>
       <InputRow
         label="Din ägarandel i företaget"
         value={state.ownershipPct}
@@ -983,8 +995,8 @@ function AnnualZakatWizard({
       />
 
       <View style={{ height: 1, backgroundColor: T.border, marginVertical: 12 }} />
-      <Text style={{ fontSize: 14, fontWeight: '600', color: T.text, marginBottom: 4 }}>Missade zakatår</Text>
-      <Text style={{ fontSize: 12, color: T.textMuted, marginBottom: 12 }}>
+      <Text style={{ fontSize: sf(14), fontWeight: '600', color: T.text, marginBottom: 4 }}>Missade zakatår</Text>
+      <Text style={{ fontSize: sf(12), color: T.textMuted, marginBottom: 12 }}>
         Om du missat att betala zakat tidigare år kan du beräkna det här. Ange ungefärliga totaltillgångar för respektive år.
       </Text>
       {state.missedYears.map((y, idx) => (
@@ -997,7 +1009,7 @@ function AnnualZakatWizard({
             <InputRow label="Totala tillgångar det året" value={y.totalAssets} onChangeText={v => updateMissedYear(idx, { totalAssets: v })} unit="kr" T={T} />
           </View>
           <TouchableOpacity onPress={() => removeMissedYear(idx)} style={{ justifyContent: 'center', paddingLeft: 4 }}>
-            <Text style={{ fontSize: 13, color: '#FF3B30' }}>✕</Text>
+            <Text style={{ fontSize: sf(13), color: '#FF3B30' }}>✕</Text>
           </TouchableOpacity>
         </View>
       ))}
@@ -1008,7 +1020,7 @@ function AnnualZakatWizard({
           borderWidth: 1, borderColor: T.accent, borderStyle: 'dashed', marginBottom: 16,
         }}
       >
-        <Text style={{ fontSize: 13, fontWeight: '600', color: T.accent }}>+ Lägg till missat år</Text>
+        <Text style={{ fontSize: sf(13), fontWeight: '600', color: T.accent }}>+ Lägg till missat år</Text>
       </TouchableOpacity>
 
       <StepButtons onBack={back} onNext={next} nextLabel="Beräkna" T={T} />
@@ -1027,7 +1039,7 @@ function AnnualZakatWizard({
             backgroundColor: T.card, borderRadius: 12, padding: 14, marginBottom: 14,
             borderWidth: 0.5, borderColor: T.border,
           }}>
-            <Text style={{ fontSize: 13, color: T.textMuted, lineHeight: 19 }}>
+            <Text style={{ fontSize: sf(13), color: T.textMuted, lineHeight: 19 }}>
               Fyll i beräkningsstegen för att se ditt zakatsresultat.
             </Text>
           </View>
@@ -1046,7 +1058,7 @@ function AnnualZakatWizard({
           <View style={{
             backgroundColor: '#FF3B3018', borderRadius: 10, padding: 12, marginBottom: 14,
           }}>
-            <Text style={{ fontSize: 13, color: '#FF3B30', lineHeight: 18 }}>
+            <Text style={{ fontSize: sf(13), color: '#FF3B30', lineHeight: 18 }}>
               {result.ineligibleReason}
             </Text>
           </View>
@@ -1060,7 +1072,7 @@ function AnnualZakatWizard({
           backgroundColor: T.card, borderRadius: 12, padding: 14, marginBottom: 14,
           borderWidth: 0.5, borderColor: T.border,
         }}>
-          <Text style={{ fontSize: 14, fontWeight: '700', color: T.text, marginBottom: 10 }}>Nisab-gräns</Text>
+          <Text style={{ fontSize: sf(14), fontWeight: '700', color: T.text, marginBottom: 10 }}>Nisab-gräns</Text>
           <ResultRow label={`Guldnisab (${NISAB_GOLD_GRAMS} g)`} value={result.nisabGoldSEK > 0 ? fmtSEK(result.nisabGoldSEK) : 'Pris saknas'} T={T} />
           <ResultRow label={`Silvernisab (${NISAB_SILVER_GRAMS} g)`} value={result.nisabSilverSEK > 0 ? fmtSEK(result.nisabSilverSEK) : 'Pris saknas'} T={T} />
           <ResultRow
@@ -1077,7 +1089,7 @@ function AnnualZakatWizard({
             backgroundColor: T.card, borderRadius: 12, padding: 14, marginBottom: 14,
             borderWidth: 0.5, borderColor: T.border,
           }}>
-            <Text style={{ fontSize: 14, fontWeight: '700', color: T.text, marginBottom: 10 }}>Tillgångar</Text>
+            <Text style={{ fontSize: sf(14), fontWeight: '700', color: T.text, marginBottom: 10 }}>Tillgångar</Text>
             {result.breakdown.map(b => (
               <ResultRow key={b.label} label={b.label} value={fmtSEK(b.valueSEK)} T={T} />
             ))}
@@ -1094,19 +1106,19 @@ function AnnualZakatWizard({
           borderColor: result.aboveNisab && result.eligible ? T.accent : T.border,
         }}>
           {notEligible ? (
-            <Text style={{ fontSize: 14, color: T.textMuted }}>Zakat är inte obligatorisk baserat på dina svar.</Text>
+            <Text style={{ fontSize: sf(14), color: T.textMuted }}>Zakat är inte obligatorisk baserat på dina svar.</Text>
           ) : !result.aboveNisab ? (
             <>
-              <Text style={{ fontSize: 14, fontWeight: '700', color: T.text, marginBottom: 6 }}>
+              <Text style={{ fontSize: sf(14), fontWeight: '700', color: T.text, marginBottom: 6 }}>
                 Under nisab-gränsen
               </Text>
-              <Text style={{ fontSize: 13, color: T.textMuted }}>
+              <Text style={{ fontSize: sf(13), color: T.textMuted }}>
                 Dina zakatspliktiga tillgångar ({fmtSEK(result.totalSEK)}) överstiger inte nisab-gränsen ({result.nisabApplied > 0 ? fmtSEK(result.nisabApplied) : '–'}). Ingen zakat är skyldig.
               </Text>
             </>
           ) : (
             <>
-              <Text style={{ fontSize: 14, fontWeight: '700', color: T.text, marginBottom: 10 }}>
+              <Text style={{ fontSize: sf(14), fontWeight: '700', color: T.text, marginBottom: 10 }}>
                 Zakat att betala (2,5%)
               </Text>
               <ResultRow label="Totalt underlag" value={fmtSEK(result.totalSEK)} T={T} />
@@ -1121,7 +1133,7 @@ function AnnualZakatWizard({
             backgroundColor: T.card, borderRadius: 12, padding: 14, marginBottom: 14,
             borderWidth: 0.5, borderColor: T.border,
           }}>
-            <Text style={{ fontSize: 14, fontWeight: '700', color: T.text, marginBottom: 6 }}>Missade zakatår</Text>
+            <Text style={{ fontSize: sf(14), fontWeight: '700', color: T.text, marginBottom: 6 }}>Missade zakatår</Text>
             {state.missedYears.map((y, i) => {
               const v = num(y.totalAssets);
               const z = v >= result.nisabApplied && result.nisabApplied > 0 ? v * ZAKAT_RATE : 0;
@@ -1138,7 +1150,7 @@ function AnnualZakatWizard({
           backgroundColor: T.card, borderRadius: 12, padding: 14, marginBottom: 14,
           borderWidth: 0.5, borderColor: T.border,
         }}>
-          <Text style={{ fontSize: 14, fontWeight: '700', color: T.text, marginBottom: 8 }}>Zakatmottagare (8 kategorier)</Text>
+          <Text style={{ fontSize: sf(14), fontWeight: '700', color: T.text, marginBottom: 8 }}>Zakatmottagare (8 kategorier)</Text>
           {[
             'De fattiga (al-fuqarāʾ)',
             'De behövande (al-masākīn)',
@@ -1149,9 +1161,9 @@ function AnnualZakatWizard({
             'Allahs väg – dawa & goda syften (fī sabīl Allāh)',
             'Resande utan medel (ibn al-sabīl)',
           ].map((r, i) => (
-            <Text key={i} style={{ fontSize: 12, color: T.textMuted, marginBottom: 3 }}>• {r}</Text>
+            <Text key={i} style={{ fontSize: sf(12), color: T.textMuted, marginBottom: 3 }}>• {r}</Text>
           ))}
-          <Text style={{ fontSize: 12, color: T.textMuted, marginTop: 8, fontStyle: 'italic' }}>
+          <Text style={{ fontSize: sf(12), color: T.textMuted, marginTop: 8, fontStyle: 'italic' }}>
             Zakat kan fördelas på flera mottagare. Föräldrar och barn får inte ta emot zakat från varandra.
           </Text>
         </View>
@@ -1180,6 +1192,8 @@ function ZakatAlFitrCalc({
   state, setState,
 }: { state: FitrState; setState: (f: (p: FitrState) => FitrState) => void }) {
   const { theme: T } = useTheme();
+  const fs = useContext(ZakatFontCtx);
+  const sf = (n: number) => Math.round(n * fs / 14);
 
   const set = <K extends keyof FitrState>(k: K, v: FitrState[K]) =>
     setState(p => ({ ...p, [k]: v }));
@@ -1227,13 +1241,13 @@ function ZakatAlFitrCalc({
           backgroundColor: T.accentGlow, borderRadius: 12, padding: 16, marginTop: 8,
           borderWidth: 0.5, borderColor: T.accent,
         }}>
-          <Text style={{ fontSize: 14, fontWeight: '700', color: T.text, marginBottom: 10 }}>Resultat</Text>
+          <Text style={{ fontSize: sf(14), fontWeight: '700', color: T.text, marginBottom: 10 }}>Resultat</Text>
           <ResultRow label="Totalt antal personer" value={String(totalPersons)} T={T} />
           <ResultRow label={`${FITR_KG_PER_PERSON} kg × ${totalPersons} pers.`} value={fmtKg(totalKg)} accent large T={T} />
           {totalSEK !== null && (
             <ResultRow label="Uppskattat värde" value={fmtSEK(totalSEK)} T={T} />
           )}
-          <Text style={{ fontSize: 12, color: T.textMuted, marginTop: 10 }}>
+          <Text style={{ fontSize: sf(12), color: T.textMuted, marginTop: 10 }}>
             Zakat al-Fitr betalas senast före Eid-bönen. Den som är ansvarig (familjens försörjare) betalar för sig själv och dem i hans/hennes hushåll.
           </Text>
         </View>
@@ -1243,16 +1257,16 @@ function ZakatAlFitrCalc({
         backgroundColor: T.card, borderRadius: 12, padding: 14, marginTop: 14,
         borderWidth: 0.5, borderColor: T.border,
       }}>
-        <Text style={{ fontSize: 14, fontWeight: '700', color: T.text, marginBottom: 8 }}>Regler att notera</Text>
+        <Text style={{ fontSize: sf(14), fontWeight: '700', color: T.text, marginBottom: 8 }}>Regler att notera</Text>
         {[
           'Betalas senast innan Eid-bönen börjar.',
           'Obligatorisk för alla muslimer som har råd — vuxna och barn.',
           'Familjens försörjare betalar för hela hushållet.',
           'Mängd: 3 kg baslivsmedel per person.',
-          'Kan ges som matvaruvärde i pengar (om lokala scholars tillåter).',
+          'Kan ges som matvaruvärde i pengar.',
           'Prioritera att ge till de fattiga i din närmaste omgivning.',
         ].map((r, i) => (
-          <Text key={i} style={{ fontSize: 12, color: T.textMuted, marginBottom: 3 }}>• {r}</Text>
+          <Text key={i} style={{ fontSize: sf(12), color: T.textMuted, marginBottom: 3 }}>• {r}</Text>
         ))}
       </View>
 
@@ -1297,7 +1311,7 @@ export default function ZakatScreen() {
         <BackButton onPress={() => router.back()} />
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, marginLeft: 12 }}>
           <SvgIcon name="zakat" size={24} color={T.accent} />
-          <Text style={{ fontSize: 22, fontWeight: '700', color: T.text }}>Zakatkalkylator</Text>
+          <Text style={{ fontSize: Math.round(22 * bodyFs / 14), fontWeight: '700', color: T.text }}>Zakatkalkylator</Text>
         </View>
         <TouchableOpacity
           onPress={() => setShowFontPanel(p => !p)}
@@ -1357,7 +1371,7 @@ export default function ZakatScreen() {
             }}
           >
             <Text style={{
-              fontSize: 13, fontWeight: '600',
+              fontSize: Math.round(13 * bodyFs / 14), fontWeight: '600',
               color: tab === t.key ? '#fff' : T.textMuted,
             }}>{t.label}</Text>
           </TouchableOpacity>

@@ -596,6 +596,28 @@ bismillahLockUntilMsRef.current = bsmllhEntry
 
 ---
 
+### `app/quran.tsx` — black screen on deep-link navigation (verseKey) — fixed 2026-04-24
+
+Navigating to `/quran?verseKey=X:Y` (e.g. from Dagens Koranvers) caused a black screen for up to 10+ seconds on slow networks.
+
+**Root cause:** `QuranRoute` called the `api.quran.com/verses/by_key` API to resolve the exact page number BEFORE mounting `QuranProvider`, and showed `<View style={{ backgroundColor: '#000' }} />` while waiting. No timeout. On slow/congested connections the wait was unbounded.
+
+**Fix — two-phase approach (2026-04-24):**
+1. `QuranRoute` now starts immediately with `approxPageForVerseKey()` (looks up `surahIndex.firstPage` — instant, no network). No black screen.
+2. `QuranScreen` (inside the provider) runs the API fetch in `useEffect` and calls `goToVerse(verseKey, exactPage)` when it resolves. `goToVerse` navigates the pager to the correct page and sets `pendingVerseHighlight` so `QuranVerseView` scrolls+flashes the verse.
+3. An 8-second `AbortController` timeout prevents the fetch from hanging forever. If it times out, the user stays on the approx page silently — no error state.
+
+**Behavioral change vs. old code:**
+- Old: `initialVerseKey` was passed to `QuranProvider` → `activeVerseKey` was set on mount → verse showed a permanent highlight slab until audio started. 
+- New: `activeVerseKey` starts `null` → `pendingVerseHighlight` fires via `goToVerse` → verse flashes then returns to normal. This is better UX.
+
+**Permanent rules:**
+- NEVER block `QuranProvider` mounting on a network call. Always start with `approxPageForVerseKey()` and resolve asynchronously inside `QuranScreen` via `goToVerse`.
+- ALWAYS add an `AbortController` + timeout to the page-resolution fetch — no unbounded waits.
+- NEVER pass `initialVerseKey` to `QuranProvider` for deep-link navigation; use `goToVerse` instead.
+
+---
+
 ## Working Memory
 
 Long-term patterns and decisions that future sessions must respect. Do not reinvent these.

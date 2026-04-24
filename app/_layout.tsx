@@ -1,4 +1,5 @@
 import { Stack, useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
 import * as NativeSplash from 'expo-splash-screen';
 import { useCallback, useEffect, useState } from 'react';
@@ -37,7 +38,7 @@ Asset.fromModule(
 // ── Inner app content ─────────────────────────────────────────────────────────
 
 function AppContent({ onFontsReady }: { onFontsReady: () => void }) {
-  const { overlayAnim } = useTheme();
+  const { overlayAnim, isDark } = useTheme();
   const { dispatch } = useApp();
   const router = useRouter();
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -170,6 +171,7 @@ function AppContent({ onFontsReady }: { onFontsReady: () => void }) {
 
   return (
     <View style={{ flex: 1 }}>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
       <Stack
         screenOptions={({ route }) => ({
           headerShown: false,

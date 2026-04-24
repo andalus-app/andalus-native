@@ -82,7 +82,10 @@ async function _run(): Promise<void> {
       batch.push(_prefetchPage(j));
     }
     await Promise.all(batch);
-    // Yield to the JS event loop between every batch.
-    await new Promise<void>((r) => setTimeout(r, 0));
+    // Yield one frame to the JS event loop between every batch.
+    // 16ms (vs. 0ms) ensures the UI thread gets a full render cycle between
+    // batches of Font.loadAsync() calls, which are JS-thread-heavy and would
+    // otherwise make scrolling and taps sluggish during the prefetch.
+    await new Promise<void>((r) => setTimeout(r, 16));
   }
 }

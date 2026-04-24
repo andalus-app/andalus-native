@@ -13,7 +13,7 @@ import React, {
 } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView, StyleSheet,
-  StatusBar, Share, Switch,
+  Share, Switch,
 } from 'react-native';
 import SvgIcon from '@/components/SvgIcon';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -475,10 +475,6 @@ export default function UmrahScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: T.bg }]}>
-      <StatusBar
-        barStyle={isGuideDark ? 'light-content' : 'dark-content'}
-        backgroundColor={T.bg}
-      />
 
       {/* ── Top bar ─────────────────────────────────────────────────────────── */}
       <View

@@ -17,7 +17,7 @@ import React, {
 } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView, StyleSheet,
-  StatusBar, Switch,
+  Switch,
 } from 'react-native';
 import SvgIcon from '@/components/SvgIcon';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -485,10 +485,6 @@ export default function HajjScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: T.bg }]}>
-      <StatusBar
-        barStyle={isGuideDark ? 'light-content' : 'dark-content'}
-        backgroundColor={T.bg}
-      />
 
       {/* ── Top bar ─────────────────────────────────────────────────────────── */}
       <View

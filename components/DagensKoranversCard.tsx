@@ -144,21 +144,34 @@ export default function DagensKoranversCard() {
             {verse.swedish}
           </Text>
         </View>
-        {truncated && (
+        {truncated ? (
+          // Large tap zone when the verse text is truncated: covers the Visa mer/Visa
+          // mindre label + AccentDivider + reference text in one target.
+          // paddingTop creates the "air gap" above the label so the user never
+          // accidentally misses and opens the Quran app via the outer card press.
+          // stopPropagation ensures the outer TouchableOpacity (navigate to Quran) is
+          // suppressed whenever the user taps anywhere in this bottom section.
           <TouchableOpacity
             onPress={e => { e.stopPropagation?.(); setExpanded(v => !v); }}
             activeOpacity={0.7}
-            style={styles.visaMerBtn}
+            style={styles.expandZone}
           >
-            <Text style={{ fontSize: 12, color: accentColor }}>{expanded ? 'Visa mindre' : 'Visa mer'}</Text>
+            <Text style={[styles.visaMerLabel, { color: accentColor }]}>
+              {expanded ? 'Visa mindre' : 'Visa mer'}
+            </Text>
+            <AccentDivider color={accentColor} small />
+            <Text style={[styles.reference, { color: verseColor }]}>
+              {verse.surahName} · {verse.surahNumber}:{verse.ayahNumber}
+            </Text>
           </TouchableOpacity>
+        ) : (
+          <>
+            <AccentDivider color={accentColor} small />
+            <Text style={[styles.reference, { color: verseColor }]}>
+              {verse.surahName} · {verse.surahNumber}:{verse.ayahNumber}
+            </Text>
+          </>
         )}
-
-        <AccentDivider color={accentColor} small />
-
-        <Text style={[styles.reference, { color: verseColor }]}>
-          {verse.surahName} · {verse.surahNumber}:{verse.ayahNumber}
-        </Text>
       </Animated.View>
     </TouchableOpacity>
   );
@@ -213,9 +226,15 @@ const styles = StyleSheet.create({
     height: 66,
     overflow: 'hidden',
   },
-  visaMerBtn: {
+  expandZone: {
+    // paddingTop creates tap area in the "air" above the Visa mer label so the user
+    // doesn't accidentally miss and trigger the outer card's Quran navigation.
+    paddingTop: 4,
+  },
+  visaMerLabel: {
+    fontSize: 12,
+    textAlign: 'center',
     alignSelf: 'center',
-    marginTop: 2,
     marginBottom: 0,
   },
   swedish: {

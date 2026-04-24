@@ -25,9 +25,12 @@ import {
 } from '../services/notifications';
 import {
   loadZakatReminderSettings,
+  saveZakatReminderSettings,
   enableZakatReminder,
   disableZakatReminder,
+  syncZakatReminders,
 } from '../services/zakatReminderService';
+import HijriDatePickerModal from '../components/HijriDatePickerModal';
 import { supabase } from '../lib/supabase';
 import { Storage } from '../services/storage';
 
@@ -57,25 +60,29 @@ function SectionLabel({ label, T }) {
 }
 
 function Row({ iconName, customIcon, label, value, onPress, right, T }) {
+  // When both onPress and right (e.g. Switch) are present, only the label/value
+  // area is tappable — the right control handles its own interaction.
+  const hasRightControl = right !== undefined;
   return (
-    <TouchableOpacity onPress={onPress} activeOpacity={onPress?0.7:1}
-      style={{flexDirection:'row',alignItems:'center',backgroundColor:T.card,borderRadius:14,borderWidth:0.5,borderColor:T.border,padding:14,marginBottom:8,gap:12}}>
+    <View style={{flexDirection:'row',alignItems:'center',backgroundColor:T.card,borderRadius:14,borderWidth:0.5,borderColor:T.border,padding:14,marginBottom:8,gap:12}}>
       <View style={{width:32,height:32,borderRadius:8,backgroundColor:T.accentGlow,alignItems:'center',justifyContent:'center'}}>
         {customIcon ? <SvgXml xml={customIcon} width={18} height={18}/> : <SvgIcon name={iconName} size={18} color={T.accent}/>}
       </View>
-      <View style={{flex:1}}>
+      <TouchableOpacity style={{flex:1}} onPress={onPress} activeOpacity={onPress ? 0.7 : 1} disabled={!onPress}>
         <Text style={{fontSize:15,fontWeight:'600',color:T.text}}>{label}</Text>
         {value ? <Text style={{fontSize:12,color:T.textMuted,marginTop:1}}>{value}</Text> : null}
-      </View>
-      {right !== undefined ? <View style={{alignSelf:'center'}}>{right}</View> : (onPress ? <Text style={{fontSize:18,color:T.textMuted}}>›</Text> : null)}
-    </TouchableOpacity>
+      </TouchableOpacity>
+      {hasRightControl
+        ? <View style={{alignSelf:'center'}}>{right}</View>
+        : (onPress ? <Text style={{fontSize:18,color:T.textMuted}}>›</Text> : null)}
+    </View>
   );
 }
 
 function Sheet({ visible, title, subtitle, onClose, children, T }) {
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <TouchableOpacity style={{flex:1,backgroundColor:'rgba(0,0,0,0.45)'}} activeOpacity={1} onPress={onClose}/>
+      <TouchableOpacity style={{flex:1,backgroundColor:'transparent'}} activeOpacity={1} onPress={onClose}/>
       <View style={{backgroundColor:T.card,borderTopLeftRadius:22,borderTopRightRadius:22,maxHeight:'85%',paddingBottom:Platform.OS==='ios'?34:20,borderWidth:0.5,borderBottomWidth:0,borderColor:T.border}}>
         <View style={{width:36,height:4,borderRadius:2,backgroundColor:T.border,alignSelf:'center',marginTop:10,marginBottom:14}}/>
         <View style={{paddingHorizontal:20,marginBottom:4,flexDirection:'row',alignItems:'center',justifyContent:'space-between'}}>
@@ -122,6 +129,10 @@ export default function SettingsScreen() {
   const [cityModal,     setCityModal]     = useState(false);
   const [kahfEnabled,            setKahfEnabled]            = useState(true);
   const [zakatEnabled,           setZakatEnabled]           = useState(false);
+  const [zakatSavedDate,         setZakatSavedDate]         = useState<string | null>(null);
+  const [zakatPickerVisible,     setZakatPickerVisible]     = useState(false);
+  const [zakatPickerDefaults,    setZakatPickerDefaults]    = useState({ day: 1, month: 1, hour: 10, minute: 0 });
+  const zakatSettingsRef = useRef<Awaited<ReturnType<typeof loadZakatReminderSettings>>>(null);
   const [allahNamesEnabled,      setAllahNamesEnabled]      = useState(true);
   const [liveNotifEnabled, setLiveNotifEnabled] = useState(false);
   const [preferredName,    setPreferredName]    = useState<string | null>(null);
@@ -151,7 +162,15 @@ export default function SettingsScreen() {
       const liveNotif = await AsyncStorage.getItem(LIVE_NOTIF_ENABLED_KEY);
       setLiveNotifEnabled(liveNotif === 'true'); // null (never set) = default off
       const zakat = await loadZakatReminderSettings();
+      zakatSettingsRef.current = zakat;
       setZakatEnabled(zakat?.enabled ?? false);
+      if (zakat?.hijriDay && zakat?.hijriMonthName) {
+        const h = String(zakat.reminderTimeHour ?? 8).padStart(2, '0');
+        const m = String(zakat.reminderTimeMinute ?? 0).padStart(2, '0');
+        setZakatSavedDate(`${zakat.hijriDay} ${zakat.hijriMonthName} · ${h}:${m}`);
+      } else {
+        setZakatSavedDate(null);
+      }
       const name = await AsyncStorage.getItem('andalus_preferred_name');
       setPreferredName(name ?? null);
     } catch {}
@@ -164,6 +183,33 @@ export default function SettingsScreen() {
     AsyncStorage.setItem('andalus_settings_updated', Date.now().toString()).catch(() => {});
     dispatch({ type: 'SET_SETTINGS', payload: partial });
   }
+
+  // ── Zakat picker confirm (first-time setup from Settings) ────────────────
+  const handleZakatPickerConfirm = useCallback(async (
+    day: number, month: number, monthName: string, hour: number, minute: number,
+  ) => {
+    const now = new Date().toISOString();
+    const existing = zakatSettingsRef.current;
+    const newSettings = {
+      enabled: true,
+      hijriDay: day,
+      hijriMonth: month,
+      hijriMonthName: monthName,
+      advanceDays: existing?.advanceDays ?? 7,
+      reminderTimeHour: hour,
+      reminderTimeMinute: minute,
+      source: (existing?.source ?? 'aladhan') as 'aladhan',
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+    };
+    await saveZakatReminderSettings(newSettings);
+    await syncZakatReminders();
+    zakatSettingsRef.current = newSettings;
+    setZakatEnabled(true);
+    const h = String(hour).padStart(2, '0');
+    const m = String(minute).padStart(2, '0');
+    setZakatSavedDate(`${day} ${monthName} · ${h}:${m}`);
+  }, []);
 
   async function handleSaveName() {
     const trimmed = nameInput.trim();
@@ -385,7 +431,17 @@ export default function SettingsScreen() {
             }}
             trackColor={{false:T.border,true:T.accent}} thumbColor="#fff" ios_backgroundColor={T.border}/>}/>
 
-        <Row T={T} iconName="bell" label="Zakat-påminnelse" value="Årlig Hijri-baserad påminnelse"
+        <Row T={T} iconName="bell" label="Zakat-påminnelse" value={zakatSavedDate ? `Årlig Hijri-baserad påminnelse\n${zakatSavedDate}` : 'Årlig Hijri-baserad påminnelse'}
+          onPress={zakatSavedDate ? () => {
+            const z = zakatSettingsRef.current;
+            setZakatPickerDefaults({
+              day: z?.hijriDay ?? 1,
+              month: z?.hijriMonth ?? 1,
+              hour: z?.reminderTimeHour ?? 10,
+              minute: z?.reminderTimeMinute ?? 0,
+            });
+            setZakatPickerVisible(true);
+          } : undefined}
           right={<Switch value={zakatEnabled}
             onValueChange={async (v) => {
               if (v) {
@@ -405,9 +461,10 @@ export default function SettingsScreen() {
                   await enableZakatReminder({ ...existing, enabled: true });
                   setZakatEnabled(true);
                 } else {
-                  // No config yet — navigate to Zakat calculator result step for setup
-                  router.push('/zakat?step=result' as any);
-                  // Don't set enabled=true yet; useFocusEffect will re-read state on return
+                  // No config yet — show the date picker directly
+                  setZakatPickerDefaults({ day: 1, month: 1, hour: 10, minute: 0 });
+                  setZakatPickerVisible(true);
+                  // Don't set enabled=true yet; picker confirm handler does that
                 }
               } else {
                 await disableZakatReminder();
@@ -446,7 +503,7 @@ export default function SettingsScreen() {
         <View style={{backgroundColor:T.card,borderRadius:14,borderWidth:0.5,borderColor:T.border,padding:16}}>
           <Text style={{fontSize:15,fontWeight:'700',color:T.text}}>Hidayah</Text>
           <Text style={{fontSize:13,color:T.textMuted,marginTop:2}}>Bönetider och Qibla-kompass</Text>
-          <Text style={{fontSize:12,color:T.textMuted,marginTop:6,opacity:0.7}}>Version 1.1.0</Text>
+          <Text style={{fontSize:12,color:T.textMuted,marginTop:6,opacity:0.7}}>Version 1.1.1</Text>
           <Text style={{fontSize:11,color:T.textMuted,marginTop:2,opacity:0.55}}>
             © {new Date().getFullYear()} Fatih Köker. Alla rättigheter förbehållna.
           </Text>
@@ -573,6 +630,17 @@ export default function SettingsScreen() {
           <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={closeNameModal} />
         </View>
       </Modal>
+
+      {/* Zakat first-time date picker — shown when enabling without saved config */}
+      <HijriDatePickerModal
+        visible={zakatPickerVisible}
+        currentDay={zakatPickerDefaults.day}
+        currentMonth={zakatPickerDefaults.month}
+        currentHour={zakatPickerDefaults.hour}
+        currentMinute={zakatPickerDefaults.minute}
+        onConfirm={handleZakatPickerConfirm}
+        onClose={() => setZakatPickerVisible(false)}
+      />
     </View>
   );
 }

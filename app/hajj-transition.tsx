@@ -10,7 +10,7 @@
 
 import React from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, StatusBar,
+  View, Text, TouchableOpacity, StyleSheet,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -34,7 +34,6 @@ export default function HajjTransitionScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: T.bg }]}>
-      <StatusBar barStyle="dark-content" backgroundColor={T.bg} />
 
       {/* ── Top bar ─────────────────────────────────────────────────────────── */}
       <View style={[styles.topBar, { paddingTop: insets.top + 8, borderBottomColor: T.separator }]}>
