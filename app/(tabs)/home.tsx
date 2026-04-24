@@ -839,7 +839,6 @@ export default function HomeScreen() {
           <HidayahLogo size={52} />
         </TouchableOpacity>
         <View style={{ flex: 1 }} />
-        <Text style={{ position: 'absolute', left: 0, right: 0, fontSize: 20, fontWeight: '700', color: T.text, textAlign: 'center' }}>Hem</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           {isLoggedIn && <TouchableOpacity onPress={openBell} style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}>
             <Svg width={22} height={22} viewBox="0 0 24 24" fill={T.textMuted}>
