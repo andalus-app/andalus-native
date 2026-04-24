@@ -29,7 +29,7 @@ const PREFIX = '[QURAN_PERF]';
  */
 export function qLog(message: string): void {
   if (!ENABLE_QURAN_PERF_LOGS) return;
-  console.log(`${PREFIX} ${message}`);
+  console.warn(`${PREFIX} ${message}`);
 }
 
 /**
