@@ -22,8 +22,9 @@ import {
   Platform,
   Animated,
   TouchableOpacity,
+  Pressable,
 } from 'react-native';
-import { ScrollView, GestureDetector, Gesture } from 'react-native-gesture-handler';
+import { ScrollView } from 'react-native-gesture-handler';
 import Svg, { Text as SvgText, G, Path, Defs, ClipPath, Rect, Line as SvgLine } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
@@ -253,7 +254,7 @@ type SurahHeaderCardProps = {
   // Stable ref — updated every QuranVerseView render, never causes SurahHeaderCard re-render.
   // Called from onLayout so we can scroll immediately on first mount without polling.
   surahScrollCbRef: React.MutableRefObject<((surahId: number, y: number) => void) | null>;
-  onLongPress:      () => void;
+  onLongPress:      (surahId: number) => void;
 };
 
 // Height of the calligraphy SVG canvas inside the banner
@@ -311,6 +312,16 @@ const SurahHeaderCard = memo(function SurahHeaderCard({
   surahScrollCbRef,
   onLongPress,
 }: SurahHeaderCardProps) {
+  // Stable long-press handler — fires haptics then delegates to parent.
+  // onLongPress is stable (useCallback), surahMeta.id never changes for this
+  // card instance, so this useCallback never recreates.
+  const onLongPressRef = useRef(onLongPress);
+  onLongPressRef.current = onLongPress;
+  const surahId = surahMeta.id;
+  const stableOnLongPress = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+    onLongPressRef.current(surahId);
+  }, [surahId]); // eslint-disable-line react-hooks/exhaustive-deps
   const { theme: T } = useTheme();
 
   const nameColor  = isDark ? '#FFFEF0' : '#1A1106';
@@ -345,7 +356,7 @@ const SurahHeaderCard = memo(function SurahHeaderCard({
     <TouchableOpacity
       activeOpacity={1}
       delayLongPress={1000}
-      onLongPress={onLongPress}
+      onLongPress={stableOnLongPress}
       onLayout={(e) => {
         const y = e.nativeEvent.layout.y;
         verseYMapRef.current[verseKey] = y;
@@ -406,7 +417,10 @@ type VerseCardProps = {
   // Stable ref: same object across all parent re-renders → memo never sees
   // a new reference → no spurious re-renders from this prop.
   verseYMapRef: React.MutableRefObject<Record<string, number>>;
-  onLongPress: () => void;
+  // Called with this card's verseKey on long press (≥1 s hold).
+  onLongPress: (verseKey: string) => void;
+  // Called on short tap — forwards to chrome toggle (same as outer Pressable in QuranPager).
+  onPress: () => void;
   // Flash: true when this card was just scrolled to from a deep-link.
   // Triggers a 2-cycle pulse animation then calls onFlashDone.
   shouldFlash: boolean;
@@ -429,6 +443,7 @@ const VerseCard = memo(function VerseCard({
   isDark,
   verseYMapRef,
   onLongPress,
+  onPress,
   shouldFlash,
   onFlashDone,
 }: VerseCardProps) {
@@ -437,9 +452,15 @@ const VerseCard = memo(function VerseCard({
   // Native-driver opacity — no JS thread work during recitation.
   const highlightAnim = useRef(new Animated.Value(isHighlighted ? 1 : 0)).current;
   const animRef = useRef<Animated.CompositeAnimation | null>(null);
-  // Stable ref so the flash callback never becomes a memo dep.
+  // Stable refs so flash/longpress callbacks never become memo deps.
   const onFlashDoneRef = useRef(onFlashDone);
   onFlashDoneRef.current = onFlashDone;
+  const onLongPressRef = useRef(onLongPress);
+  onLongPressRef.current = onLongPress;
+  const onPressRef = useRef(onPress);
+  onPressRef.current = onPress;
+  const verseKeyRef = useRef(item.verseKey);
+  verseKeyRef.current = item.verseKey;
   // Guard: skip the first-mount animation — Animated.Value is already initialised
   // to the correct value (isHighlighted ? 1 : 0), so running a 0→0 or 1→1
   // Animated.timing on mount needlessly creates native animation nodes across all
@@ -492,26 +513,19 @@ const VerseCard = memo(function VerseCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shouldShow, shouldFlash]);
 
-  // Stable ref — always holds the latest callback without re-creating the gesture.
-  const onLongPressRef = useRef(onLongPress);
-  onLongPressRef.current = onLongPress;
-
-  // 1-second long-press opens the action menu.
-  // Using RNGH LongPress (not RN onLongPress) so that short taps fall through
-  // to the outer RN Pressable in QuranPager which toggles chrome — exactly the
-  // original behaviour. RNGH does not consume the RN responder on gesture failure.
-  //
-  // Short taps produce NO highlight — visual feedback only fires on confirmed long press.
-  // onStart fires after minDuration → open menu; longPressedVerse drives the highlight.
-  const gesture = useRef(
-    Gesture.LongPress()
-      .minDuration(1000)
-      .runOnJS(true)
-      .onStart(() => {
-        onLongPressRef.current();
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
-      }),
-  ).current;
+  // Stable handlers — created once, read latest values through refs.
+  // Using RN Pressable instead of RNGH GestureDetector because:
+  // - Per-card GestureDetectors (20-30 per page × 3 pages = 60-90 total) add
+  //   significant overhead to the native gesture recognizer chain during scroll
+  //   and block the JS thread for ~10s on unmount as all 60+ deregister at once.
+  // - onPress forwards short taps to toggleChrome (same effect as the outer
+  //   Pressable in QuranPager), so chrome toggling works identically.
+  // - onLongPress fires after 1000ms, then haptics + action menu open.
+  const stableHandlePress = useRef(() => { onPressRef.current(); }).current;
+  const stableHandleLongPress = useRef(() => {
+    onLongPressRef.current(verseKeyRef.current);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+  }).current;
 
   // Both modes: fully transparent card bg so only the highlight slab is visible.
   // Non-highlighted → invisible card (no border, no shadow).
@@ -548,9 +562,13 @@ const VerseCard = memo(function VerseCard({
     // Translation is shown below when hasTranslation is true.
     const bsmSvgH = arabicLineH + 8;
     return (
-      <GestureDetector gesture={gesture}>
+      <Pressable
+        onPress={stableHandlePress}
+        onLongPress={stableHandleLongPress}
+        delayLongPress={1000}
+        onLayout={(e) => { verseYMapRef.current[item.verseKey] = e.nativeEvent.layout.y; }}
+      >
         <Animated.View
-          onLayout={(e) => { verseYMapRef.current[item.verseKey] = e.nativeEvent.layout.y; }}
           style={[styles.card, { backgroundColor: 'transparent', borderColor: cardBorder, borderWidth: isDark ? 0 : 0.5, shadowOpacity: 0 }]}
         >
           {/* Khatmah day marker — soft glow overlay, not animated */}
@@ -585,7 +603,7 @@ const VerseCard = memo(function VerseCard({
             </>
           )}
         </Animated.View>
-      </GestureDetector>
+      </Pressable>
     );
   }
 
@@ -593,11 +611,13 @@ const VerseCard = memo(function VerseCard({
   const wordLineH = Math.round(arabicFontSize * 2.2);
 
   return (
-    <GestureDetector gesture={gesture}>
+    <Pressable
+      onPress={stableHandlePress}
+      onLongPress={stableHandleLongPress}
+      delayLongPress={1000}
+      onLayout={(e) => { verseYMapRef.current[item.verseKey] = e.nativeEvent.layout.y; }}
+    >
       <Animated.View
-        onLayout={(e) => {
-          verseYMapRef.current[item.verseKey] = e.nativeEvent.layout.y;
-        }}
         style={[
           styles.card,
           {
@@ -671,7 +691,7 @@ const VerseCard = memo(function VerseCard({
           </>
         )}
       </Animated.View>
-    </GestureDetector>
+    </Pressable>
   );
 });
 
@@ -683,11 +703,29 @@ function QuranVerseView({ pageNumber, width, height, isActive }: Props) {
     activeVerseKey, settings, longPressedVerse, setLongPressedVerse,
     pendingSurahScroll, clearPendingSurahScroll,
     pendingVerseHighlight, clearPendingVerseHighlight,
-    khatmahRange,
+    khatmahRange, toggleChrome,
   } = useQuranContext();
   const insets = useSafeAreaInsets();
 
   const [selectedSurahId, setSelectedSurahId] = useState<number | null>(null);
+
+  // Stable callbacks — created once, never change reference.
+  // This ensures VerseCard and SurahHeaderCard memo() works correctly: only the
+  // two cards whose isHighlighted/khatmahMarkerType changed re-render on
+  // activeVerseKey updates, not all 20+ cards simultaneously.
+
+  // pageLastVerseKey is computed at render time (from items, available later).
+  // Use a ref so handleVerseLongPress always reads the current value without
+  // being recreated whenever it changes.
+  const pageLastVerseKeyRef = useRef('');
+
+  const handleVerseLongPress = useCallback((verseKey: string) => {
+    setLongPressedVerse({ verseKey, pageLastVerseKey: pageLastVerseKeyRef.current });
+  }, [setLongPressedVerse]);
+
+  const handleSurahLongPress = useCallback((surahId: number) => {
+    setSelectedSurahId(surahId);
+  }, []);
 
   // Clock — updates every minute (matches reading mode)
   const [time, setTime] = useState(() => formatTime(new Date()));
@@ -1001,6 +1039,8 @@ function QuranVerseView({ pageNumber, width, height, isActive }: Props) {
   // Last regular verse on this page (for "Till sidans slut") — excludes bismillah + surah headers
   const lastRegularItem = [...items].reverse().find((i) => !i.isBismillah && !i.isSurahHeader);
   const pageLastVerseKey = lastRegularItem?.verseKey ?? '';
+  // Keep ref in sync so handleVerseLongPress always uses the current value.
+  pageLastVerseKeyRef.current = pageLastVerseKey;
 
   return (
     <>
@@ -1039,10 +1079,7 @@ function QuranVerseView({ pageNumber, width, height, isActive }: Props) {
               isDark={isDark}
               verseYMapRef={verseYMap}
               surahScrollCbRef={surahScrollCbRef}
-              onLongPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
-                setSelectedSurahId(item.surahMeta!.id);
-              }}
+              onLongPress={handleSurahLongPress}
             />
           );
         }
@@ -1070,9 +1107,8 @@ function QuranVerseView({ pageNumber, width, height, isActive }: Props) {
             verseYMapRef={verseYMap}
             shouldFlash={flashingVerseKey === item.verseKey}
             onFlashDone={clearFlashingVerse}
-            onLongPress={() => {
-              setLongPressedVerse({ verseKey: item.verseKey, pageLastVerseKey });
-            }}
+            onLongPress={handleVerseLongPress}
+            onPress={toggleChrome}
           />
         );
       })}

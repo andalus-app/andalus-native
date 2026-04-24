@@ -26,15 +26,31 @@ const TOTAL_PAGES = 604;
 const CONCURRENCY = 4;
 
 let _started = false;
+let _stopped = false;
 
 /**
  * Starts the background pre-cache pass. Safe to call multiple times —
- * only the first call in a session has any effect.
+ * only the first call while running has any effect.
  */
 export function startMushafPrefetch(): void {
-  if (_started) return;
+  if (_started && !_stopped) return;
   _started = true;
+  _stopped = false;
   _run().catch(() => undefined);
+}
+
+/**
+ * Stops the background pre-cache pass after the current batch finishes.
+ * Also resets _started so startMushafPrefetch() can be called again (e.g.
+ * when the user re-opens the Quran screen after navigating away).
+ *
+ * Call this from the Quran screen's unmount cleanup to avoid keeping
+ * Font.loadAsync() (JS-thread-heavy in bundled mode) alive after the
+ * user has navigated away.
+ */
+export function stopMushafPrefetch(): void {
+  _stopped = true;
+  _started = false;
 }
 
 async function _prefetchPage(page: number): Promise<void> {
@@ -58,6 +74,9 @@ async function _run(): Promise<void> {
   // event loop so UI interactions (swipes, taps) are never starved by sustained
   // Font.loadAsync() calls even after the 4-second startup delay elapses.
   for (let i = 1; i <= TOTAL_PAGES; i += CONCURRENCY) {
+    // Check cancellation flag before each batch. stopMushafPrefetch() sets this
+    // when the Quran screen unmounts so we don't keep running after navigation.
+    if (_stopped) return;
     const batch: Promise<void>[] = [];
     for (let j = i; j < i + CONCURRENCY && j <= TOTAL_PAGES; j++) {
       batch.push(_prefetchPage(j));

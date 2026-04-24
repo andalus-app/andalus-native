@@ -123,11 +123,23 @@ export default function DagensKoranversCard() {
       <Animated.View style={{ opacity }}>
         <Text style={[styles.title, { color: accentColor }]}>Dagens Koranvers</Text>
 
+        {/* Invisible measuring text — absolutely positioned, no height constraint.
+            Parent height: 66 on verseContainer constrains the layout pass so
+            onTextLayout there only reports 3 lines. This element has no such
+            constraint and always reports the true line count. */}
+        <Text
+          style={[styles.swedish, styles.measuringText]}
+          onTextLayout={e => setTruncated(e.nativeEvent.lines.length > 3)}
+          accessible={false}
+        >
+          {verse.swedish}
+        </Text>
+
+        {/* Visible text — numberOfLines clips cleanly, container hides overflow */}
         <View style={expanded ? undefined : styles.verseContainer}>
           <Text
             style={[styles.swedish, { color: verseColor }]}
             numberOfLines={expanded ? undefined : 3}
-            onTextLayout={e => { if (!expanded) setTruncated(e.nativeEvent.lines.length > 3); }}
           >
             {verse.swedish}
           </Text>
@@ -138,7 +150,7 @@ export default function DagensKoranversCard() {
             activeOpacity={0.7}
             style={styles.visaMerBtn}
           >
-            <Text style={{ fontSize: 12, color: isDark ? accentColor : verseColor }}>{expanded ? 'Visa mindre' : 'Visa mer'}</Text>
+            <Text style={{ fontSize: 12, color: accentColor }}>{expanded ? 'Visa mindre' : 'Visa mer'}</Text>
           </TouchableOpacity>
         )}
 
@@ -168,7 +180,7 @@ const styles = StyleSheet.create({
     marginBottom: 7,
   },
   dividerRowSmall: {
-    marginTop: 8,
+    marginTop: 4,
     marginBottom: 4,
     alignSelf: 'center',
     width: '50%',
@@ -190,13 +202,21 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 6,
   },
+  measuringText: {
+    position: 'absolute',
+    opacity: 0,
+    left: 0,
+    right: 0,
+    top: 0,
+  },
   verseContainer: {
     height: 66,
     overflow: 'hidden',
   },
   visaMerBtn: {
     alignSelf: 'center',
-    marginTop: 4,
+    marginTop: 2,
+    marginBottom: 0,
   },
   swedish: {
     fontSize: 14.5,

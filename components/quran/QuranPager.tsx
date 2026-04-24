@@ -54,7 +54,7 @@ import QuranPageView from './QuranPageView';
 import { useQuranContext } from '../../context/QuranContext';
 import { loadQCFPageFont, loadBismillahFont } from '../../services/mushafFontManager';
 import { fetchComposedMushafPage } from '../../services/mushafApi';
-import { startMushafPrefetch } from '../../services/mushafPrefetchService';
+import { startMushafPrefetch, stopMushafPrefetch } from '../../services/mushafPrefetchService';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -194,7 +194,14 @@ function QuranPager() {
   // unresponsive period before first swipe worked.
   useEffect(() => {
     const t = setTimeout(() => { startMushafPrefetch(); }, 4000);
-    return () => clearTimeout(t);
+    return () => {
+      clearTimeout(t);
+      // Stop the background prefetch when the Quran screen unmounts so it does
+      // not keep running (and blocking the JS thread in bundled-font mode) after
+      // the user has navigated away. startMushafPrefetch() will restart it the
+      // next time the user opens the Quran screen.
+      stopMushafPrefetch();
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── External navigation (picker / contents / bookmark) ───────────────────

@@ -106,14 +106,40 @@ export default function QuranRoute() {
   const params = useLocalSearchParams<{ page?: string; verseKey?: string }>();
   const initialVerseKey = params.verseKey ?? undefined;
 
-  // If a page param is provided (deep-link from Asmaul Husna etc.), use it directly.
-  // Otherwise read from the module-level cache which was populated at import time —
-  // synchronous, no async wait, no flash. Falls back to page 1 on very first launch
-  // before the cache has loaded (race window is typically < 50ms after app start).
-  const [initialPage] = useState<number>(() => {
+  // When a verseKey is provided we must use the word-level page_number from the
+  // Quran Foundation API — the surah's firstPage (or any other approximation) will
+  // be wrong for verses that are not at the start of their surah, causing
+  // pendingVerseHighlight to never fire (QuranVerseView checks pageNumber equality).
+  //
+  // When there is no verseKey, fall back to the page param (Asmaul Husna etc.)
+  // or the last-read page cache — both are synchronous and correct.
+  const [resolvedPage, setResolvedPage] = useState<number | null>(() => {
+    if (initialVerseKey) return null; // will be resolved async below
     if (params.page) return Math.max(1, Math.min(604, parseInt(params.page, 10)));
     return getCachedLastPage();
   });
+
+  useEffect(() => {
+    if (!initialVerseKey) return;
+
+    const fallback = params.page
+      ? Math.max(1, Math.min(604, parseInt(params.page, 10)))
+      : getCachedLastPage();
+
+    // Same fetch used by QuranSearchModal — word-level page_number is accurate,
+    // verse-level field is not (see CLAUDE.md fixed bugs).
+    fetch(
+      `https://api.quran.com/api/v4/verses/by_key/${initialVerseKey}` +
+      `?words=true&word_fields=code_v2,page_number&mushaf=1`,
+    )
+      .then((r) => r.json())
+      .then((data: { verse?: { words?: Array<{ page_number?: number }> } }) => {
+        const page = data?.verse?.words?.[0]?.page_number;
+        setResolvedPage(typeof page === 'number' ? page : fallback);
+      })
+      .catch(() => setResolvedPage(fallback));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     // Unlock rotation for the Quran reader (landscape mode support).
@@ -127,9 +153,13 @@ export default function QuranRoute() {
     };
   }, []);
 
+  // Hold render until the page is resolved (only applies to verseKey navigation).
+  // Return a dark view matching the reader background — avoids white flash.
+  if (resolvedPage === null) return <View style={{ flex: 1, backgroundColor: '#000' }} />;
+
   return (
     <QuranProvider
-      initialPage={initialPage}
+      initialPage={resolvedPage}
       initialVerseKey={initialVerseKey}
       initialReadingMode={initialVerseKey ? 'verse' : undefined}
     >

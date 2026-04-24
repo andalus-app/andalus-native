@@ -988,7 +988,9 @@ export default function HomeScreen() {
               </Text>
 
               {/* Negative margin lets the scroll row bleed to screen edges */}
-              <View style={{ marginHorizontal: -16, marginTop: -28, marginBottom: -28 }}>
+              {/* paddingBottom 22 gives the shadow (offset 3 + radius 10–14) room to
+                  breathe. marginBottom matches so no extra whitespace is added. */}
+              <View style={{ marginHorizontal: -16, marginTop: -18, marginBottom: -22 }}>
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
@@ -997,7 +999,7 @@ export default function HomeScreen() {
                   // Snap[1]: iOS clamps to max offset → cards 2+3 fully visible.
                   snapToOffsets={[0, CARD_W + GAP]}
                   snapToAlignment="start"
-                  contentContainerStyle={{ paddingLeft: 16, paddingRight: 20, paddingTop: 28, paddingBottom: 28 }}
+                  contentContainerStyle={{ paddingLeft: 16, paddingRight: 20, paddingTop: 18, paddingBottom: 22 }}
                 >
                   {ITEMS.map((item, index) => (
                     <TouchableOpacity
@@ -1010,27 +1012,27 @@ export default function HomeScreen() {
                         borderRadius: 14,
                         borderWidth: 0.5,
                         borderColor: T.border,
-                        paddingHorizontal: 14,
-                        paddingVertical: 11,
+                        paddingHorizontal: 12,
+                        paddingVertical: 9,
                         marginRight: index < ITEMS.length - 1 ? GAP : 0,
                         shadowColor: '#000',
                         shadowOffset: { width: 0, height: 3 },
                         shadowOpacity: isDark ? 0.08 : 0.15,
-                        shadowRadius: isDark ? 10 : 16,
+                        shadowRadius: isDark ? 10 : 14,
                       }}
                     >
                       <View style={{
-                        width: 30, height: 30, borderRadius: 9,
+                        width: 26, height: 26, borderRadius: 8,
                         backgroundColor: T.accentGlow,
                         alignItems: 'center', justifyContent: 'center',
-                        marginBottom: 9,
+                        marginBottom: 7,
                       }}>
-                        <SvgIcon name={item.icon} size={16} color={T.accent} />
+                        <SvgIcon name={item.icon} size={15} color={T.accent} />
                       </View>
-                      <Text style={{ fontSize: 14, fontWeight: '600', color: T.text, lineHeight: 19 }}>
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: T.text, lineHeight: 18 }}>
                         {item.title}
                       </Text>
-                      <Text style={{ fontSize: 12, fontWeight: '400', color: T.textMuted, marginTop: 3 }}>
+                      <Text style={{ fontSize: 11, fontWeight: '400', color: T.textMuted, marginTop: 2 }}>
                         {item.subtitle}
                       </Text>
                     </TouchableOpacity>

@@ -105,11 +105,20 @@ export default function DagensHadithCard() {
       <Animated.View style={{ opacity }}>
         <Text style={[styles.title, { color: T.text }]}>Dagens Hadith</Text>
 
+        {/* Invisible measuring text — no height constraint, reports true line count */}
+        <Text
+          style={[styles.swedish, styles.measuringText]}
+          onTextLayout={e => setTruncated(e.nativeEvent.lines.length > 3)}
+          accessible={false}
+        >
+          {hadith.svenska}
+        </Text>
+
+        {/* Visible text — clipped cleanly via numberOfLines */}
         <View style={expanded ? undefined : styles.textContainer}>
           <Text
             style={[styles.swedish, { color: T.text }]}
             numberOfLines={expanded ? undefined : 3}
-            onTextLayout={e => { if (!expanded) setTruncated(e.nativeEvent.lines.length > 3); }}
           >
             {hadith.svenska}
           </Text>
@@ -149,6 +158,13 @@ const styles = StyleSheet.create({
     letterSpacing: 0.1,
     textAlign: 'left',
     marginBottom: 5,
+  },
+  measuringText: {
+    position: 'absolute',
+    opacity: 0,
+    left: 0,
+    right: 0,
+    top: 0,
   },
   textContainer: {
     height: 63,
