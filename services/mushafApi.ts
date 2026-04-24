@@ -118,6 +118,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { pageCache }           from './quranPageLRU';
 import { isPageCached }        from './quranOfflineManifest';
 import { readPage, writePage } from './quranPageFileStore';
+import { qLog, qWarn }         from './quranPerfLogger';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -459,7 +460,7 @@ async function fetchMushafPageVerses(
         (line) => line.words.some((w) => w.pageNumber !== pageNumber),
       );
       if (!hasWrongPageWords) {
-        if (__DEV__) console.log(`[mushafApi] p${pageNumber}: AsyncStorage hit`);
+        qLog(`p${pageNumber}: AsyncStorage hit`);
         return cachedPage;
       }
       // Stale cache — delete it so next load fetches fresh data
@@ -470,7 +471,7 @@ async function fetchMushafPageVerses(
   }
 
   // ── Fetch from network ─────────────────────────────────────────────────
-  if (__DEV__) console.log(`[mushafApi] p${pageNumber}: Network fetch`);
+  qLog(`p${pageNumber}: Network fetch`);
   //
   // Main page (N): fetched with AbortSignal so the request is cancelled if the
   // page view unmounts before the response arrives.
@@ -821,7 +822,7 @@ export function fetchComposedMushafPage(
   // pageCache.get() promotes the entry to MRU — correct for frequently accessed pages.
   const memCached = pageCache.get(pageNumber);
   if (memCached) {
-    if (__DEV__) console.log(`[mushafApi] p${pageNumber}: LRU hit`);
+    qLog(`p${pageNumber}: LRU hit`);
     return Promise.resolve(memCached);
   }
 
@@ -867,12 +868,12 @@ async function _fetchWithFileStoreFallback(
   if (isPageCached(pageNumber)) {
     const diskPage = await readPage(pageNumber);
     if (diskPage) {
-      if (__DEV__) console.log(`[mushafApi] p${pageNumber}: FileStore hit`);
+      qLog(`p${pageNumber}: FileStore hit`);
       return diskPage;
     }
     // File is gone despite manifest saying cached (e.g. device restore).
     // Fall through to re-fetch and rebuild the cache entry below.
-    if (__DEV__) console.warn(`[mushafApi] p${pageNumber}: manifest=cached but file missing — re-fetching`);
+    qWarn(`p${pageNumber}: manifest=cached but file missing — re-fetching`);
   }
 
   // ── Layers 3+4: existing path (AsyncStorage + network) ────────────────────
@@ -884,7 +885,7 @@ async function _fetchWithFileStoreFallback(
   // Persist to FileStore for future sessions (non-blocking, fire-and-forget).
   // If writePage throws (disk full, etc.) we swallow the error — the page is
   // still usable from memory / AsyncStorage on this session and next.
-  if (__DEV__) console.log(`[mushafApi] p${pageNumber}: writing to FileStore`);
+  qLog(`p${pageNumber}: writing to FileStore`);
   writePage(pageNumber, result).catch(() => {});
 
   return result;

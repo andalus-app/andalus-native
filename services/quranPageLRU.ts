@@ -18,6 +18,7 @@
  */
 
 import type { ComposedMushafPage } from './mushafApi';
+import { qLog } from './quranPerfLogger';
 
 // ── Configuration ─────────────────────────────────────────────────────────────
 
@@ -57,7 +58,7 @@ class PageLRUCache {
       const lruKey = this._map.keys().next().value;
       if (lruKey !== undefined) {
         this._map.delete(lruKey);
-        if (__DEV__) console.log(`[PageLRU] evicted p${lruKey}`);
+        qLog(`PageLRU evicted p${lruKey}`);
       }
     }
     this._map.set(pageNumber, page);

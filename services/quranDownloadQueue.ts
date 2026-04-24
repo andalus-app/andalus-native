@@ -45,6 +45,7 @@ import { fetchComposedMushafPage, getComposedPageSync } from './mushafApi';
 import { isPageCached }                                  from './quranOfflineManifest';
 import { writePage }                                     from './quranPageFileStore';
 import { pageCache }                                     from './quranPageLRU';
+import { qLog, qWarn }                                   from './quranPerfLogger';
 
 // ── Configuration ─────────────────────────────────────────────────────────────
 
@@ -131,9 +132,7 @@ function _promotePriority(pageNumber: number, newPriority: QueuePriority): void 
       item.priority = newPriority;
       // Insert at front of new bucket — pick it up next
       _buckets[newPriority].unshift(item);
-      if (__DEV__) {
-        console.log(`[Queue] p${pageNumber} promoted → priority ${newPriority}`);
-      }
+      qLog(`Queue p${pageNumber} promoted → priority ${newPriority}`);
       return;
     }
   }
@@ -223,11 +222,7 @@ async function _downloadItem(item: QueueItem): Promise<void> {
     if (!_stopped && item.retryCount < MAX_RETRIES) {
       const delayMs = RETRY_DELAYS_MS[item.retryCount] ?? 30_000;
       item.retryCount++;
-      if (__DEV__) {
-        console.log(
-          `[Queue] p${pageNumber} failed — retry ${item.retryCount}/${MAX_RETRIES} in ${delayMs / 1000}s`,
-        );
-      }
+      qLog(`Queue p${pageNumber} failed — retry ${item.retryCount}/${MAX_RETRIES} in ${delayMs / 1000}s`);
       setTimeout(() => {
         if (_stopped) return;
         if (!isPageCached(pageNumber)) {
@@ -237,9 +232,7 @@ async function _downloadItem(item: QueueItem): Promise<void> {
         }
       }, delayMs);
     } else {
-      if (__DEV__) {
-        console.warn(`[Queue] p${pageNumber} failed after ${MAX_RETRIES} retries — giving up`);
-      }
+      qWarn(`Queue p${pageNumber} failed after ${MAX_RETRIES} retries — giving up`);
       // markPageFailed is intentionally NOT called here — the queue's job is
       // background caching, not page delivery. The page remains 'missing' in
       // the manifest so the next session can retry it.
@@ -309,7 +302,7 @@ export function stopQueue(): void {
 export function pauseQueue(): void {
   if (_paused) return;
   _paused = true;
-  if (__DEV__) console.log('[Queue] paused (scroll started)');
+  qLog('Queue paused (scroll started)');
 }
 
 /**
@@ -319,7 +312,7 @@ export function pauseQueue(): void {
 export function resumeQueue(): void {
   if (!_paused) return;
   _paused = false;
-  if (__DEV__) console.log('[Queue] resumed (page settled)');
+  qLog('Queue resumed (page settled)');
   if (_started && !_stopped) _launchWorkers();
 }
 

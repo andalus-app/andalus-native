@@ -56,6 +56,7 @@ import {
 } from './quranDownloadQueue';
 import { fetchComposedMushafPage } from './mushafApi';
 import type { ComposedMushafPage } from './mushafApi';
+import { qLog, qWarn }            from './quranPerfLogger';
 
 // ── Configuration ─────────────────────────────────────────────────────────────
 
@@ -95,18 +96,14 @@ export function initOfflineManager(currentPage: number): void {
   _initPromise = _init(currentPage).catch(() => {
     // Non-fatal — the app works without the offline manager.
     // Quran text is always available via the existing mushafApi fallback.
-    if (__DEV__) console.warn('[OfflineManager] init failed — falling back to mushafApi');
+    qWarn('OfflineManager init failed — falling back to mushafApi');
   });
 }
 
 async function _init(currentPage: number): Promise<void> {
   await initManifest();
 
-  if (__DEV__) {
-    console.log(
-      `[OfflineManager] manifest ready — ${getCachedPageCount()}/604 pages on disk`,
-    );
-  }
+  qLog(`OfflineManager manifest ready — ${getCachedPageCount()}/604 pages on disk`);
 
   // Delay queue start so it does not compete with the critical startup window.
   _startupTimer = setTimeout(() => {
@@ -114,13 +111,11 @@ async function _init(currentPage: number): Promise<void> {
     _enqueueAllMissing(currentPage);
     startQueue();
 
-    if (__DEV__) {
-      const s = getQueueStats();
-      console.log(
-        `[OfflineManager] queue started — ${s.pending} pages enqueued`
-        + ` (p0=${s.p0}, p1=${s.p1}, p2=${s.p2})`,
-      );
-    }
+    const s = getQueueStats();
+    qLog(
+      `OfflineManager queue started — ${s.pending} pages enqueued`
+      + ` (p0=${s.p0}, p1=${s.p1}, p2=${s.p2})`,
+    );
   }, STARTUP_DELAY_MS);
 }
 

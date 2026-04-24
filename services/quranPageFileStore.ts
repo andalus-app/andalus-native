@@ -41,6 +41,7 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import type { ComposedMushafPage } from './mushafApi';
 import { markPageDone, markPageFailed, MANIFEST_DIR } from './quranOfflineManifest';
+import { qWarn } from './quranPerfLogger';
 
 // ── Paths ─────────────────────────────────────────────────────────────────────
 
@@ -99,9 +100,7 @@ export async function readPage(
     // We do NOT validate individual code_v2 values — that would require
     // re-fetching and would defeat the purpose of the cache.
     if (page.pageNumber !== pageNumber || !Array.isArray(page.slots) || page.slots.length === 0) {
-      if (__DEV__) {
-        console.warn(`[FileStore] p${pageNumber}: integrity check failed — pageNumber or slots invalid`);
-      }
+      qWarn(`FileStore p${pageNumber}: integrity check failed — pageNumber or slots invalid`);
       return null;
     }
 
@@ -135,7 +134,7 @@ export async function writePage(
     markPageDone(pageNumber);
   } catch (e) {
     markPageFailed(pageNumber);
-    if (__DEV__) console.warn(`[FileStore] p${pageNumber}: write failed`, e);
+    qWarn(`FileStore p${pageNumber}: write failed: ${String(e)}`);
     throw e;
   }
 }

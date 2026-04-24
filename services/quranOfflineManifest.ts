@@ -20,6 +20,7 @@
  */
 
 import * as FileSystem from 'expo-file-system/legacy';
+import { qLog, qWarn }  from './quranPerfLogger';
 
 // ── Paths ─────────────────────────────────────────────────────────────────────
 
@@ -89,7 +90,7 @@ async function _load(): Promise<void> {
 
     if (json.schemaVersion !== SCHEMA_VERSION) {
       // Schema changed — start fresh. Pages will be re-downloaded.
-      if (__DEV__) console.log('[Manifest] schema version mismatch — resetting');
+      qLog('Manifest schema version mismatch — resetting');
       return;
     }
 
@@ -100,16 +101,14 @@ async function _load(): Promise<void> {
       }
     }
 
-    if (__DEV__) {
-      const done = [..._entries.values()].filter(
-        e => e.data === 'done' && e.dataVersion === CURRENT_DATA_VERSION,
-      ).length;
-      console.log(`[Manifest] loaded — ${done}/604 pages cached on disk`);
-    }
+    const done = [..._entries.values()].filter(
+      e => e.data === 'done' && e.dataVersion === CURRENT_DATA_VERSION,
+    ).length;
+    qLog(`Manifest loaded — ${done}/604 pages cached on disk`);
   } catch {
     // Corrupt or unreadable — start fresh. Overwritten on next save.
     _entries.clear();
-    if (__DEV__) console.warn('[Manifest] load failed — starting fresh');
+    qWarn('Manifest load failed — starting fresh');
   }
 }
 
@@ -207,7 +206,7 @@ async function _saveNow(): Promise<void> {
     await FileSystem.writeAsStringAsync(MANIFEST_TMP, JSON.stringify(json));
     await FileSystem.moveAsync({ from: MANIFEST_TMP, to: MANIFEST_PATH });
   } catch (e) {
-    if (__DEV__) console.warn('[Manifest] save failed', e);
+    qWarn(`Manifest save failed: ${String(e)}`);
   }
 }
 
