@@ -3,9 +3,9 @@
  *
  * Public API for the Mushaf offline system.
  *
- * This is the ONLY file that QuranPager and QuranPageView need to import
+ * This is the ONLY file that QuranPager and _layout.tsx need to import
  * from the offline system. All other modules (manifest, LRU, FileStore,
- * download queue) are internal implementation details.
+ * download queue, font manager) are internal implementation details.
  *
  * ── Resolution order for getPage(n) ─────────────────────────────────────────
  *
@@ -16,19 +16,31 @@
  * After a layer-3 hit, the result is written to FileStore and LRU so
  * subsequent accesses use the faster layers.
  *
- * ── Integration status ───────────────────────────────────────────────────────
+ * ── Global startup cache ─────────────────────────────────────────────────────
  *
- *   QuranPager is NOT yet modified. This module runs in pure background mode:
- *   initOfflineManager() starts the download queue; QuranPageView continues
- *   to call fetchComposedMushafPage() directly. getPage() is ready to use
- *   once the integration step is verified.
+ *   startGlobalCache() is called once from app/_layout.tsx after storage
+ *   initialises. It downloads all 604 page-data files AND all 606 fonts
+ *   to the device's DocumentDirectory so that every Quran page opens
+ *   instantly without any network request.
+ *
+ *   Downloads run in a low-concurrency background queue (2 workers) and
+ *   pause automatically while the user swipes between pages. The manifest
+ *   tracks progress across sessions, so interrupted downloads resume where
+ *   they left off.
+ *
+ *   The queue NEVER stops once started globally — it persists across
+ *   Quran-screen open/close cycles until all 604 pages are cached.
+ *
+ * ── AppState integration ─────────────────────────────────────────────────────
+ *
+ *   startGlobalCache() registers a single AppState listener that:
+ *     • Flushes the manifest (saves debounced writes) on 'background'.
+ *     • Resumes the queue and font downloads on 'active'.
  *
  * ── Backward compatibility ───────────────────────────────────────────────────
  *
  *   All existing AsyncStorage keys (andalus_mushaf_cache_v4_*, _chapter_v3_*)
  *   remain intact and continue to serve as fallbacks. No data is deleted.
- *   The offline system adds layers on top of the existing pipeline; it does
- *   not replace anything until the integration step is complete and verified.
  *
  * ── Quran text integrity ─────────────────────────────────────────────────────
  *
@@ -37,11 +49,13 @@
  *   No transformation, sanitisation, or re-encoding is performed.
  */
 
+import { AppState } from 'react-native';
 import {
   initManifest,
   isPageCached,
   getMissingPages,
   getCachedPageCount,
+  flushManifest,
 } from './quranOfflineManifest';
 import { pageCache }  from './quranPageLRU';
 import { readPage, writePage } from './quranPageFileStore';
@@ -56,59 +70,149 @@ import {
 } from './quranDownloadQueue';
 import { fetchComposedMushafPage } from './mushafApi';
 import type { ComposedMushafPage } from './mushafApi';
-import { qLog, qWarn }            from './quranPerfLogger';
+import { preWarmPageFonts, preWarmSharedFonts } from './mushafFontManager';
+import { getCachedLastPage } from './quranLastPage';
+import { qLog, qWarn } from './quranPerfLogger';
 
 // ── Configuration ─────────────────────────────────────────────────────────────
 
 /**
- * Delay before starting the background queue after mount (ms).
- *
- * Matches the existing mushafPrefetchService.ts delay. Prevents the queue's
- * Font.loadAsync / JSON work from competing with the JS thread during the
- * critical first-render window (initial page render + first swipe gesture).
+ * Delay before the GLOBAL background queue starts (ms).
+ * Shorter than the QuranPager delay — when called at app startup the Quran
+ * screen isn't even open, so we're not competing with any render work.
  */
-const STARTUP_DELAY_MS = 4_000;
+const GLOBAL_STARTUP_DELAY_MS = 2_000;
+
+/**
+ * Delay before the QuranPager-triggered queue starts (ms).
+ * Prevents competing with the critical first-render window.
+ */
+const PAGER_STARTUP_DELAY_MS = 4_000;
+
+/**
+ * Extra delay before font downloads begin (ms, measured from startGlobalCache call).
+ * Fonts start after the page-data queue is already running so they don't
+ * compete with the initial data fetch for the user's current page.
+ */
+const FONT_STARTUP_DELAY_MS = 5_000;
 
 // ── Module state ──────────────────────────────────────────────────────────────
 
-let _initPromise:  Promise<void> | null = null;
+/** True once startGlobalCache() has been called. */
+let _globallyStarted = false;
+
+/** Ongoing init promise — set to null only when stopOfflineManager resets it. */
+let _initPromise: Promise<void> | null = null;
+
+/** Timer for the delayed queue start. */
 let _startupTimer: ReturnType<typeof setTimeout> | null = null;
 
-// ── Initialisation ────────────────────────────────────────────────────────────
+/** AppState subscription from startGlobalCache. */
+let _appStateSub: ReturnType<typeof AppState.addEventListener> | null = null;
+
+/** Ongoing font-download promise (null when idle or completed). */
+let _fontPromise: Promise<void> | null = null;
+
+/** True once all 606 fonts are verified on disk. */
+let _fontsFullyCached = false;
+
+// ── Global startup entry point ────────────────────────────────────────────────
 
 /**
- * Initialises the offline system and starts the background download queue.
+ * Starts the full offline Quran cache from app startup.
  *
- * Call once when the Quran screen mounts (QuranPager useEffect).
- * Safe to call multiple times — subsequent calls are no-ops until
- * stopOfflineManager() resets the state.
+ * Call ONCE from app/_layout.tsx after initStorage() resolves.
+ * Subsequent calls are no-ops (idempotent).
  *
- * Steps:
- *   1. Load the manifest from disk into memory.
- *   2. After STARTUP_DELAY_MS: enqueue all missing pages by priority.
- *   3. Start the download queue.
+ * What this does:
+ *  1. Loads the disk manifest into memory.
+ *  2. After 2 s: starts the background download queue for all 604 page-data files.
+ *  3. After 5 s: starts downloading all 606 QCF font files to disk.
+ *  4. Registers an AppState listener that:
+ *       – Pauses downloads and flushes the manifest when the app is backgrounded.
+ *       – Resumes downloads when the app returns to the foreground.
  *
- * @param currentPage - The page the user is viewing on mount.
- *                      Used to set initial queue priorities.
+ * Downloads run with concurrency = 2 and pause during Mushaf swipe gestures.
+ * All progress is persisted via the manifest so interrupted downloads resume
+ * where they left off on the next app launch.
+ */
+export function startGlobalCache(): void {
+  if (_globallyStarted) return;
+  _globallyStarted = true;
+
+  // Start page-data download
+  if (!_initPromise) {
+    _initPromise = _initWithDelay(GLOBAL_STARTUP_DELAY_MS).catch(() => {
+      qWarn('GlobalCache page-data init failed — falling back to mushafApi');
+    });
+  }
+
+  // Start font download (delayed further so it doesn't compete with data queue)
+  _scheduleFontDownload();
+
+  // AppState: flush manifest on background, resume on foreground
+  _appStateSub = AppState.addEventListener('change', (nextState) => {
+    if (nextState === 'active') {
+      resumeQueue();
+      _scheduleFontDownload(); // Re-schedule if interrupted while backgrounded
+    } else {
+      // 'background' or 'inactive'
+      pauseQueue();
+      flushManifest().catch(() => {}); // Persist debounced manifest writes
+    }
+  });
+
+  qLog('GlobalCache started');
+}
+
+// ── QuranPager entry point ────────────────────────────────────────────────────
+
+/**
+ * Initialises the offline system when the Quran screen opens.
+ *
+ * If startGlobalCache() was already called (the normal case), this is a no-op
+ * because _initPromise is already set. QuranPager's prioritize() calls handle
+ * boosting the current page in the already-running queue.
+ *
+ * If somehow the global cache wasn't started (e.g. very early navigation),
+ * this falls back to the original behaviour with the 4 s delay.
+ *
+ * Safe to call multiple times — subsequent calls are no-ops.
  */
 export function initOfflineManager(currentPage: number): void {
   if (_initPromise) return;
-  _initPromise = _init(currentPage).catch(() => {
-    // Non-fatal — the app works without the offline manager.
-    // Quran text is always available via the existing mushafApi fallback.
+  _initPromise = _initWithDelay(PAGER_STARTUP_DELAY_MS, currentPage).catch(() => {
     qWarn('OfflineManager init failed — falling back to mushafApi');
   });
 }
 
-async function _init(currentPage: number): Promise<void> {
+// ── Shared init implementation ────────────────────────────────────────────────
+
+/**
+ * Loads the manifest then starts the download queue after `delayMs`.
+ * When called globally (no currentPage), uses getCachedLastPage() inside
+ * the timeout so the value is resolved after AsyncStorage has loaded.
+ */
+async function _initWithDelay(
+  delayMs:      number,
+  currentPage?: number,
+): Promise<void> {
   await initManifest();
 
-  qLog(`OfflineManager manifest ready — ${getCachedPageCount()}/604 pages on disk`);
+  const cachedCount = getCachedPageCount();
+  qLog(`OfflineManager manifest ready — ${cachedCount}/604 pages on disk`);
 
-  // Delay queue start so it does not compete with the critical startup window.
+  if (cachedCount === 604) {
+    qLog('OfflineManager — all 604 pages already cached, skipping queue');
+    return;
+  }
+
   _startupTimer = setTimeout(() => {
     _startupTimer = null;
-    _enqueueAllMissing(currentPage);
+    // If no currentPage was supplied (global mode), read the last-visited page
+    // now (inside the timeout) so AsyncStorage has had time to resolve.
+    const priorityPage = currentPage ?? getCachedLastPage();
+    _enqueueAllMissing(priorityPage);
     startQueue();
 
     const s = getQueueStats();
@@ -116,7 +220,7 @@ async function _init(currentPage: number): Promise<void> {
       `OfflineManager queue started — ${s.pending} pages enqueued`
       + ` (p0=${s.p0}, p1=${s.p1}, p2=${s.p2})`,
     );
-  }, STARTUP_DELAY_MS);
+  }, delayMs);
 }
 
 /**
@@ -124,22 +228,56 @@ async function _init(currentPage: number): Promise<void> {
  * from currentPage so nearby pages download first.
  */
 function _enqueueAllMissing(currentPage: number): void {
-  const missing = getMissingPages(); // pages where isPageCached(n) === false
+  const missing = getMissingPages();
 
-  const p0: number[] = []; // current page
-  const p1: number[] = []; // ±1 and ±2 pages
-  const p2: number[] = []; // everything else
+  const p0: number[] = [];
+  const p1: number[] = [];
+  const p2: number[] = [];
 
   for (const n of missing) {
     const dist = Math.abs(n - currentPage);
-    if (dist === 0)      p0.push(n);
-    else if (dist <= 2)  p1.push(n);
-    else                 p2.push(n);
+    if (dist === 0)     p0.push(n);
+    else if (dist <= 2) p1.push(n);
+    else                p2.push(n);
   }
 
   if (p0.length) enqueuePages(p0, 0);
   if (p1.length) enqueuePages(p1, 1);
   if (p2.length) enqueuePages(p2, 2);
+}
+
+// ── Font download ─────────────────────────────────────────────────────────────
+
+/**
+ * Starts the background font download if not already running or completed.
+ * Called at startup and again when the app returns to the foreground.
+ */
+function _scheduleFontDownload(): void {
+  if (_fontsFullyCached || _fontPromise) return;
+
+  _fontPromise = _doFontDownload()
+    .then(() => {
+      _fontsFullyCached = true;
+      _fontPromise = null;
+      qLog('GlobalCache — all 606 QCF fonts downloaded to disk');
+    })
+    .catch(() => {
+      _fontPromise = null; // Allow retry on next app foreground / explicit call
+    });
+}
+
+async function _doFontDownload(): Promise<void> {
+  // Wait for the page-data queue to start first
+  await new Promise<void>(resolve => setTimeout(resolve, FONT_STARTUP_DELAY_MS));
+
+  // Download shared fonts (surah names + bismillah) — small, download first
+  await preWarmSharedFonts();
+
+  // Download all 604 QCF page fonts with concurrency 2.
+  // preWarmPageFonts skips fonts that are already on disk (idempotent).
+  // Each batch of 2 runs in parallel; batches are sequential with a small
+  // yield in between so the JS thread stays responsive.
+  await preWarmPageFonts(1, 604, 2);
 }
 
 // ── Page access ───────────────────────────────────────────────────────────────
@@ -151,16 +289,9 @@ function _enqueueAllMissing(currentPage: number): void {
  *
  *   1. LRU in-memory cache — synchronous Map lookup, < 1 ms.
  *   2. FileStore (disk)    — async JSON read, ~2–5 ms.
- *      Available on second open after the background queue has cached the page.
  *   3. Existing mushafApi  — AsyncStorage then network, unchanged path.
- *      After a layer-3 hit, the result is written to FileStore and LRU
- *      so subsequent accesses hit layer 1 or 2.
  *
- * This function is NOT yet called from QuranPager/QuranPageView — they still
- * call fetchComposedMushafPage() directly. Integration happens in the next step.
- *
- * Quran text: the ComposedMushafPage is returned verbatim from whichever layer
- * supplies it. No transformation is applied to code_v2 or any Arabic text.
+ * Quran text: the ComposedMushafPage is returned verbatim. No transformation.
  */
 export async function getPage(
   pageNumber: number,
@@ -176,17 +307,12 @@ export async function getPage(
       pageCache.set(pageNumber, diskHit);
       return diskHit;
     }
-    // Manifest says cached but file is gone (e.g. device restored).
-    // Fall through to re-fetch and rebuild the cache entry.
   }
 
   // ── Layer 3: mushafApi (AsyncStorage + network) — existing, unchanged ──────
   const page = await fetchComposedMushafPage(pageNumber);
-
-  // Persist to FileStore for next session (non-blocking, fire-and-forget).
   writePage(pageNumber, page).catch(() => {});
   pageCache.set(pageNumber, page);
-
   return page;
 }
 
@@ -194,19 +320,12 @@ export async function getPage(
 
 /**
  * Boosts the download priority of `currentPage` and its ±2 neighbours.
- *
- * Call this whenever currentPage changes (user swiped to a new page).
- * Already-cached or in-flight pages are ignored automatically by the queue.
- * In-queue pages are promoted to a higher priority bucket.
- *
- * Safe to call before initOfflineManager() — items are enqueued and will
- * be processed when the queue starts.
+ * Call whenever currentPage changes (user swiped to a new page).
+ * Safe to call before initOfflineManager().
  */
 export function prioritize(currentPage: number): void {
-  // Current page → priority 0 (highest)
   enqueuePages([currentPage], 0);
 
-  // ±1 and ±2 pages → priority 1
   const nearby: number[] = [];
   for (const delta of [-2, -1, 1, 2]) {
     const n = currentPage + delta;
@@ -215,32 +334,31 @@ export function prioritize(currentPage: number): void {
   if (nearby.length) enqueuePages(nearby, 1);
 }
 
-// ── Queue lifecycle (called from QuranPager) ──────────────────────────────────
+// ── Queue lifecycle ───────────────────────────────────────────────────────────
 
-/**
- * Pauses the download queue.
- * Call from QuranPager's onScrollBeginDrag.
- */
+/** Pauses the download queue. Call from QuranPager's onScrollBeginDrag. */
 export function pauseDownloads(): void {
   pauseQueue();
 }
 
-/**
- * Resumes the download queue after a pause.
- * Call from QuranPager's onMomentumScrollEnd.
- */
+/** Resumes the download queue. Call from QuranPager's onMomentumScrollEnd. */
 export function resumeDownloads(): void {
   resumeQueue();
 }
 
 /**
- * Stops the queue and clears the startup timer.
- * Call from QuranPager's unmount cleanup (useEffect return).
+ * Stops the offline manager and resets its state.
  *
- * Resets _initPromise so initOfflineManager() can be called again when
- * the user re-opens the Quran screen.
+ * When startGlobalCache() has been called, this is a NO-OP — the global
+ * download queue runs across screen navigations and must not be stopped
+ * when QuranPager unmounts.
+ *
+ * Only has effect in the legacy path where initOfflineManager() was called
+ * directly from QuranPager without a prior startGlobalCache() call.
  */
 export function stopOfflineManager(): void {
+  if (_globallyStarted) return; // Never stop the global cache
+
   if (_startupTimer !== null) {
     clearTimeout(_startupTimer);
     _startupTimer = null;
@@ -253,37 +371,39 @@ export function stopOfflineManager(): void {
 
 export type OfflineStats = {
   /** Pages with valid cached JSON on disk (from manifest). */
-  cachedPages:   number;
+  cachedPages:       number;
+  /** Whether the global startup cache is active. */
+  globallyStarted:   boolean;
+  /** Whether all 606 QCF fonts are downloaded to disk. */
+  fontsFullyCached:  boolean;
   /** Pages in the download queue (not yet downloaded). */
-  queuePending:  number;
+  queuePending:      number;
   /** Pages currently being downloaded. */
-  queueInFlight: number;
+  queueInFlight:     number;
   /** Priority-0 queue length (current page). */
-  queueP0:       number;
+  queueP0:           number;
   /** Priority-1 queue length (±2 pages). */
-  queueP1:       number;
+  queueP1:           number;
   /** Priority-2 queue length (background). */
-  queueP2:       number;
+  queueP2:           number;
   /** Active parallel download workers. */
-  queueWorkers:  number;
+  queueWorkers:      number;
   /** Pages currently in the LRU in-memory cache. */
-  lruSize:       number;
+  lruSize:           number;
 };
 
-/**
- * Returns a snapshot of the offline system state.
- * Useful for dev logging, diagnostics, and a future progress indicator.
- */
 export function getOfflineStats(): OfflineStats {
   const q: QueueStats = getQueueStats();
   return {
-    cachedPages:   getCachedPageCount(),
-    queuePending:  q.pending,
-    queueInFlight: q.inFlight,
-    queueP0:       q.p0,
-    queueP1:       q.p1,
-    queueP2:       q.p2,
-    queueWorkers:  q.workers,
-    lruSize:       pageCache.size,
+    cachedPages:      getCachedPageCount(),
+    globallyStarted:  _globallyStarted,
+    fontsFullyCached: _fontsFullyCached,
+    queuePending:     q.pending,
+    queueInFlight:    q.inFlight,
+    queueP0:          q.p0,
+    queueP1:          q.p1,
+    queueP2:          q.p2,
+    queueWorkers:     q.workers,
+    lruSize:          pageCache.size,
   };
 }

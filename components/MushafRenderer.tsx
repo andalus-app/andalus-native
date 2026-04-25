@@ -74,7 +74,7 @@
  */
 
 import React, { memo, useEffect, useRef, useState } from 'react';
-import { View, Text, ActivityIndicator, StyleSheet, Platform } from 'react-native';
+import { View, Text, ActivityIndicator, StyleSheet, Platform, Animated } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, {
   Text as SvgText,
@@ -513,6 +513,8 @@ export type MushafRendererProps = {
   activeVerseKey?:  string | null;
   /** Persistent start/end verse markers for the active Khatmah day. */
   khatmahMarkers?:  { startVerseKey: string; endVerseKey: string } | null;
+  /** Bookmarked verse keys on this page — always highlighted with precise bbox rects. */
+  bookmarkVerseKeys?: string[] | null;
   fontSize?:        number;
   onReady?:         () => void;
   onError?:         (msg: string) => void;
@@ -535,6 +537,7 @@ function MushafRenderer({
   isDark,
   activeVerseKey,
   khatmahMarkers,
+  bookmarkVerseKeys,
   fontSize = 27,
   onReady,
   onError,
@@ -653,17 +656,210 @@ function MushafRenderer({
   const [kmEndLineBboxes,   setKmEndLineBboxes]   = useState<LineBboxState | null>(null);
   const [kmEndRects,        setKmEndRects]         = useState<HighlightRect[] | null>(null);
 
+  // ── Bookmark highlight refs + state ──────────────────────────────────────────
+  // Key namespace: `bm_${slotNum}` for full-line, `bmf_${slotNum}_${vk}` for frag,
+  // `bmp_${slotNum}_${vk}` for prefix. Never collides with audio or khatmah keys.
+  const bmFullLineRefs = useRef<Record<string, any>>({});
+  const bmFragRefs     = useRef<Record<string, any>>({});
+  const bmPrefixRefs   = useRef<Record<string, any>>({});
+
+  // Per-verseKey full-line bboxes: Record<verseKey, Record<slotNumber, LineBbox>>
+  type BmLineBboxState = { pageNumber: number; keysId: string; bboxes: Record<string, Record<number, LineBbox>> };
+  const [bmLineBboxes, setBmLineBboxes] = useState<BmLineBboxState | null>(null);
+  const [bmRects,      setBmRects]      = useState<HighlightRect[] | null>(null);
+
+  // ── Highlight fade animation (native driver — no JS thread per frame) ────────
+  // highlightFadeAnim drives the opacity of the highlight SVG layer.
+  // Resets to 0 instantly on verse/page change, animates to 1 when rects arrive.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const highlightFadeAnim = useRef(new Animated.Value(0)).current;
+
   // Clear measurement state on verse/page change.
   // Do NOT clear ref maps — see comment above.
   useEffect(() => {
     setLineBboxes(null);
     setMeasuredRects(null);
-  }, [activeVerseKey, page.pageNumber]);
+    highlightFadeAnim.setValue(0);
+  }, [activeVerseKey, page.pageNumber, highlightFadeAnim]);
+
+  // Fade in when new highlight rects arrive.
+  useEffect(() => {
+    if (measuredRects && measuredRects.length > 0) {
+      Animated.timing(highlightFadeAnim, {
+        toValue:         1,
+        duration:        180,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [measuredRects, highlightFadeAnim]);
 
   useEffect(() => { setKmStartLineBboxes(null); setKmStartRects(null); },
     [khatmahMarkers?.startVerseKey, page.pageNumber]);
   useEffect(() => { setKmEndLineBboxes(null); setKmEndRects(null); },
     [khatmahMarkers?.endVerseKey, page.pageNumber]);
+
+  // Stable key for bookmark dep — avoids array identity churn on every render
+  const bmKeysId = bookmarkVerseKeys?.join('|') ?? '';
+  useEffect(() => { setBmLineBboxes(null); setBmRects(null); }, [bmKeysId, page.pageNumber]);
+
+  // ── Bookmark PASS 1: measure full-line bboxes for every bookmark verse key ───
+  useEffect(() => {
+    if (!bookmarkVerseKeys?.length || fontState.status !== 'ready') return;
+
+    let cancelled = false;
+    const keysId = bookmarkVerseKeys.join('|');
+
+    const timer = setTimeout(async () => {
+      if (cancelled || !mountedRef.current) return;
+
+      const getBBox = async (el: any): Promise<{ x: number; width: number } | null> => {
+        if (!el || typeof el.getBBox !== 'function') return null;
+        try {
+          const r = el.getBBox();
+          const b = (r instanceof Promise ? await r : r) as { x: number; width: number };
+          return (b && b.width > 4) ? b : null;
+        } catch { return null; }
+      };
+
+      // Measure full-line bboxes for ALL bookmark keys in one pass
+      const allBboxes: Record<string, Record<number, LineBbox>> = {};
+      for (const vk of bookmarkVerseKeys) {
+        const vkBboxes: Record<number, LineBbox> = {};
+        for (const slot of page.slots) {
+          if (slot.kind !== 'verse_line') continue;
+          if (!slot.line.verseKeys.includes(vk)) continue;
+          const bbox = await getBBox(bmFullLineRefs.current[`bm_${slot.slotNumber}_${vk}`]);
+          if (cancelled) return;
+          if (bbox) vkBboxes[slot.slotNumber] = bbox;
+        }
+        allBboxes[vk] = vkBboxes;
+      }
+
+      // Retry once if ALL slots for ALL keys missed (font not ready)
+      const totalExpected = bookmarkVerseKeys.reduce((acc, vk) =>
+        acc + page.slots.filter(s => s.kind === 'verse_line' && s.line.verseKeys.includes(vk)).length, 0);
+      const totalMeasured = bookmarkVerseKeys.reduce((acc, vk) => acc + Object.keys(allBboxes[vk] ?? {}).length, 0);
+
+      if (totalExpected > 0 && totalMeasured === 0) {
+        await new Promise<void>(r => setTimeout(r, 50));
+        if (cancelled || !mountedRef.current) return;
+        for (const vk of bookmarkVerseKeys) {
+          const vkBboxes: Record<number, LineBbox> = {};
+          for (const slot of page.slots) {
+            if (slot.kind !== 'verse_line') continue;
+            if (!slot.line.verseKeys.includes(vk)) continue;
+            const bbox = await getBBox(bmFullLineRefs.current[`bm_${slot.slotNumber}_${vk}`]);
+            if (cancelled) return;
+            if (bbox) vkBboxes[slot.slotNumber] = bbox;
+          }
+          allBboxes[vk] = vkBboxes;
+        }
+      }
+
+      if (!cancelled && mountedRef.current) {
+        setBmLineBboxes({ pageNumber: page.pageNumber, keysId, bboxes: allBboxes });
+      }
+    }, 50);
+
+    return () => { cancelled = true; clearTimeout(timer); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bmKeysId, page.pageNumber, fontState.status]);
+
+  // ── Bookmark PASS 2: compute precise rects from full-line + fragment bboxes ──
+  useEffect(() => {
+    if (
+      !bmLineBboxes ||
+      bmLineBboxes.pageNumber !== page.pageNumber ||
+      bmLineBboxes.keysId !== bmKeysId ||
+      !bookmarkVerseKeys?.length ||
+      fontState.status !== 'ready'
+    ) return;
+
+    let cancelled = false;
+
+    const timer = setTimeout(async () => {
+      if (cancelled || !mountedRef.current) return;
+
+      const getBBox = async (el: any): Promise<{ x: number; width: number } | null> => {
+        if (!el || typeof el.getBBox !== 'function') return null;
+        try {
+          const r = el.getBBox();
+          const b = (r instanceof Promise ? await r : r) as { x: number; width: number };
+          return (b && b.width > 4) ? b : null;
+        } catch { return null; }
+      };
+
+      const measureBookmarkRects = async (): Promise<{ rects: HighlightRect[]; needRetry: boolean }> => {
+        const layouts = slotLayoutsRef.current;
+        const rects: HighlightRect[] = [];
+        let needRetry = false;
+
+        for (const vk of bookmarkVerseKeys!) {
+          const vkBboxes = bmLineBboxes.bboxes[vk] ?? {};
+          for (const slot of page.slots) {
+            if (slot.kind !== 'verse_line') continue;
+            if (!slot.line.verseKeys.includes(vk)) continue;
+
+            const layout = layouts[slot.slotNumber - 1];
+            if (!layout) continue;
+
+            const y = Math.round(layout.centerY - layout.slotHeight / 2) + 2;
+            const h = layout.slotHeight - 4;
+            const fullBbox = vkBboxes[slot.slotNumber];
+            if (!fullBbox) continue;
+
+            if (slot.line.verseKeys.length === 1) {
+              rects.push({ x: fullBbox.x, y, w: fullBbox.width, h });
+              continue;
+            }
+
+            // Shared slot — use fragment + prefix measurement (same logic as audio pass-2)
+            const activeIdx = slot.line.verseKeys.indexOf(vk);
+            const isLead    = activeIdx === 0;
+            const lineRight = fullBbox.x + fullBbox.width;
+
+            const fragBbox = await getBBox(bmFragRefs.current[`bmf_${slot.slotNumber}_${vk}`]);
+            if (cancelled) return { rects, needRetry };
+
+            if (!fragBbox) {
+              needRetry = true;
+              continue;
+            }
+
+            let rectX: number;
+            if (isLead) {
+              rectX = lineRight - fragBbox.width;
+            } else {
+              const prefixBbox = await getBBox(bmPrefixRefs.current[`bmp_${slot.slotNumber}_${vk}`]);
+              if (cancelled) return { rects, needRetry };
+              rectX = prefixBbox ? lineRight - prefixBbox.width : fullBbox.x;
+            }
+
+            rects.push({ x: rectX, y, w: fragBbox.width, h });
+          }
+        }
+        return { rects, needRetry };
+      };
+
+      let { rects, needRetry } = await measureBookmarkRects();
+      if (cancelled || !mountedRef.current) return;
+
+      if (needRetry) {
+        await new Promise<void>(r => setTimeout(r, 50));
+        if (cancelled || !mountedRef.current) return;
+        const retry = await measureBookmarkRects();
+        if (cancelled) return;
+        rects = retry.rects;
+      }
+
+      if (!cancelled && mountedRef.current) {
+        setBmRects(rects.length > 0 ? rects : null);
+      }
+    }, 50);
+
+    return () => { cancelled = true; clearTimeout(timer); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bmLineBboxes, bmKeysId, page.pageNumber, fontState.status]);
 
   // ── PASS 1: measure full lines + bismillah ─────────────────────────────────
   useEffect(() => {
@@ -1307,7 +1503,7 @@ function MushafRenderer({
   if (fontState.status === 'loading') {
     return (
       <View style={[styles.root, { width, height, backgroundColor: palette.pageBg }]}>
-        <ActivityIndicator color={isDark ? '#666' : '#999'} />
+        <ActivityIndicator size="large" color={isDark ? '#FFFEF0' : '#1A1106'} />
       </View>
     );
   }
@@ -1420,7 +1616,27 @@ function MushafRenderer({
   const highlightColor = isDark ? 'rgba(255,255,255,0.28)' : 'rgba(175,145,90,0.34)';
 
   return (
-    <View style={[styles.root, { width, height }]}>
+    <View style={[styles.root, { width, height, backgroundColor: palette.pageBg }]}>
+      {/* Highlight layer — animated fade in/out, sits below text SVG.
+          Native driver: opacity change runs on UI thread, zero JS cost per frame.
+          A separate lightweight SVG (only 1–3 Rect elements) keeps main SVG clean. */}
+      <Animated.View
+        style={[StyleSheet.absoluteFill, { opacity: highlightFadeAnim }]}
+        pointerEvents="none"
+      >
+        <Svg width={width} height={height}>
+          {highlightRects.map((r, i) => (
+            <Rect
+              key={`hl-${i}`}
+              x={r.x} y={r.y}
+              width={r.w} height={r.h}
+              fill={highlightColor}
+              rx={10}
+            />
+          ))}
+        </Svg>
+      </Animated.View>
+
       <Svg width={width} height={height}>
         {/* ClipPath defs for quran-banner-knut ornament */}
         <Defs>
@@ -1432,8 +1648,12 @@ function MushafRenderer({
             </ClipPath>
           ))}
         </Defs>
-        <Rect x={0} y={0} width={width} height={height} fill={palette.pageBg} />
 
+        {/* Bookmark highlights — accent green, behind text, always visible */}
+        {bmRects?.map((r, i) => (
+          <Rect key={`bm-${i}`} x={r.x} y={r.y} width={r.w} height={r.h}
+            fill={isDark ? 'rgba(255,255,255,0.22)' : 'rgba(175,145,90,0.28)'} rx={10} />
+        ))}
         {/* Khatmah start — green, behind text */}
         {kmStartRects?.map((r, i) => (
           <Rect key={`km-s-${i}`} x={r.x} y={r.y} width={r.w} height={r.h}
@@ -1443,17 +1663,6 @@ function MushafRenderer({
         {kmEndRects?.map((r, i) => (
           <Rect key={`km-e-${i}`} x={r.x} y={r.y} width={r.w} height={r.h}
             fill={isDark ? 'rgba(255,149,0,0.32)' : 'rgba(255,149,0,0.22)'} rx={10} />
-        ))}
-
-        {/* Highlight rects — rendered before text so glyphs draw on top */}
-        {highlightRects.map((r, i) => (
-          <Rect
-            key={`hl-${i}`}
-            x={r.x} y={r.y}
-            width={r.w} height={r.h}
-            fill={highlightColor}
-            rx={10}
-          />
         ))}
 
         {page.slots.map((slot, i) => {
@@ -1679,6 +1888,48 @@ function MushafRenderer({
             </React.Fragment>
           );
         })}
+
+        {/* ── Bookmark hidden elements: phase-1 full lines (one per vk per slot) ── */}
+        {bookmarkVerseKeys?.length ? bookmarkVerseKeys.flatMap((vk) =>
+          page.slots.map((slot) => {
+            if (slot.kind !== 'verse_line') return null;
+            if (!slot.line.verseKeys.includes(vk)) return null;
+            const layout = slotLayouts[slot.slotNumber - 1];
+            if (!layout) return null;
+            return (
+              <SvgText key={`bm-p1-${slot.slotNumber}-${vk}`}
+                ref={(el: any) => { bmFullLineRefs.current[`bm_${slot.slotNumber}_${vk}`] = el; }}
+                x={Math.round(width / 2)} y={layout.baselineY} textAnchor="middle"
+                fontFamily={pagePsName} fontSize={effectiveFontSize * 0.98}
+                fill={palette.pageBg} opacity={0.004}>
+                {slot.line.lineGlyph}
+              </SvgText>
+            );
+          })
+        ) : null}
+
+        {/* ── Bookmark hidden elements: phase-2 frag+prefix (shared slots only) ── */}
+        {bookmarkVerseKeys?.length && bmLineBboxes?.pageNumber === page.pageNumber && bmLineBboxes.keysId === bmKeysId
+          ? bookmarkVerseKeys.flatMap((vk) =>
+              page.slots.map((slot) => {
+                if (slot.kind !== 'verse_line' || slot.line.verseKeys.length === 1) return null;
+                if (!slot.line.verseKeys.includes(vk)) return null;
+                if (!(bmLineBboxes.bboxes[vk] ?? {})[slot.slotNumber]) return null;
+                const layout = slotLayouts[slot.slotNumber - 1]; if (!layout) return null;
+                const activeIdx = slot.line.verseKeys.indexOf(vk); const isLead = activeIdx === 0;
+                const activeGlyphs = slot.line.words.filter(w => w.verseKey === vk).map(w => w.glyph).join('');
+                if (!activeGlyphs) return null;
+                const prefixGlyphs = isLead ? null : slot.line.words.filter(w => slot.line.verseKeys.indexOf(w.verseKey) <= activeIdx).map(w => w.glyph).join('');
+                const sp = { x: Math.round(width / 2), y: layout.baselineY, textAnchor: 'middle' as const, fontFamily: pagePsName, fontSize: effectiveFontSize * 0.98, fill: palette.pageBg, opacity: 0.004 };
+                return (
+                  <React.Fragment key={`bm-p2-${slot.slotNumber}-${vk}`}>
+                    <SvgText ref={(el: any) => { bmFragRefs.current[`bmf_${slot.slotNumber}_${vk}`] = el; }} {...sp}>{activeGlyphs}</SvgText>
+                    {!isLead && prefixGlyphs ? <SvgText ref={(el: any) => { bmPrefixRefs.current[`bmp_${slot.slotNumber}_${vk}`] = el; }} {...sp}>{prefixGlyphs}</SvgText> : null}
+                  </React.Fragment>
+                );
+              })
+            )
+          : null}
       </Svg>
 
       {/* Surah headers are rendered inside <Svg> via renderSurahHeaderSlot */}
@@ -1826,7 +2077,7 @@ const styles = StyleSheet.create({
 //   - pressedVerseKey (touch feedback handled by SlotZone overlay, not SVG)
 //   - pressedSurahId  (same — handled by SurahHeaderZone overlay)
 //   - longPressedVerse from context (other pages re-render unnecessarily)
-//   - bookmarkFlashKey (only bookmark stripe visibility, not SVG canvas)
+//   - bookmarks (bookmark overlays are rendered as View layers, not SVG canvas)
 //
 // activeVerseKey IS included — highlight rects depend on it.
 // khatmahMarkers IS included — khatmah highlight rects depend on them.
@@ -1843,5 +2094,6 @@ export default memo(MushafRenderer, (prev, next) =>
   prev.activeVerseKey === next.activeVerseKey &&
   prev.fontSize     === next.fontSize     &&
   prev.khatmahMarkers?.startVerseKey === next.khatmahMarkers?.startVerseKey &&
-  prev.khatmahMarkers?.endVerseKey   === next.khatmahMarkers?.endVerseKey
+  prev.khatmahMarkers?.endVerseKey   === next.khatmahMarkers?.endVerseKey   &&
+  (prev.bookmarkVerseKeys?.join('|') ?? '') === (next.bookmarkVerseKeys?.join('|') ?? '')
 );

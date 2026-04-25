@@ -16,6 +16,7 @@ import { useTheme } from '@/context/ThemeContext';
 import { getDailyQuranVerse } from '@/services/dailyReminder';
 
 const GOLD_DARK = '#cab488';
+const COLLAPSED_HEIGHT = 66;
 
 function todayStr(): string {
   const d = new Date();
@@ -43,8 +44,14 @@ export default function DagensKoranversCard() {
   const { theme: T, isDark } = useTheme();
   const router = useRouter();
   const [dateKey, setDateKey] = useState<string>(todayStr);
-  const [expanded,  setExpanded]  = useState(false);
-  const [truncated, setTruncated] = useState(false);
+  const [expanded,   setExpanded]   = useState(false);
+  const [truncated,  setTruncated]  = useState(false);
+  const [fullHeight, setFullHeight] = useState(0);
+
+  // Height animation — useNativeDriver:false required for layout properties
+  const animHeight = useRef(new Animated.Value(COLLAPSED_HEIGHT)).current;
+  const expandedRef = useRef(false);
+
   const opacity = useRef(new Animated.Value(1)).current;
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dateKeyRef = useRef<string>(dateKey);
@@ -55,6 +62,27 @@ export default function DagensKoranversCard() {
   const verseColor  = isDark ? '#FFFFFF' : T.text;
   const borderSideColor = isDark ? 'rgba(202,180,136,0.18)' : 'rgba(36,100,93,0.18)';
 
+  // Toggle expand/collapse with spring animation
+  const toggleExpanded = useCallback(() => {
+    const next = !expandedRef.current;
+    expandedRef.current = next;
+    setExpanded(next);
+    Animated.spring(animHeight, {
+      toValue: next ? fullHeight : COLLAPSED_HEIGHT,
+      useNativeDriver: false,
+      damping: 18,
+      stiffness: 120,
+      mass: 0.8,
+    }).start();
+  }, [animHeight, fullHeight]);
+
+  // When fullHeight becomes known (after first measure), keep anim in sync
+  useEffect(() => {
+    if (fullHeight > 0 && !expandedRef.current) {
+      animHeight.setValue(COLLAPSED_HEIGHT);
+    }
+  }, [fullHeight, animHeight]);
+
   const fadeAndUpdate = useCallback(() => {
     Animated.timing(opacity, {
       toValue: 0,
@@ -64,15 +92,17 @@ export default function DagensKoranversCard() {
       const newKey = todayStr();
       dateKeyRef.current = newKey;
       setDateKey(newKey);
+      expandedRef.current = false;
       setExpanded(false);
       setTruncated(false);
+      animHeight.setValue(COLLAPSED_HEIGHT);
       Animated.timing(opacity, {
         toValue: 1,
         duration: 400,
         useNativeDriver: true,
       }).start();
     });
-  }, [opacity]);
+  }, [opacity, animHeight]);
 
   const scheduleMidnight = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -123,36 +153,38 @@ export default function DagensKoranversCard() {
       <Animated.View style={{ opacity }}>
         <Text style={[styles.title, { color: accentColor }]}>Dagens Koranvers</Text>
 
-        {/* Invisible measuring text — absolutely positioned, no height constraint.
-            Parent height: 66 on verseContainer constrains the layout pass so
-            onTextLayout there only reports 3 lines. This element has no such
-            constraint and always reports the true line count. */}
+        {/* Hidden full-height measurer — absolutely positioned, no clipping.
+            Reports true line count AND full natural height for the animation. */}
         <Text
           style={[styles.swedish, styles.measuringText]}
-          onTextLayout={e => setTruncated(e.nativeEvent.lines.length > 3)}
+          onTextLayout={e => {
+            const lines = e.nativeEvent.lines;
+            setTruncated(lines.length > 3);
+            if (lines.length > 0) {
+              const last = lines[lines.length - 1];
+              const measured = Math.ceil(last.y + last.height);
+              if (measured > COLLAPSED_HEIGHT) setFullHeight(measured);
+            }
+          }}
           accessible={false}
         >
           {verse.swedish}
         </Text>
 
-        {/* Visible text — numberOfLines clips cleanly, container hides overflow */}
-        <View style={expanded ? undefined : styles.verseContainer}>
-          <Text
-            style={[styles.swedish, { color: verseColor }]}
-            numberOfLines={expanded ? undefined : 3}
-          >
+        {/* Animated height container — clips text to animated height */}
+        <Animated.View style={[styles.verseContainer, truncated && { height: animHeight }]}>
+          <Text style={[styles.swedish, { color: verseColor }]}>
             {verse.swedish}
           </Text>
-        </View>
+        </Animated.View>
+
         {truncated ? (
           // Large tap zone when the verse text is truncated: covers the Visa mer/Visa
           // mindre label + AccentDivider + reference text in one target.
-          // paddingTop creates the "air gap" above the label so the user never
-          // accidentally misses and opens the Quran app via the outer card press.
           // stopPropagation ensures the outer TouchableOpacity (navigate to Quran) is
           // suppressed whenever the user taps anywhere in this bottom section.
           <TouchableOpacity
-            onPress={e => { e.stopPropagation?.(); setExpanded(v => !v); }}
+            onPress={e => { e.stopPropagation?.(); toggleExpanded(); }}
             activeOpacity={0.7}
             style={styles.expandZone}
           >
@@ -221,14 +253,13 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     top: 0,
+    pointerEvents: 'none',
   },
   verseContainer: {
-    height: 66,
     overflow: 'hidden',
+    height: COLLAPSED_HEIGHT,
   },
   expandZone: {
-    // paddingTop creates tap area in the "air" above the Visa mer label so the user
-    // doesn't accidentally miss and trigger the outer card's Quran navigation.
     paddingTop: 4,
   },
   visaMerLabel: {

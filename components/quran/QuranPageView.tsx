@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo, memo } from 'react';
 import {
-  View, Animated, Text, StyleSheet,
+  View, Animated, Text, StyleSheet, ActivityIndicator,
   TouchableOpacity, GestureResponderEvent,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
@@ -105,9 +105,7 @@ const SlotZone = memo(function SlotZone({
 
   const handlePressIn = useCallback((event: GestureResponderEvent) => {
     pressXRef.current = event.nativeEvent.locationX;
-    const key = pickVerseByTouch(verseKeys, glyphCounts, pressXRef.current, lineWidth);
-    setPressedVerseKey(key);
-  }, [verseKeys, glyphCounts, lineWidth, setPressedVerseKey]);
+  }, []);
 
   const handlePressOut = useCallback(() => {
     setPressedVerseKey(null);
@@ -153,10 +151,7 @@ const BismillahZone = memo(function BismillahZone({
 }: BismillahZoneProps) {
   const bsmllhKey = `BSMLLH_${surahId}`;
 
-  const handlePressIn = useCallback(() => {
-    setPressedVerseKey(bsmllhKey);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
-  }, [bsmllhKey, setPressedVerseKey]);
+  const handlePressIn = useCallback(() => {}, []);
 
   const handlePressOut = useCallback(() => {
     setPressedVerseKey(null);
@@ -281,7 +276,7 @@ function QuranPageView({ pageNumber, width, height, viewportHeight, screenWidth,
   const { theme: T, isDark } = useTheme();
   const {
     activeVerseKey, settings, longPressedVerse, setLongPressedVerse,
-    toggleChrome, khatmahRange, bookmarks, bookmarkFlashKey,
+    toggleChrome, khatmahRange, bookmarks,
   } = useQuranContext();
 
   // Initialize synchronously from the in-memory composed-page cache when
@@ -364,21 +359,13 @@ function QuranPageView({ pageNumber, width, height, viewportHeight, screenWidth,
 
   // ── All useMemo hooks must run before any conditional returns ────────────────
 
-  // Flash highlight from navigating via bookmarks list — active for 2.5 s, then clears
-  const activeBookmarkKey = useMemo(() => {
-    if (!bookmarkFlashKey) return null;
-    return bookmarks.some(
-      (b) => b.pageNumber === pageNumber && b.verseKey === bookmarkFlashKey,
-    ) ? bookmarkFlashKey : null;
-  }, [bookmarkFlashKey, bookmarks, pageNumber]);
-
   // Bookmark indicator: does this page have any bookmarks?
   const pageHasBookmarks = useMemo(
     () => bookmarks.some((b) => b.pageNumber === pageNumber),
     [bookmarks, pageNumber],
   );
 
-  // Bookmarked verse keys on this page — used to show a margin stripe on each bookmarked line
+  // Bookmarked verse keys on this page — always highlighted
   const pageBookmarkVerseKeys = useMemo(
     () => bookmarks
       .filter((b) => b.pageNumber === pageNumber && b.verseKey)
@@ -429,22 +416,15 @@ function QuranPageView({ pageNumber, width, height, viewportHeight, screenWidth,
     return { padV, slotH, verticalShift, pageLastVerseKey };
   }, [loadState, height, viewportHeight]);
 
-  // Slot numbers of lines that contain a bookmarked verse — for left-margin stripe
-  const bookmarkedSlotNums = useMemo(() => {
-    if (loadState.status !== 'ready' || pageBookmarkVerseKeys.length === 0) return [];
-    return loadState.page.slots
-      .filter(
-        (s) =>
-          s.kind === 'verse_line' &&
-          s.line.verseKeys.some((vk) => pageBookmarkVerseKeys.includes(vk)),
-      )
-      .map((s) => s.slotNumber);
-  }, [loadState, pageBookmarkVerseKeys]);
 
   // ── Early returns after all hooks ─────────────────────────────────────────────
 
   if (loadState.status === 'idle' || loadState.status === 'loading') {
-    return <View style={{ width, height, backgroundColor: T.bg }} />;
+    return (
+      <View style={{ width, height, backgroundColor: T.bg, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator size="large" color={T.accent} />
+      </View>
+    );
   }
 
   if (loadState.status === 'error') {
@@ -479,8 +459,8 @@ function QuranPageView({ pageNumber, width, height, viewportHeight, screenWidth,
 
   const { padV, slotH, verticalShift, pageLastVerseKey } = slotLayout;
 
-  // Highlight priority: confirmed long-press > active audio > bookmark flash > touch
-  const highlightKey = longPressedVerse?.verseKey ?? activeVerseKey ?? activeBookmarkKey ?? null;
+  // Highlight priority: confirmed long-press > active audio > touch
+  const highlightKey = longPressedVerse?.verseKey ?? activeVerseKey ?? null;
   const pendingKey   = !highlightKey ? (pressedVerseKey ?? null) : null;
   const surahKey     = !highlightKey && !pendingKey && pressedSurahId !== null
     ? `SURAH_${pressedSurahId}`
@@ -499,6 +479,7 @@ function QuranPageView({ pageNumber, width, height, viewportHeight, screenWidth,
         khatmahMarkers={khatmahRange
           ? { startVerseKey: khatmahRange.startVerseKey, endVerseKey: khatmahRange.endVerseKey }
           : null}
+        bookmarkVerseKeys={pageBookmarkVerseKeys.length > 0 ? pageBookmarkVerseKeys : null}
       />
       {/* Transparent long-press zones over each verse line / surah header */}
       <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
@@ -567,26 +548,6 @@ function QuranPageView({ pageNumber, width, height, viewportHeight, screenWidth,
         })}
       </View>
 
-      {/* Left-margin bookmark stripes — one per bookmarked verse line */}
-      {bookmarkedSlotNums.map((slotNum) => {
-        const topY = padV + (slotNum - 1) * slotH + verticalShift;
-        return (
-          <View
-            key={`bm-stripe-${slotNum}`}
-            pointerEvents="none"
-            style={{
-              position: 'absolute',
-              left: 0,
-              top: topY + slotH * 0.15,
-              width: 3,
-              height: slotH * 0.7,
-              backgroundColor: T.accent,
-              borderTopRightRadius: 2,
-              borderBottomRightRadius: 2,
-            }}
-          />
-        );
-      })}
 
       {/* Bookmark ribbon — visible whenever this page has bookmarks */}
       {pageHasBookmarks && (
@@ -602,7 +563,7 @@ function QuranPageView({ pageNumber, width, height, viewportHeight, screenWidth,
           <View style={{
             width: 22,
             height: 30,
-            backgroundColor: activeBookmarkKey ? T.accent : T.accentGlow,
+            backgroundColor: T.accent,
             borderBottomLeftRadius: 5,
             borderBottomRightRadius: 5,
             alignItems: 'center',
@@ -612,7 +573,7 @@ function QuranPageView({ pageNumber, width, height, viewportHeight, screenWidth,
             <SvgIcon
               name="bookmark-fill"
               size={12}
-              color={activeBookmarkKey ? '#fff' : T.accent}
+              color="#fff"
             />
           </View>
         </View>

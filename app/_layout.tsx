@@ -15,6 +15,7 @@ import { initStorage } from '../services/storage';
 import { syncKahfReminderOnStartup, savePushToken, syncAllahNamesReminderOnStartup } from '../services/notifications';
 import { syncZakatRemindersOnStartup } from '../services/zakatReminderService';
 import '../services/quranLastPage'; // side-effect: pre-warms last Quran page font + data at startup
+import { startGlobalCache } from '../services/quranOfflineManager';
 import CustomSplashScreen from '../components/SplashScreen';
 import { YoutubePlayerProvider } from '../context/YoutubePlayerContext';
 import YoutubeBackgroundPlayer from '../components/YoutubeBackgroundPlayer';
@@ -134,7 +135,7 @@ function AppContent({ onFontsReady }: { onFontsReady: () => void }) {
         router.push(`/asmaul${nameNr}` as any);
       } else if (data?.screen === 'prayer') {
         // Bönetids-notis — öppna Bönetider-fliken direkt.
-        router.navigate('/(tabs)/index' as any);
+        router.navigate('/' as any);
       } else if (data?.screen === 'dhikr') {
         // Dhikr-påminnelse — öppna Dhikr-sidan direkt.
         router.push('/dhikr' as any);
@@ -267,6 +268,7 @@ export default function RootLayout() {
   useEffect(() => {
     initStorage().then(async () => {
       setStorageReady(true);
+      startGlobalCache();
       syncKahfReminderOnStartup();
       syncZakatRemindersOnStartup();
       syncAllahNamesReminderOnStartup();

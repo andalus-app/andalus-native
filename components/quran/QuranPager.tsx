@@ -56,11 +56,11 @@ import { loadQCFPageFont, loadBismillahFont } from '../../services/mushafFontMan
 import { fetchComposedMushafPage } from '../../services/mushafApi';
 import {
   initOfflineManager,
-  stopOfflineManager,
   prioritize as prioritizeOffline,
   pauseDownloads,
   resumeDownloads,
 } from '../../services/quranOfflineManager';
+import { qLog } from '../../services/quranPerfLogger';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -163,30 +163,28 @@ function QuranPager() {
 
   const isMushafMode = settings.readingMode !== 'verse';
 
-  // ── Font pre-loading ─────────────────────────────────────────────────────
-  // MushafRenderer calls setFontState after loadQCFPageFont resolves. When
-  // fonts are not yet loaded, this async setState fires ~seconds after initial
-  // render, which FlatList measures as a very slow batch update (dt ~20000ms).
+  // ── Font and data pre-loading ─────────────────────────────────────────────
+  // Pre-load fonts and page data for currentPage ±2 immediately.
   //
-  // Fix: pre-load fonts for the current page ± 2 (ahead of windowSize=3) before
-  // FlatList renders those pages. loadQCFPageFont deduplicates concurrent calls
-  // and Font.isLoaded() short-circuits immediately for already-loaded fonts, so
-  // by the time FlatList renders each MushafRenderer, its font is ready and
-  // setFontState resolves in the same microtask — no late state cascade.
+  // Range matches windowSize=5: FlatList keeps ±2 pages mounted, so pre-loading
+  // ±2 ensures the LRU cache is populated before those pages mount. When
+  // getComposedPageSync hits in QuranPageView's lazy initializer, the page
+  // starts as 'ready' with no loading spinner.
+  //
+  // Both loadQCFPageFont and fetchComposedMushafPage deduplicate in-flight calls
+  // and short-circuit via LRU / Font.isLoaded for already-warm pages — safe to
+  // call on every currentPage change without redundant work.
+  //
+  // Bismillah font is shared across all pages — loaded once then cached.
   useEffect(() => {
-    const start = Math.max(1, currentPage - 3);
-    const end   = Math.min(TOTAL_PAGES, currentPage + 3);
+    const start = Math.max(1, currentPage - 2);
+    const end   = Math.min(TOTAL_PAGES, currentPage + 2);
     for (let p = start; p <= end; p++) {
-      // Pre-load font: MushafRenderer lazy-inits to 'ready' if font is already
-      // registered, skipping the loading→ready setState cycle entirely.
       loadQCFPageFont(p);
-      // Pre-warm page data: fetchComposedMushafPage returns Promise.resolve()
-      // for already-cached pages, so QuranPageView settles in the same
-      // microtask tick with no visible loading state.
       fetchComposedMushafPage(p);
     }
-    // Bismillah font is shared across all pages — load once, then cached.
     loadBismillahFont();
+    qLog(`Pager pre-warm p${start}–p${end}`);
   }, [currentPage]);
 
   // ── Full-Quran background pre-cache ──────────────────────────────────────
@@ -203,9 +201,6 @@ function QuranPager() {
     // the background download queue. Replaces startMushafPrefetch/stopMushafPrefetch.
     // Pause/resume during scroll is handled by onScrollBeginDrag / onMomentumScrollEnd.
     initOfflineManager(currentPage);
-    return () => {
-      stopOfflineManager();
-    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── External navigation (picker / contents / bookmark) ───────────────────
@@ -365,12 +360,20 @@ function QuranPager() {
         getItemLayout={getItemLayout}
         onScrollToIndexFailed={onScrollToIndexFailed}
         // ── Window strategy ────────────────────────────────────────────────
-        // windowSize=3 keeps ±1 page mounted in both Mushaf and Verse mode.
-        // Mushaf: pre-renders adjacent SVG pages for smooth swiping.
-        // Verse: pre-renders adjacent QuranVerseViews so they are already in
-        // `ready` state before the user swipes — eliminates the mount-during-
-        // gesture lag and the scroll jump caused by setState calls mid-swipe.
-        windowSize={3}
+        // windowSize=5 keeps ±2 pages mounted in both Mushaf and Verse mode.
+        //
+        // Mushaf: ±2 SVG pages are already fully rendered before the user
+        // swipes there — no mount lag, no spinner, instant page transition.
+        // With Tier 2 font pre-warming (above), MushafRenderer at ±2 finds
+        // its font already registered and skips the loading→ready setState.
+        //
+        // Verse: ±2 QuranVerseViews are in `ready` state before the gesture,
+        // eliminating the mount-during-gesture lag and setState scroll jump.
+        //
+        // Memory: 5 full-page SVG trees in memory simultaneously (~5 × MushafRenderer).
+        // This is bounded and acceptable on any iPhone supported by Expo SDK 54.
+        // The LRU data cache (25 pages) is independent and unaffected.
+        windowSize={5}
         maxToRenderPerBatch={2}
         initialNumToRender={1}
         // removeClippedSubviews intentionally omitted — it detaches and reattaches

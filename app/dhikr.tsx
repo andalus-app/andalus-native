@@ -306,10 +306,11 @@ function RepetitionBadge({ text, T, isDark }: { text: string; T: any; isDark: bo
 }
 
 // ─── Dhikr detail card ────────────────────────────────────────────────────────
-function DhikrCard({ d, T, isDark, favorites, onToggleFav, arabicFontSize = 18, uttalFontSize = 14, svenskaFontSize = 14 }: {
+function DhikrCard({ d, T, isDark, favorites, onToggleFav, onCategoryPress, arabicFontSize = 18, uttalFontSize = 14, svenskaFontSize = 14 }: {
   d: DhikrPost; T: any; isDark: boolean;
   favorites: string[];
   onToggleFav: (k: string) => void;
+  onCategoryPress?: () => void;
   arabicFontSize?: number;
   uttalFontSize?: number;
   svenskaFontSize?: number;
@@ -359,9 +360,14 @@ function DhikrCard({ d, T, isDark, favorites, onToggleFav, arabicFontSize = 18, 
         <View style={{ flex: 1 }}>
           <Text style={{ fontSize: 17, fontWeight: '700', color: T.text, lineHeight: 24 }}>{d.titel}</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 5, flexWrap: 'wrap' }}>
-            <View style={{ backgroundColor: T.accentGlow, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 20 }}>
+            <TouchableOpacity
+              onPress={onCategoryPress ? () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onCategoryPress(); } : undefined}
+              disabled={!onCategoryPress}
+              activeOpacity={onCategoryPress ? 0.6 : 1}
+              style={{ backgroundColor: T.accentGlow, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 20 }}
+            >
               <Text style={{ fontSize: 10, color: T.accent, fontWeight: '600' }}>{d._kategori}</Text>
-            </View>
+            </TouchableOpacity>
             <Text style={{ fontSize: 11, color: T.textMuted }}>›</Text>
             <View style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 20 }}>
               <Text style={{ fontSize: 10, color: T.textMuted, fontWeight: '500' }}>{d._undersida}</Text>
@@ -752,9 +758,9 @@ function ArabicFontPanel({ arabicIdx, uttalIdx, svenskaIdx, onArabicDecrease, on
 }
 
 // ─── Dhikr detail view (slides over cat) ─────────────────────────────────────
-function DhikrDetailView({ selDhikr, setSelDhikr, siblings, onClose, favorites, onToggleFav, T, isDark }: {
+function DhikrDetailView({ selDhikr, setSelDhikr, siblings, onClose, onOpenCategory, favorites, onToggleFav, T, isDark }: {
   selDhikr: DhikrPost; setSelDhikr: (d: DhikrPost) => void; siblings: DhikrPost[];
-  onClose: () => void; favorites: string[];
+  onClose: () => void; onOpenCategory?: (kategori: string) => void; favorites: string[];
   onToggleFav: (k: string) => void;
   T: any; isDark: boolean;
 }) {
@@ -918,7 +924,7 @@ function DhikrDetailView({ selDhikr, setSelDhikr, siblings, onClose, favorites, 
           </View>
         )}
 
-        <DhikrCard key={dhikrKey(selDhikr)} d={selDhikr} T={T} isDark={isDark} favorites={favorites} onToggleFav={onToggleFav} arabicFontSize={arabicFontSize} uttalFontSize={uttalFontSize} svenskaFontSize={svenskaFontSize} />
+        <DhikrCard key={dhikrKey(selDhikr)} d={selDhikr} T={T} isDark={isDark} favorites={favorites} onToggleFav={onToggleFav} onCategoryPress={onOpenCategory ? () => onOpenCategory(selDhikr._kategori) : undefined} arabicFontSize={arabicFontSize} uttalFontSize={uttalFontSize} svenskaFontSize={svenskaFontSize} />
       </ScrollView>
     </Animated.View>
   );
@@ -1011,7 +1017,17 @@ function SavedView({ favorites, onSelectDhikr, onClearFav, T }: {
   onSelectDhikr: (d: DhikrPost, s: DhikrPost[]) => void;
   onClearFav: () => void; T: any;
 }) {
-  const favDhikr = ALL_DHIKR.filter(d => favorites.includes(dhikrKey(d)));
+  // Deduplicate by key — same dhikr may appear in multiple subcategories
+  // (e.g. Kursi-versen in both Morgon and Kväll). Keep first occurrence per key.
+  const favDhikr = useMemo(() => {
+    const seen = new Set<string>();
+    return ALL_DHIKR.filter(d => {
+      const k = dhikrKey(d);
+      if (!favorites.includes(k) || seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+  }, [favorites]);
 
   // Group favorites by _kategori, preserving order of first appearance
   const grouped = useMemo(() => {
@@ -1022,7 +1038,7 @@ function SavedView({ favorites, onSelectDhikr, onClearFav, T }: {
       map.get(cat)!.push(d);
     });
     return Array.from(map.entries());
-  }, [favorites]);
+  }, [favDhikr]);
 
   if (favDhikr.length === 0) {
     return (
@@ -1398,6 +1414,12 @@ export default function DhikrScreen() {
           siblings={siblings} onClose={closeDhikr}
           favorites={favorites}
           onToggleFav={toggleFav}
+          onOpenCategory={(kategori) => {
+            const grupp = GRUPPER.find(g =>
+              g.undersidor.some(u => u._kategorinamn === kategori)
+            );
+            if (grupp) { closeDhikr(); goToCat(grupp); }
+          }}
           T={T} isDark={isDark}
         />
       )}

@@ -442,3 +442,45 @@ export async function preWarmPageFonts(
     );
   }
 }
+
+/**
+ * Downloads the two shared fonts (surah names + bismillah) to disk
+ * without registering them. Safe to call from a background startup task.
+ * Skips each file if it already exists (idempotent).
+ */
+export async function preWarmSharedFonts(): Promise<void> {
+  if (OFFLINE_MODE === 'bundled') return;
+  await Promise.allSettled([
+    (async () => {
+      const p = localSurahNameFontUri();
+      const info = await FileSystem.getInfoAsync(p);
+      if (!info.exists) await FileSystem.downloadAsync(SURAH_NAME_FONT_CDN, p);
+    })(),
+    (async () => {
+      const p = localBismillahFontUri();
+      const info = await FileSystem.getInfoAsync(p);
+      if (!info.exists) await FileSystem.downloadAsync(BISMILLAH_FONT_CDN, p);
+    })(),
+  ]);
+}
+
+/**
+ * Returns how many of the 604 QCF page fonts are already on disk.
+ * Used by the global cache for progress reporting.
+ */
+export async function countDownloadedPageFonts(
+  startPage = 1,
+  endPage   = 604,
+): Promise<number> {
+  if (OFFLINE_MODE === 'bundled') return endPage - startPage + 1;
+  let count = 0;
+  const checks = Array.from(
+    { length: endPage - startPage + 1 },
+    (_, i) => startPage + i,
+  ).map(async n => {
+    const info = await FileSystem.getInfoAsync(localPageFontUri(n));
+    if (info.exists) count++;
+  });
+  await Promise.all(checks);
+  return count;
+}

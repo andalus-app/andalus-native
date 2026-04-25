@@ -14,7 +14,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Modal, View, Text, TextInput, TouchableOpacity,
   KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator,
-  StyleSheet,
+  StyleSheet, Animated,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import Svg, { Path, Circle } from 'react-native-svg';
@@ -50,6 +50,28 @@ export default function AdminPinModal({ visible, user, onSuccess, onCancel, isDa
 
   const pinInputRef = useRef<TextInput>(null);
   const norm        = normalizePhone(user.phone);
+  const dotAnims    = useRef(Array.from({ length: 6 }, () => new Animated.Value(0))).current;
+
+  // Animate pin dots: new dot springs in, cleared dots reset instantly.
+  useEffect(() => {
+    const len = pin.length;
+    // Reset all slots beyond current length
+    for (let i = len; i < 6; i++) dotAnims[i].setValue(0);
+    // Animate the newly added dot
+    if (len > 0) {
+      Animated.spring(dotAnims[len - 1], {
+        toValue: 1,
+        useNativeDriver: true,
+        bounciness: 10,
+        speed: 20,
+      }).start();
+    }
+  }, [pin.length]);
+
+  // Reset dot anims when modal closes
+  useEffect(() => {
+    if (!visible) dotAnims.forEach(a => a.setValue(0));
+  }, [visible]);
 
   // On open: check if a valid Supabase Auth session already exists.
   // If yes, skip the email/password step — go straight to PIN.
@@ -212,14 +234,14 @@ export default function AdminPinModal({ visible, user, onSuccess, onCancel, isDa
                     <Text style={{ fontSize: 13, color: T.textMuted, marginTop: 4 }}>Ange din PIN-kod</Text>
                   </View>
 
-                  {/* Dot display */}
+                  {/* Dot display — only filled dots shown, centered, animate in */}
                   <TouchableOpacity activeOpacity={1} onPress={() => pinInputRef.current?.focus()}
-                    style={{ flexDirection: 'row', justifyContent: 'center', gap: 14, marginBottom: 8 }}>
-                    {Array.from({ length: 6 }).map((_, i) => (
-                      <View key={i} style={{
+                    style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 14, minHeight: 28, marginBottom: 8 }}>
+                    {Array.from({ length: pin.length }).map((_, i) => (
+                      <Animated.View key={i} style={{
                         width: 14, height: 14, borderRadius: 7,
-                        backgroundColor: i < pin.length ? T.text : 'transparent',
-                        borderWidth: 1.5, borderColor: i < pin.length ? T.text : T.border,
+                        backgroundColor: T.text,
+                        transform: [{ scale: dotAnims[i] }],
                       }} />
                     ))}
                   </TouchableOpacity>

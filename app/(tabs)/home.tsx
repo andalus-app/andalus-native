@@ -869,7 +869,7 @@ export default function HomeScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
-      <View style={{ paddingTop: 56, paddingHorizontal: 20, paddingBottom: 16, flexDirection: 'row', alignItems: 'center' }}>
+      <View style={{ paddingTop: 56, paddingHorizontal: 20, paddingBottom: 10, flexDirection: 'row', alignItems: 'center' }}>
         {/* Triple-tap triggers hidden admin access — no visual feedback intentional */}
         <TouchableOpacity onPress={handleLogoTap} activeOpacity={1} hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}>
           <HidayahLogo size={52} />
@@ -924,7 +924,7 @@ export default function HomeScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={T.accent} />}
       >
         {/* ── Greeting / Home-top banner (crossfade) ── */}
-        <View style={{ marginBottom: 20, alignSelf: 'stretch' }}>
+        <View style={{ marginBottom: 10, alignSelf: 'stretch' }}>
           {homeTopBanner ? (
             // When a home-top banner is active: slide out left, new slides in from right
             <View style={{ position: 'relative', overflow: 'hidden' }}>

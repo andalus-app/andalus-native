@@ -1,8 +1,8 @@
 /**
  * Umrah Guide — main screen.
  *
- * - Opens in LIGHT MODE by default, independent of app theme.
- * - User can toggle dark mode; choice persists across visits.
+ * - Opens in the app's current theme (system/dark/light) on every visit.
+ * - User can toggle dark/light inside the guide without affecting the app theme.
  * - Simplified view toggle hides supplementary content.
  * - Step-based flow with progress, counters, checklists.
  * - Auto-resumes at last active step.
@@ -21,6 +21,7 @@ import { Asset } from 'expo-asset';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
+import { useTheme } from '@/context/ThemeContext';
 
 import { umrahLight, umrahDark, UmrahTheme } from '@/components/umrah/umrahTheme';
 import UmrahHeroHeader from '@/components/umrah/UmrahHeroHeader';
@@ -282,6 +283,9 @@ export default function UmrahScreen() {
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
 
+  // App-level theme — used to initialise the guide's own dark toggle.
+  const { isDark: appIsDark } = useTheme();
+
   // ── Entry context (explicit — never guessed) ─────────────────────────────────
   // Present when another guide opens the Umrah Guide via router params.
   const { from, returnStep } = useLocalSearchParams<{ from?: string; returnStep?: string }>();
@@ -293,7 +297,10 @@ export default function UmrahScreen() {
   // ── Local state ─────────────────────────────────────────────────────────────
   const [stepIndex,       setStepIndex]       = useState(0);
   const [completedSteps,  setCompletedSteps]  = useState<string[]>([]);
-  const [isGuideDark,     setIsGuideDark]     = useState(false);
+  // Initialise from the app's resolved theme so the guide always opens in the
+  // same mode as the rest of the app. The user can override this toggle inside
+  // the guide without affecting the global app theme.
+  const [isGuideDark,     setIsGuideDark]     = useState(appIsDark);
   const [isSimplified,    setIsSimplified]    = useState(false);
   const [fontScaleIndex,  setFontScaleIndex]  = useState(0);
   const [counterValues,   setCounterValues]   = useState<Record<string, number>>({});
@@ -316,6 +323,8 @@ export default function UmrahScreen() {
   }, []);
 
   // ── Load persisted state ────────────────────────────────────────────────────
+  // isGuideDark is intentionally NOT restored — the guide always opens in the
+  // app's current theme (appIsDark). The user's in-guide toggle is session-only.
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY).then(raw => {
       if (raw) {
@@ -323,7 +332,6 @@ export default function UmrahScreen() {
           const saved: PersistedState = JSON.parse(raw);
           setStepIndex(saved.stepIndex ?? 0);
           setCompletedSteps(saved.completedSteps ?? []);
-          setIsGuideDark(saved.isGuideDark ?? false);
           setIsSimplified(saved.isSimplified ?? false);
           setFontScaleIndex(Math.min(saved.fontScaleIndex ?? 0, FONT_SCALE_STEPS.length - 1));
           setCounterValues(saved.counterValues ?? {});

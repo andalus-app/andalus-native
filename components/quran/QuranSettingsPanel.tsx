@@ -652,11 +652,6 @@ function QuranSettingsPanel() {
                       <View style={{ flex: 1 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                           <Text style={[styles.optionText, { color: T.text }]}>{tr.name}</Text>
-                          {tr.id === LOCAL_BERNSTROM_ID && (
-                            <View style={[styles.langCountBadge, { backgroundColor: T.accentGlow }]}>
-                              <Text style={[styles.langCount, { color: T.accent }]}>Offline</Text>
-                            </View>
-                          )}
                         </View>
                         <Text style={[styles.optionMeta, { color: T.textMuted }]}>
                           {toLangSv(tr.languageName)} · {tr.authorName}
@@ -739,11 +734,6 @@ function QuranSettingsPanel() {
                           <View style={{ flex: 1 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                               <Text style={[styles.optionText, { color: T.text }]}>{tr.name}</Text>
-                              {tr.id === LOCAL_BERNSTROM_ID && (
-                                <View style={[styles.langCountBadge, { backgroundColor: T.accentGlow }]}>
-                                  <Text style={[styles.langCount, { color: T.accent }]}>Offline</Text>
-                                </View>
-                              )}
                             </View>
                             <Text style={[styles.optionMeta, { color: T.textMuted }]}>{tr.authorName}</Text>
                           </View>
@@ -780,8 +770,8 @@ function QuranSettingsPanel() {
             </View>
             <TouchableOpacity
               style={styles.storageRow}
-              onPress={handleDeleteTranslations}
-              activeOpacity={0.7}
+              onPress={cachedPages > 0 ? handleDeleteTranslations : undefined}
+              activeOpacity={cachedPages > 0 ? 0.7 : 1}
             >
               <View style={{ flex: 1 }}>
                 <Text style={[styles.storageLabel, { color: T.text }]}>Översättnings-cache</Text>
@@ -789,7 +779,7 @@ function QuranSettingsPanel() {
                   {`${cachedPages} sidor cachade`}
                 </Text>
               </View>
-              <SvgIcon name="trash" size={20} color={T.accentRed} />
+              {cachedPages > 0 && <SvgIcon name="trash" size={20} color={T.accentRed} />}
             </TouchableOpacity>
           </AccordionSection>
         </ScrollView>

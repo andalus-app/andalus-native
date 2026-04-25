@@ -76,10 +76,8 @@ type QuranContextValue = {
   removeBookmark: (id: string) => void;
   updateNote: (id: string, note: string) => void;
   isBookmarked: (pageNumber: number, verseKey?: string) => boolean;
-  // Navigate to a bookmark: goes to the page and flashes the verse for 2.5 s
+  // Navigate to a bookmark: goes to the page
   goToBookmark: (pageNumber: number, verseKey?: string) => void;
-  // Currently flashing bookmark verse key (auto-clears after 2.5 s)
-  bookmarkFlashKey: string | null;
 
   // Audio bridge — QuranAudioPlayer registers these on mount
   audioCommandsRef: React.MutableRefObject<AudioCommands | null>;
@@ -302,27 +300,16 @@ export function QuranProvider({ children, initialPage = 1, initialVerseKey, init
     dayNumber:     number;
   } | null>(null);
 
-  // Bookmark flash — set when navigating from the bookmarks list, auto-clears after 2.5 s
-  const [bookmarkFlashKey, setBookmarkFlashKey] = useState<string | null>(null);
-  const bookmarkFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   // Long-press verse selection
   const setLongPressedVerse = useCallback((v: LongPressedVerse | null) => {
     setLongPressedVerseState(v);
   }, []);
 
-  // Navigate to a bookmarked page and flash the verse for 2.5 s
+  // Navigate to a bookmarked page — all bookmarked verses on the page are always highlighted
   const goToBookmark = useCallback(
     (pageNumber: number, verseKey?: string) => {
       goToPage(pageNumber);
       setContentsMenuOpen(false);
-      if (bookmarkFlashTimerRef.current) clearTimeout(bookmarkFlashTimerRef.current);
-      if (verseKey) {
-        setBookmarkFlashKey(verseKey);
-        bookmarkFlashTimerRef.current = setTimeout(() => {
-          setBookmarkFlashKey(null);
-        }, 2500);
-      }
     },
     [goToPage],
   );
@@ -365,7 +352,6 @@ export function QuranProvider({ children, initialPage = 1, initialVerseKey, init
       updateNote,
       isBookmarked,
       goToBookmark,
-      bookmarkFlashKey,
       audioCommandsRef,
       audioCacheRefreshRef,
       activeVerseKey,
@@ -410,7 +396,6 @@ export function QuranProvider({ children, initialPage = 1, initialVerseKey, init
       updateNote,
       isBookmarked,
       goToBookmark,
-      bookmarkFlashKey,
       activeVerseKey,
       setPlaybackVerse,
       longPressedVerse,
