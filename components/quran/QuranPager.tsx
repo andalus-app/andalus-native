@@ -41,6 +41,7 @@
 import React, { useRef, useCallback, useEffect, memo } from 'react';
 import {
   FlatList,
+  InteractionManager,
   Pressable,
   ScrollView,
   useWindowDimensions,
@@ -164,27 +165,38 @@ function QuranPager() {
   const isMushafMode = settings.readingMode !== 'verse';
 
   // ── Font and data pre-loading ─────────────────────────────────────────────
-  // Pre-load fonts and page data for currentPage ±2 immediately.
+  // Pre-load fonts and page data for currentPage ±2.
   //
-  // Range matches windowSize=5: FlatList keeps ±2 pages mounted, so pre-loading
-  // ±2 ensures the LRU cache is populated before those pages mount. When
-  // getComposedPageSync hits in QuranPageView's lazy initializer, the page
-  // starts as 'ready' with no loading spinner.
+  // Current page: loads immediately so QuranVerseView / QuranPageView can render
+  // without a loading spinner. Both functions are deduplicated (no-op if already
+  // loaded) so rapid currentPage changes don't trigger redundant work.
   //
-  // Both loadQCFPageFont and fetchComposedMushafPage deduplicate in-flight calls
-  // and short-circuit via LRU / Font.isLoaded for already-warm pages — safe to
-  // call on every currentPage change without redundant work.
+  // Adjacent pages (±1 and ±2): deferred via InteractionManager.runAfterInteractions
+  // so they don't compete with the Font.loadAsync calls for the current page
+  // during the critical first-render window. On Quran-screen open this avoids
+  // up to 4 concurrent Font.loadAsync registrations blocking the JS thread while
+  // the current page is still loading.
   //
-  // Bismillah font is shared across all pages — loaded once then cached.
+  // windowSize=5 keeps ±2 pages mounted. Pre-loading ±2 ensures the LRU cache
+  // is populated before adjacent pages mount so they start as 'ready'.
   useEffect(() => {
-    const start = Math.max(1, currentPage - 2);
-    const end   = Math.min(TOTAL_PAGES, currentPage + 2);
-    for (let p = start; p <= end; p++) {
-      loadQCFPageFont(p);
-      fetchComposedMushafPage(p);
-    }
+    // Current page — load immediately
+    loadQCFPageFont(currentPage);
+    fetchComposedMushafPage(currentPage);
     loadBismillahFont();
-    qLog(`Pager pre-warm p${start}–p${end}`);
+
+    // Adjacent pages — defer until animations/interactions complete
+    const task = InteractionManager.runAfterInteractions(() => {
+      const start = Math.max(1, currentPage - 2);
+      const end   = Math.min(TOTAL_PAGES, currentPage + 2);
+      for (let p = start; p <= end; p++) {
+        if (p === currentPage) continue; // already loaded above
+        loadQCFPageFont(p);
+        fetchComposedMushafPage(p);
+      }
+      qLog(`Pager pre-warm adjacent p${start}–p${end}`);
+    });
+    return () => task.cancel();
   }, [currentPage]);
 
   // ── Full-Quran background pre-cache ──────────────────────────────────────

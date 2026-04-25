@@ -105,6 +105,8 @@ function QuranScreen({ deepLinkVerseKey, deepLinkNonce }: { deepLinkVerseKey?: s
     if (handledNavKeyRef.current === navKey) return;
     handledNavKeyRef.current = navKey;
 
+    if (__DEV__) console.log('[QuranTargetScroll] received target', deepLinkVerseKey, 'nonce', deepLinkNonce);
+
     // Navigate to the approximate page immediately (surah first page, no network needed).
     // This re-sets pendingVerseHighlight even if the QuranProvider was not remounted
     // (i.e. the screen was reused from the stack and its pendingVerseHighlight is null).

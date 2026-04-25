@@ -14,6 +14,7 @@ import { Animated, AppState, AppStateStatus, Text, TouchableOpacity, StyleSheet,
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/context/ThemeContext';
 import { getDailyQuranVerse } from '@/services/dailyReminder';
+import { prewarmDailyVerseTarget } from '@/services/quranPrewarmService';
 
 const GOLD_DARK = '#cab488';
 const COLLAPSED_HEIGHT = 66;
@@ -57,6 +58,13 @@ export default function DagensKoranversCard() {
   const dateKeyRef = useRef<string>(dateKey);
 
   const verse = useMemo(() => getDailyQuranVerse(new Date()), [dateKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Pre-warm Quran page fonts + data for today's verse so the reader opens
+  // instantly. Fires once per day (date-keyed session guard in the service),
+  // deferred via InteractionManager so it never blocks the home screen render.
+  useEffect(() => {
+    prewarmDailyVerseTarget(verse.verseKey);
+  }, [verse.verseKey]);
 
   const accentColor = isDark ? GOLD_DARK : T.accent;
   const verseColor  = isDark ? '#FFFFFF' : T.text;
@@ -173,7 +181,10 @@ export default function DagensKoranversCard() {
 
         {/* Animated height container — clips text to animated height */}
         <Animated.View style={[styles.verseContainer, truncated && { height: animHeight }]}>
-          <Text style={[styles.swedish, { color: verseColor }]}>
+          <Text
+            style={[styles.swedish, { color: verseColor }]}
+            numberOfLines={truncated && !expanded ? 3 : undefined}
+          >
             {verse.swedish}
           </Text>
         </Animated.View>
@@ -191,18 +202,14 @@ export default function DagensKoranversCard() {
             <Text style={[styles.visaMerLabel, { color: accentColor }]}>
               {expanded ? 'Visa mindre' : 'Visa mer'}
             </Text>
-            <AccentDivider color={accentColor} small />
             <Text style={[styles.reference, { color: verseColor }]}>
               {verse.surahName} · {verse.surahNumber}:{verse.ayahNumber}
             </Text>
           </TouchableOpacity>
         ) : (
-          <>
-            <AccentDivider color={accentColor} small />
-            <Text style={[styles.reference, { color: verseColor }]}>
-              {verse.surahName} · {verse.surahNumber}:{verse.ayahNumber}
-            </Text>
-          </>
+          <Text style={[styles.reference, { color: verseColor }]}>
+            {verse.surahName} · {verse.surahNumber}:{verse.ayahNumber}
+          </Text>
         )}
       </Animated.View>
     </TouchableOpacity>

@@ -157,7 +157,10 @@ export default function DagensHadithCard() {
 
         {/* Animated height container — clips text during animation */}
         <Animated.View style={[styles.textContainer, truncated && { height: animHeight }]}>
-          <Text style={[styles.swedish, { color: T.text }]}>
+          <Text
+            style={[styles.swedish, { color: T.text }]}
+            numberOfLines={truncated && !expanded ? 3 : undefined}
+          >
             {hadith.svenska}
           </Text>
         </Animated.View>

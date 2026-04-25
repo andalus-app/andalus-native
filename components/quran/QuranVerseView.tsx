@@ -417,6 +417,10 @@ type VerseCardProps = {
   // Stable ref: same object across all parent re-renders → memo never sees
   // a new reference → no spurious re-renders from this prop.
   verseYMapRef: React.MutableRefObject<Record<string, number>>;
+  // Stable ref: called when this card lays out if it matches the pending
+  // deep-link scroll target. Direct trigger — fires immediately instead of
+  // waiting for the retry polling loop. Stable ref avoids memo invalidation.
+  pendingScrollCbRef: React.MutableRefObject<((verseKey: string, y: number) => void) | null>;
   // Called with this card's verseKey on long press (≥1 s hold).
   onLongPress: (verseKey: string) => void;
   // Called on short tap — forwards to chrome toggle (same as outer Pressable in QuranPager).
@@ -442,6 +446,7 @@ const VerseCard = memo(function VerseCard({
   hasTranslation,
   isDark,
   verseYMapRef,
+  pendingScrollCbRef,
   onLongPress,
   onPress,
   shouldFlash,
@@ -566,7 +571,13 @@ const VerseCard = memo(function VerseCard({
         onPress={stableHandlePress}
         onLongPress={stableHandleLongPress}
         delayLongPress={1000}
-        onLayout={(e) => { verseYMapRef.current[item.verseKey] = e.nativeEvent.layout.y; }}
+        onLayout={(e) => {
+          const y = e.nativeEvent.layout.y;
+          verseYMapRef.current[item.verseKey] = y;
+          // Direct trigger: if this bismillah is the pending scroll target, fire immediately
+          // instead of waiting for the 80ms retry polling loop.
+          pendingScrollCbRef.current?.(item.verseKey, y);
+        }}
       >
         <Animated.View
           style={[styles.card, { backgroundColor: 'transparent', borderColor: cardBorder, borderWidth: isDark ? 0 : 0.5, shadowOpacity: 0 }]}
@@ -615,7 +626,13 @@ const VerseCard = memo(function VerseCard({
       onPress={stableHandlePress}
       onLongPress={stableHandleLongPress}
       delayLongPress={1000}
-      onLayout={(e) => { verseYMapRef.current[item.verseKey] = e.nativeEvent.layout.y; }}
+      onLayout={(e) => {
+        const y = e.nativeEvent.layout.y;
+        verseYMapRef.current[item.verseKey] = y;
+        // Direct trigger: if this verse is the pending scroll target, fire immediately
+        // instead of waiting for the 80ms retry polling loop.
+        pendingScrollCbRef.current?.(item.verseKey, y);
+      }}
     >
       <Animated.View
         style={[
@@ -752,6 +769,16 @@ function QuranVerseView({ pageNumber, width, height, isActive }: Props) {
   const flashTimerRef       = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [flashingVerseKey, setFlashingVerseKey] = useState<string | null>(null);
   const clearFlashingVerse = useCallback(() => setFlashingVerseKey(null), []);
+
+  // Direct-trigger ref: called by VerseCard's onLayout when the laid-out verse
+  // matches the pending deep-link scroll target. Fires immediately instead of
+  // waiting for the 80ms polling loop — eliminates the timing gap when a fresh
+  // page mounts and VerseCards lay out for the first time.
+  //
+  // Updated every render (not in useEffect) so it always reads current
+  // pendingVerseHighlight without becoming a stale closure. Same pattern as
+  // surahScrollCbRef. Stable ref object → VerseCard memo never re-renders.
+  const pendingScrollCbRef = useRef<((verseKey: string, y: number) => void) | null>(null);
   // How many px to subtract from a verse's layout-Y when scrolling to it, so it
   // lands just below the floating meta bar overlay. Updated every render so it
   // always reflects the current orientation's insets.top.
@@ -943,27 +970,40 @@ function QuranVerseView({ pageNumber, width, height, isActive }: Props) {
   }, [pendingSurahScroll, loadState.status, isActive]);
 
   // Scroll to and flash the deep-link verse (e.g. navigated from Asmaul Husna).
-  // Mirrors the pendingSurahScroll retry pattern: retry up to 15 times (every 80ms)
-  // to wait for onLayout to populate verseYMap, then scroll + trigger flash.
+  //
+  // Two scroll paths work together:
+  //   1. DIRECT (primary): pendingScrollCbRef.current is called by VerseCard.onLayout
+  //      the moment the card lays out. This fires immediately on fresh page mounts
+  //      where verseYMap is empty at effect time. No polling delay.
+  //   2. FALLBACK (this effect): polls verseYMap every 80ms for up to 1.6s.
+  //      Handles the case where the page was already rendered (verseYMap
+  //      pre-populated) so onLayout won't fire again for existing cards.
+  //
+  // When pendingVerseHighlight.pageNumber !== pageNumber the guard returns early
+  // WITHOUT clearing state so the correct page's view can still handle it.
   useEffect(() => {
     if (!pendingVerseHighlight || loadState.status !== 'ready' || !isActive) return;
     if (pendingVerseHighlight.pageNumber !== pageNumber) return;
     const verseKey = pendingVerseHighlight.verseKey;
     if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+    if (__DEV__) console.log('[QuranTargetScroll] list ready for', verseKey, 'page', pageNumber);
     let attempts = 0;
     const tryScrollAndFlash = () => {
       flashTimerRef.current = null;
       if (!mountedRef.current || !scrollRef.current) return;
       const verseY = verseYMap.current[verseKey];
+      if (__DEV__) console.log('[QuranTargetScroll] scroll attempt', attempts, 'for', verseKey, 'found:', verseY !== undefined);
       if (verseY !== undefined) {
+        if (__DEV__) console.log('[QuranTargetScroll] success via retry loop', verseKey);
         clearPendingVerseHighlight();
         scrollRef.current.scrollTo({ y: Math.max(0, verseY - scrollOffsetRef.current), animated: true });
         setFlashingVerseKey(verseKey);
-      } else if (attempts < 15) {
+      } else if (attempts < 20) { // 20 × 80ms = 1.6s window (up from 15 × 80ms = 1.2s)
         attempts++;
         flashTimerRef.current = setTimeout(tryScrollAndFlash, 80);
       } else {
-        clearPendingVerseHighlight(); // give up
+        if (__DEV__) console.warn('[QuranTargetScroll] gave up after', attempts, 'retries for', verseKey, 'page', pageNumber);
+        clearPendingVerseHighlight(); // give up — verse not found on this page
       }
     };
     flashTimerRef.current = setTimeout(tryScrollAndFlash, 80);
@@ -988,6 +1028,35 @@ function QuranVerseView({ pageNumber, width, height, isActive }: Props) {
     ) return;
     clearPendingSurahScroll();
     scrollRef.current?.scrollTo({ y: Math.max(0, y - scrollOffsetRef.current), animated: false });
+  };
+
+  // Updated every render so VerseCard.onLayout always sees the current pending
+  // target without becoming a stale closure. Same pattern as surahScrollCbRef.
+  //
+  // When a VerseCard fires onLayout and the key matches pendingVerseHighlight,
+  // scroll fires IMMEDIATELY — no 80 ms polling delay. This is the primary
+  // scroll path for fresh page mounts where verseYMap is empty at effect time.
+  // The retry loop in the useEffect above acts as a fallback for the case where
+  // the page was already rendered (verseYMap pre-populated) when the pending
+  // highlight was set, so onLayout won't fire again.
+  pendingScrollCbRef.current = (verseKey: string, y: number) => {
+    if (
+      !pendingVerseHighlight ||
+      pendingVerseHighlight.verseKey !== verseKey ||
+      pendingVerseHighlight.pageNumber !== pageNumber
+    ) return;
+    if (!mountedRef.current || !scrollRef.current) return;
+    if (__DEV__) console.log('[QuranTargetScroll] success via onLayout direct trigger', verseKey, 'page', pageNumber);
+    clearPendingVerseHighlight();
+    const scrollY = Math.max(0, y - scrollOffsetRef.current);
+    // rAF ensures the native ScrollView has committed its layout before we call
+    // scrollTo. On freshly mounted pages the view may not be fully ready yet.
+    requestAnimationFrame(() => {
+      if (mountedRef.current && scrollRef.current) {
+        scrollRef.current.scrollTo({ y: scrollY, animated: true });
+      }
+    });
+    setFlashingVerseKey(verseKey);
   };
 
   // ── Render states ──────────────────────────────────────────────────────────
@@ -1105,6 +1174,7 @@ function QuranVerseView({ pageNumber, width, height, isActive }: Props) {
             hasTranslation={hasTranslation}
             isDark={isDark}
             verseYMapRef={verseYMap}
+            pendingScrollCbRef={pendingScrollCbRef}
             shouldFlash={flashingVerseKey === item.verseKey}
             onFlashDone={clearFlashingVerse}
             onLongPress={handleVerseLongPress}
