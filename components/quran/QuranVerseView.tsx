@@ -765,6 +765,11 @@ function QuranVerseView({ pageNumber, width, height, isActive }: Props) {
   const restoreVerseRef = useRef<string | null>(null);
   const prevWidthRef    = useRef(width);
   const restoreTimerRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Monotonically-increasing counter bumped on every rotation. Each timer
+  // closure captures its own version and exits if the counter has advanced,
+  // preventing a stale first-rotation timer from scrolling to the wrong verse
+  // when two rapid rotations happen within the 600 ms settle window.
+  const restoreVersionRef  = useRef(0);
   const surahScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flashTimerRef       = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [flashingVerseKey, setFlashingVerseKey] = useState<string | null>(null);
@@ -851,8 +856,11 @@ function QuranVerseView({ pageNumber, width, height, isActive }: Props) {
 
     if (restoreTimerRef.current) clearTimeout(restoreTimerRef.current);
     // 600ms gives the banner SVG (expensive render) time to finish layout.
+    // Capture version so a second rapid rotation cancels this timer's work.
+    const version = ++restoreVersionRef.current;
     restoreTimerRef.current = setTimeout(() => {
       restoreTimerRef.current = null;
+      if (restoreVersionRef.current !== version) return; // stale — newer rotation won
       const targetKey = restoreVerseRef.current;
       if (!targetKey || !scrollRef.current) return;
       const newY = verseYMap.current[targetKey];

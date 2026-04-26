@@ -195,7 +195,7 @@ export function getDailyHadith(date: Date): HadithReminder {
     arabiska:       entry.arabiska,
     svenska:        entry.svenska,
     kalla:          entry.källa,
-    navigationPath: `/hadith?hadithNr=${entry.hadith_nr}`,
+    navigationPath: `/hadith/${entry.hadith_nr}`,
   };
 }
 

@@ -51,6 +51,15 @@ function localAudioPath(reciterId: number, surahId: number): string {
   return `${AUDIO_DIR}${audioFileName(reciterId, surahId)}`;
 }
 
+/**
+ * Dedicated cache path for the bismillah clip (Al-Fatiha verse 1:1).
+ * Separate from the full surah-1 cache so it can be downloaded independently
+ * as a short (~5 s) file without pulling the entire Al-Fatiha chapter.
+ */
+function bismillahLocalPath(reciterId: number): string {
+  return `${AUDIO_DIR}r${reciterId}_bsml.mp3`;
+}
+
 // ── API ──────────────────────────────────────────────────────────────────────
 
 // QuranCDN — same source as mushafTimingService.
@@ -69,6 +78,32 @@ async function resolveRemoteUrl(reciterId: number, surahId: number): Promise<str
   return audioUrl;
 }
 
+/**
+ * Derives the verse-level audio URL from the chapter audio URL.
+ *
+ * QuranCDN chapter URL pattern:
+ *   https://audio.qurancdn.com/{slug}/{NNN}.mp3
+ *
+ * Verse URL pattern (same CDN, same slug):
+ *   https://audio.qurancdn.com/{slug}/mp3/{SSSSVVV}.mp3
+ *   where SSSS = 3-digit surah, VVV = 3-digit verse
+ *
+ * This avoids hardcoding a reciter-ID → slug mapping table — the slug is
+ * already embedded in the chapter URL that the QDC API returns.
+ *
+ * Returns null when the URL does not match the expected QuranCDN pattern,
+ * indicating we should fall back to the chapter audio + timer approach.
+ */
+function deriveVerseAudioUrl(chapterAudioUrl: string, surahId: number, verseId: number): string | null {
+  // Match "https://audio.qurancdn.com/{slug}/" at the start of the URL.
+  const match = chapterAudioUrl.match(/^(https?:\/\/audio\.qurancdn\.com\/[^/]+)\//);
+  if (!match) return null;
+  const base = match[1]; // e.g., "https://audio.qurancdn.com/Alafasy_128kbps"
+  const s = String(surahId).padStart(3, '0');
+  const v = String(verseId).padStart(3, '0');
+  return `${base}/mp3/${s}${v}.mp3`;
+}
+
 // ── Public API ───────────────────────────────────────────────────────────────
 
 /** Ensure AUDIO_DIR exists — call once on app start or before first download. */
@@ -77,6 +112,55 @@ export async function ensureAudioDir(): Promise<void> {
   if (!info.exists) {
     await FileSystem.makeDirectoryAsync(AUDIO_DIR, { intermediates: true });
   }
+}
+
+/**
+ * Returns the local URI for the bismillah audio clip (Al-Fatiha verse 1:1),
+ * downloading and caching it first if needed.
+ *
+ * Strategy:
+ *   1. Return the cached file immediately if it already exists.
+ *   2. Ask the QDC API for the Al-Fatiha chapter URL to extract the reciter
+ *      slug, then derive the verse-level URL:
+ *        https://audio.qurancdn.com/{slug}/mp3/001001.mp3  (~5 s clip)
+ *   3. If the URL cannot be derived (different CDN pattern), fall back to
+ *      downloading the full Al-Fatiha chapter file instead. In this case
+ *      `isBismillahShortClip()` returns false so the caller can still use
+ *      the timer-based approach.
+ *
+ * The file is cached at `r{reciterId}_bsml.mp3` — separate from the full
+ * surah-1 download so users who never play surah 1 in full still get a
+ * dedicated short clip.
+ */
+export async function getBismillahAudioUri(reciterId: number): Promise<string> {
+  await ensureAudioDir();
+  const local = bismillahLocalPath(reciterId);
+  const cached = await FileSystem.getInfoAsync(local);
+  if (cached.exists && (cached as FileSystem.FileInfo & { size?: number }).size) return local;
+
+  // Resolve chapter URL to derive the verse-level URL.
+  const chapterUrl = await resolveRemoteUrl(reciterId, 1); // Al-Fatiha chapter
+  const verseUrl = deriveVerseAudioUrl(chapterUrl, 1, 1);
+  const downloadUrl = verseUrl ?? chapterUrl; // fallback to chapter if pattern mismatch
+
+  const dl = FileSystem.createDownloadResumable(downloadUrl, local);
+  const result = await dl.downloadAsync();
+  if (!result?.uri) {
+    await FileSystem.deleteAsync(local, { idempotent: true });
+    throw new Error('Bismillah audio download failed');
+  }
+  return local;
+}
+
+/** True if the bismillah clip has already been downloaded to DocumentDir. */
+export async function isBismillahDownloaded(reciterId: number): Promise<boolean> {
+  const info = await FileSystem.getInfoAsync(bismillahLocalPath(reciterId));
+  return info.exists && !!((info as FileSystem.FileInfo & { size?: number }).size);
+}
+
+/** Deletes the cached bismillah clip for a reciter (e.g. on reciter change). */
+export async function deleteBismillahAudio(reciterId: number): Promise<void> {
+  await FileSystem.deleteAsync(bismillahLocalPath(reciterId), { idempotent: true });
 }
 
 /**

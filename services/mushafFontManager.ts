@@ -417,11 +417,14 @@ export async function isQCFPageFontAvailableOffline(
  * @param startPage   first page to pre-warm (inclusive)
  * @param endPage     last page to pre-warm (inclusive)
  * @param concurrency how many downloads to run in parallel (default: 4)
+ * @param isPaused    optional callback — loop suspends (100 ms ticks) while
+ *                    this returns true (e.g. user is swiping pages)
  */
 export async function preWarmPageFonts(
   startPage:   number,
   endPage:     number,
   concurrency: number = 4,
+  isPaused?:   () => boolean,
 ): Promise<void> {
   if (OFFLINE_MODE === 'bundled') return;
 
@@ -431,6 +434,12 @@ export async function preWarmPageFonts(
   );
 
   for (let i = 0; i < pages.length; i += concurrency) {
+    // Suspend at each batch boundary while the caller signals pause (e.g.
+    // swipe gesture in progress). Mirrors the page-data download queue pattern.
+    while (isPaused?.()) {
+      await new Promise<void>((r) => setTimeout(r, 100));
+    }
+
     const batch = pages.slice(i, i + concurrency);
     await Promise.allSettled(
       batch.map(async n => {
@@ -440,6 +449,10 @@ export async function preWarmPageFonts(
         await FileSystem.downloadAsync(QCF_PAGE_FONT_CDN(n), localUri);
       }),
     );
+
+    // Yield 100 ms between batches so the JS event loop has ~6 render cycles
+    // between FileSystem calls — same strategy as quranDownloadQueue.ts.
+    await new Promise<void>((r) => setTimeout(r, 100));
   }
 }
 

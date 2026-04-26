@@ -97,17 +97,38 @@ type ContextType = State & {
 
 const AppContext = createContext<ContextType | null>(null);
 
-// ── Cache helpers (samma logik som PWA) ──
+// ── Cache helpers ──
+// The prayer tab (index.tsx) writes to the same key but in a different format:
+//   prayer tab: { date: toDateString(), timings, tomorrowTimings, hijri, ... }
+//   AppContext:  { key, date: getTodayStr(), todayT, tomT, hijri }
+// getCached handles both formats so AppContext can read the cache regardless of
+// which writer last touched it.
+function isCacheToday(dateStr: string): boolean {
+  return dateStr === getTodayStr() || dateStr === new Date().toDateString();
+}
+
 async function getCached(loc: LocationType, method: number, school: number) {
   if (!loc) return null;
   try {
     const raw = await AsyncStorage.getItem(CACHE_KEY);
     if (!raw) return null;
     const cached = JSON.parse(raw);
-    const key = loc.latitude.toFixed(4)+','+loc.longitude.toFixed(4)+','+method+','+school;
-    if (cached.key !== key) return null;
-    if (cached.date !== getTodayStr()) return null;
-    return cached;
+    if (!isCacheToday(cached.date)) return null;
+
+    // AppContext format — validate location+method+school key
+    if ('key' in cached && 'todayT' in cached) {
+      const key = loc.latitude.toFixed(4)+','+loc.longitude.toFixed(4)+','+method+','+school;
+      if (cached.key !== key) return null;
+      return { todayT: cached.todayT, tomT: cached.tomT, hijri: cached.hijri };
+    }
+
+    // Prayer tab format — no key field; location is implicitly correct
+    // (the prayer tab always writes after fetching for the current GPS position)
+    if (cached.timings) {
+      return { todayT: cached.timings, tomT: cached.tomorrowTimings ?? null, hijri: cached.hijri ?? null };
+    }
+
+    return null;
   } catch { return null; }
 }
 
@@ -124,14 +145,49 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const lastFetchRef = useRef<string | null>(null);
 
   // ── Ladda sparad state vid start ──
+  // Reads STORAGE_KEY and CACHE_KEY in parallel so prayer times can be hydrated
+  // immediately — avoids the two-roundtrip delay that caused "Laddar…" on home screen.
   useEffect(() => {
     (async () => {
       try {
-        const raw = await AsyncStorage.getItem(STORAGE_KEY);
+        const [raw, cacheRaw] = await Promise.all([
+          AsyncStorage.getItem(STORAGE_KEY),
+          AsyncStorage.getItem(CACHE_KEY),
+        ]);
+
+        let savedLocation: LocationType = null;
+        let savedSettings: Partial<Settings> | null = null;
+
         if (raw) {
           const saved = JSON.parse(raw);
-          if (saved.location) dispatch({ type: 'SET_LOCATION', payload: saved.location });
-          if (saved.settings) dispatch({ type: 'SET_SETTINGS', payload: saved.settings });
+          if (saved.location) {
+            dispatch({ type: 'SET_LOCATION', payload: saved.location });
+            savedLocation = saved.location;
+          }
+          if (saved.settings) {
+            dispatch({ type: 'SET_SETTINGS', payload: saved.settings });
+            savedSettings = saved.settings;
+          }
+        }
+
+        // Hydrate prayer times immediately from cache — handles both AppContext and
+        // prayer-tab cache formats (they share the same key but differ in structure).
+        if (savedLocation && cacheRaw) {
+          try {
+            const cached = JSON.parse(cacheRaw);
+            if (isCacheToday(cached.date)) {
+              // AppContext format: todayT field
+              // Prayer tab format: timings field
+              const todayT = cached.todayT ?? cached.timings ?? null;
+              const tomT   = cached.tomT   ?? cached.tomorrowTimings ?? null;
+              const hijri  = cached.hijri  ?? null;
+              if (todayT) {
+                dispatch({ type: 'SET_PRAYER_TIMES',   payload: todayT });
+                if (tomT)  dispatch({ type: 'SET_TOMORROW_TIMES', payload: tomT });
+                if (hijri) dispatch({ type: 'SET_HIJRI',          payload: hijri });
+              }
+            }
+          } catch {}
         }
       } catch {}
     })();

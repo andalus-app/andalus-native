@@ -51,6 +51,8 @@ import {
   downloadSurahAudio,
   ensureAudioDir,
   isSurahDownloaded,
+  getBismillahAudioUri,
+  isBismillahDownloaded,
   RECITERS,
   DownloadCancelledError,
 } from '../../services/quranAudioService';
@@ -260,6 +262,8 @@ function QuranAudioPlayer() {
 
   const playerRef = useRef<AudioPlayer | null>(null);
   const playerSubRef = useRef<{ remove: () => void } | null>(null);
+  // Tracks the 750ms play-retry timer so teardown can cancel it explicitly.
+  const startRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef = useRef(true);
   const currentSurahIdRef = useRef<number | null>(null);
   const isRepeatRef = useRef(isRepeat);
@@ -392,6 +396,11 @@ function QuranAudioPlayer() {
     intervalRepeatSeekingRef.current = false;
     stopAtTimestampRef.current = null;
     bismillahLockUntilMsRef.current = 0;
+    // Cancel the 750ms play-retry timer (startPlayer) if it's still pending.
+    if (startRetryTimerRef.current) {
+      clearTimeout(startRetryTimerRef.current);
+      startRetryTimerRef.current = null;
+    }
     // Cancel pending bismillah → surah transition
     if (bismillahTimerRef.current) {
       clearTimeout(bismillahTimerRef.current);
@@ -458,7 +467,9 @@ function QuranAudioPlayer() {
       // Retrying play() after 750 ms covers this without affecting normal
       // playback (pendingPlayRef is cleared by isNowPlaying well before 750 ms).
       const retryTarget = player;
-      setTimeout(() => {
+      if (startRetryTimerRef.current) clearTimeout(startRetryTimerRef.current);
+      startRetryTimerRef.current = setTimeout(() => {
+        startRetryTimerRef.current = null;
         if (!mountedRef.current) return;
         if (playerRef.current === retryTarget && pendingPlayRef.current) {
           retryTarget.play();
@@ -546,21 +557,29 @@ function QuranAudioPlayer() {
     if (surahId === null) return;
 
     if (status.didJustFinish) {
-      // If bismillah is still playing (timer hasn't fired yet) and the audio ended
-      // unexpectedly, ignore — the timer will handle the surah transition.
-      if (bismillahPendingRef.current !== null) return;
+      // Bismillah clip finished naturally (short verse-level audio).
+      // Transition to surah immediately and cancel the safety timer.
+      // If the timer already fired first, bismillahPendingRef is null — no-op.
+      if (bismillahPendingRef.current !== null) {
+        const pending = bismillahPendingRef.current;
+        bismillahPendingRef.current = null;
+        if (bismillahTimerRef.current) {
+          clearTimeout(bismillahTimerRef.current);
+          bismillahTimerRef.current = null;
+        }
+        _transitionBismillahToSurahRef.current?.(pending);
+        return;
+      }
 
       const rs = repeatSettingsRef.current;
 
-      // ── DEBUG: log state at every surah finish ───────────────────────────
-      console.log('[QuranRepeat] didJustFinish surah=' + surahId
+      if (__DEV__) console.log('[QuranRepeat] didJustFinish surah=' + surahId
         + ' repeatInterval=' + rs.repeatInterval
         + ' from=' + rs.fromSurahId + ':' + rs.fromVerse
         + ' to=' + rs.toSurahId + ':' + rs.toVerse
         + ' pendingStop=' + pendingStopVerseKeyRef.current
         + ' continuous=' + continuousPlayRef.current
         + ' isRepeat=' + isRepeatRef.current);
-      // ────────────────────────────────────────────────────────────────────
 
       // ── Verse repeat — last verse of surah ───────────────────────────────
       // The verse-transition logic in the position callback never fires for the
@@ -646,19 +665,19 @@ function QuranAudioPlayer() {
       if (pendingStop) {
         const stopSurahId = parseInt(pendingStop.split(':')[0], 10);
         const nextSurahId = surahId + 1;
-        console.log('[CrossSurah] didJustFinish surah=' + surahId + ' nextSurah=' + nextSurahId + ' stopSurah=' + stopSurahId + ' pendingStop=' + pendingStop + ' lafvRef=' + (loadAndPlayFromVerseRef.current !== null ? 'SET' : 'NULL') + ' lapRef=' + (loadAndPlayRef.current !== null ? 'SET' : 'NULL'));
+        if (__DEV__) console.log('[CrossSurah] didJustFinish surah=' + surahId + ' nextSurah=' + nextSurahId + ' stopSurah=' + stopSurahId + ' pendingStop=' + pendingStop + ' lafvRef=' + (loadAndPlayFromVerseRef.current !== null ? 'SET' : 'NULL') + ' lapRef=' + (loadAndPlayRef.current !== null ? 'SET' : 'NULL'));
         if (!isNaN(stopSurahId) && nextSurahId <= stopSurahId && nextSurahId <= 114) {
           if (nextSurahId === stopSurahId) {
             // Reached the target surah — start with bismillah and apply stop timestamp.
             // loadAndPlayFromVerse resets pendingStopVerseKeyRef at its start and then
             // correctly looks up the stop timestamp in the target surah's timings.
             pendingStopVerseKeyRef.current = null;
-            console.log('[CrossSurah] calling LAFV for surah=' + stopSurahId + ' stop=' + pendingStop);
+            if (__DEV__) console.log('[CrossSurah] calling LAFV for surah=' + stopSurahId + ' stop=' + pendingStop);
             loadAndPlayFromVerseRef.current?.(stopSurahId, `BSMLLH_${stopSurahId}`, pendingStop);
           } else {
             // Intermediate surah — advance normally; bismillah is handled by loadAndPlay.
             // pendingStopVerseKeyRef is NOT cleared here so the next didJustFinish sees it.
-            console.log('[CrossSurah] calling loadAndPlay for intermediate surah=' + nextSurahId);
+            if (__DEV__) console.log('[CrossSurah] calling loadAndPlay for intermediate surah=' + nextSurahId);
             loadAndPlayRef.current?.(nextSurahId);
           }
           return;
@@ -879,37 +898,80 @@ function QuranAudioPlayer() {
 
   // ── Commands ───────────────────────────────────────────────────────────────
 
+  // ── Bismillah transition helper ─────────────────────────────────────────────
+  // Shared logic called from BOTH the safety timer and onPlaybackStatusUpdate's
+  // didJustFinish path. Whichever fires first executes the transition; the second
+  // caller finds bismillahPendingRef.current === null and is a no-op.
+
+  // Stored in a ref so onPlaybackStatusUpdate (deps=[]) can call it without
+  // capturing a stale closure. Updated every render to pick up the latest startPlayer.
+  const _transitionBismillahToSurahRef = useRef<((p: BismillahPending) => Promise<void>) | null>(null);
+  _transitionBismillahToSurahRef.current = async (pending: BismillahPending) => {
+    // Kill bismillah player — clear lock screen so the old session doesn't linger.
+    playerSubRef.current?.remove();
+    playerSubRef.current = null;
+    if (playerRef.current) {
+      try { playerRef.current.pause(); } catch {}
+      try { playerRef.current.clearLockScreenControls(); } catch {}
+      try { playerRef.current.remove(); } catch {}
+      playerRef.current = null;
+    }
+
+    // Restore surah timings and set bismillah lock.
+    // The lock prevents findCurrentVerse returning verse 1 at positionMs=0 when
+    // both BSMLLH_ and verse 1 share timestampFrom=0 (common across reciters).
+    verseTimingsRef.current = pending.timings;
+    const bsmllhEntry = pending.timings?.find((t) => t.verseKey === `BSMLLH_${pending.surahId}`);
+    bismillahLockUntilMsRef.current = bsmllhEntry
+      ? Math.max(bsmllhEntry.timestampTo, 3000)
+      : 3000;
+    await startPlayer(pending.uri, pending.surahId, 0);
+  };
+
   // ── Bismillah pre-play helper ───────────────────────────────────────────────
   //
   // QuranCDN chapter audio files do NOT contain Bismillah at the start.
-  // For surahs 2-8, 10-114 we play Al-Fatiha's verse 1:1 (which IS the Bismillah)
+  // For surahs 2-8, 10-114 we play the bismillah clip (Al-Fatiha verse 1:1)
   // before the surah audio. Al-Fatiha (1) and At-Tawbah (9) are exempt.
   //
-  // Flow: play Al-Fatiha from 0 → after verse 1:1 duration → swap to surah audio.
+  // New flow (vs. old):
+  //   OLD: download all of Al-Fatiha → fetch timings → play with setTimeout
+  //   NEW: download/cache a dedicated short clip (~5 s) → play to didJustFinish
+  //
+  // The clip is fetched from the same QuranCDN as chapter audio but at the
+  // verse-level URL derived from the chapter URL (no hardcoded slug table).
+  // The timer stays as a safety net in case the clip is a full chapter fallback
+  // (deriveVerseAudioUrl returned null because the CDN pattern didn't match).
+  // Whichever fires first — didJustFinish or the timer — performs the transition;
+  // the second one is a no-op because bismillahPendingRef is already null.
 
   const startWithBismillah = useCallback(
     async (surahUri: string, surahId: number, surahTimings: VerseTimestamp[] | null) => {
       if (!mountedRef.current) return;
-      // Capture the generation set by the caller (loadAndPlay / loadAndPlayFromVerse).
-      // Do NOT increment here — the caller already did. If this value changes before
-      // any await completes, a newer load call has taken over and this one must abort.
       const myGen = loadGenerationRef.current;
       const reciterId = reciterIdRef.current;
 
-      // Get Al-Fatiha audio (download silently if needed)
-      const fatihaCached = await isSurahDownloaded(reciterId, 1);
-      if (!mountedRef.current || loadGenerationRef.current !== myGen) return;
-      let fatihaUri: string;
-      if (fatihaCached) {
-        fatihaUri = await getAudioUri(reciterId, 1);
+      // Get (or download) the dedicated bismillah clip.
+      // getBismillahAudioUri caches at r{id}_bsml.mp3 — a short verse-level file
+      // when the QuranCDN pattern matches, or the full Al-Fatiha chapter as a fallback.
+      let bsmUri: string;
+      try {
+        bsmUri = await getBismillahAudioUri(reciterId);
+      } catch {
+        // Network failure — try the existing surah-1 path as a last resort
+        const cached = await isBismillahDownloaded(reciterId);
         if (!mountedRef.current || loadGenerationRef.current !== myGen) return;
-      } else {
-        await ensureAudioDir();
-        fatihaUri = await downloadSurahAudio(reciterId, 1);
-        if (!mountedRef.current || loadGenerationRef.current !== myGen) return;
+        if (cached) {
+          bsmUri = await getAudioUri(reciterId, 1);
+        } else {
+          await ensureAudioDir();
+          bsmUri = await downloadSurahAudio(reciterId, 1);
+        }
       }
+      if (!mountedRef.current || loadGenerationRef.current !== myGen) return;
 
-      // Get bismillah duration (verse 1:1 of Al-Fatiha)
+      // For the timer fallback: get verse 1:1 duration from Al-Fatiha timings.
+      // Only needed when bsmUri is a full chapter file (short clip finishes naturally).
       let bsmDurationMs = 5000; // fallback
       try {
         const fatihaTimings = await fetchVerseTimings(reciterId, 1);
@@ -918,7 +980,7 @@ function QuranAudioPlayer() {
       } catch { /* use fallback */ }
       if (!mountedRef.current || loadGenerationRef.current !== myGen) return;
 
-      // Null out verse timings during bismillah — prevents verse sync on Al-Fatiha positions
+      // Null out verse timings during bismillah — prevents verse sync on clip positions
       verseTimingsRef.current = null;
 
       // Set BSMLLH highlight immediately
@@ -926,43 +988,28 @@ function QuranAudioPlayer() {
       lastVerseKeyRef.current = `BSMLLH_${surahId}`;
       setPlaybackVerseRef.current(`BSMLLH_${surahId}`, firstPage);
 
-      // Store pending surah info for the transition
+      // Store pending surah info — consumed by both the timer and didJustFinish.
       bismillahPendingRef.current = { uri: surahUri, surahId, timings: surahTimings };
 
-      // Start Al-Fatiha audio
-      await startPlayer(fatihaUri, surahId, 0);
+      // Start bismillah clip
+      await startPlayer(bsmUri, surahId, 0);
 
-      // Schedule swap to surah audio after bismillah.
-      // Divide by the current playback rate: at 2× speed the audio finishes in
-      // half the real-world time, so the timer must fire proportionally sooner.
+      // Safety timer: fires after verse 1:1 duration in case didJustFinish doesn't
+      // fire first (i.e. bsmUri is a full Al-Fatiha chapter, not a short clip).
+      // Rate-adjusted so 2× speed fires at the correct real-world time.
+      // didJustFinish beats it to the punch when the clip ends naturally.
       const currentRate = RATE_STEPS[rateIndexRef.current] ?? 1;
       const bsmTimerMs  = Math.round(bsmDurationMs / currentRate);
       bismillahTimerRef.current = setTimeout(async () => {
         bismillahTimerRef.current = null;
         const pending = bismillahPendingRef.current;
+        if (!pending) return; // didJustFinish already handled the transition
         bismillahPendingRef.current = null;
-        if (!mountedRef.current || !pending) return;
-
-        // Kill Al-Fatiha player
-        playerSubRef.current?.remove();
-        playerSubRef.current = null;
-        if (playerRef.current) {
-          try { playerRef.current.pause(); } catch {}
-          try { playerRef.current.remove(); } catch {}
-          playerRef.current = null;
-        }
-
-        // Restore surah timings and start surah audio from 0.
-        // Set bismillah lock so BSMLLH_ highlight is kept for at least 3 s
-        // (or until the BSMLLH_ entry's own timestampTo, whichever is later).
-        // Without this, findCurrentVerse immediately returns verse 1 at positionMs=0
-        // because both BSMLLH_ and verse 1 share timestampFrom=0 for most reciters.
-        verseTimingsRef.current = pending.timings;
-        const bsmllhEntry = pending.timings?.find((t) => t.verseKey === `BSMLLH_${pending.surahId}`);
-        bismillahLockUntilMsRef.current = bsmllhEntry
-          ? Math.max(bsmllhEntry.timestampTo, 3000)
-          : 3000;
-        await startPlayer(pending.uri, pending.surahId, 0);
+        if (!mountedRef.current) return;
+        // Use the ref so we always call the latest version of the transition
+        // function, avoiding a forward-reference/stale-closure problem since
+        // _transitionBismillahToSurahRef is defined after startWithBismillah.
+        await _transitionBismillahToSurahRef.current?.(pending);
       }, bsmTimerMs);
     },
     [startPlayer],
@@ -1241,7 +1288,7 @@ function QuranAudioPlayer() {
   // is reached (implementing "Till sidans slut" / "Till surans slut").
   const loadAndPlayFromVerse = useCallback(
     async (surahId: number, startVerseKey: string, stopAtVerseKey: string | null, continuous?: boolean) => {
-      console.log('[LAFV] called surah=' + surahId + ' start=' + startVerseKey + ' stop=' + stopAtVerseKey);
+      if (__DEV__) console.log('[LAFV] called surah=' + surahId + ' start=' + startVerseKey + ' stop=' + stopAtVerseKey);
       // Increment load generation so any in-flight concurrent call becomes stale.
       const myGen = ++loadGenerationRef.current;
       // Pause YouTube live stream — Quran audio takes priority.
@@ -1321,13 +1368,13 @@ function QuranAudioPlayer() {
           if (!isCrossSurahStop && stopAtVerseKey && timings) {
             const stopTiming = timings.find((t) => t.verseKey === stopAtVerseKey);
             stopAtTimestampRef.current = stopTiming?.timestampTo ?? null;
-            console.log('[LAFV] BSMLLH_ branch: stopTiming=' + JSON.stringify(stopTiming) + ' stopAtTs=' + stopAtTimestampRef.current);
+            if (__DEV__) console.log('[LAFV] BSMLLH_ branch: stopTiming=' + JSON.stringify(stopTiming) + ' stopAtTs=' + stopAtTimestampRef.current);
           } else {
-            console.log('[LAFV] BSMLLH_ branch: no stop set (isCross=' + isCrossSurahStop + ' stopKey=' + stopAtVerseKey + ' timings=' + (timings ? timings.length : 'null') + ')');
+            if (__DEV__) console.log('[LAFV] BSMLLH_ branch: no stop set (isCross=' + isCrossSurahStop + ' stopKey=' + stopAtVerseKey + ' timings=' + (timings ? timings.length : 'null') + ')');
           }
-          console.log('[LAFV] calling startWithBismillah for surah=' + surahId);
+          if (__DEV__) console.log('[LAFV] calling startWithBismillah for surah=' + surahId);
           await startWithBismillah(uri, surahId, timings);
-          console.log('[LAFV] startWithBismillah returned for surah=' + surahId);
+          if (__DEV__) console.log('[LAFV] startWithBismillah returned for surah=' + surahId);
           return;
         }
 
@@ -1363,7 +1410,7 @@ function QuranAudioPlayer() {
           }
         }
       } catch (e) {
-        console.log('[LAFV] CAUGHT ERROR surah=' + surahId + ' mounted=' + mountedRef.current + ' currentSurah=' + currentSurahIdRef.current + ' err=' + String(e));
+        if (__DEV__) console.log('[LAFV] CAUGHT ERROR surah=' + surahId + ' mounted=' + mountedRef.current + ' currentSurah=' + currentSurahIdRef.current + ' err=' + String(e));
         if (!mountedRef.current) return;
         // Explicit cancel (user pressed X) or stop() was called — don't show error.
         if (e instanceof DownloadCancelledError || currentSurahIdRef.current === null) return;

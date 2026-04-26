@@ -242,14 +242,7 @@ export default function NextPrayerCard() {
 
   if (!app.prayerTimes || !info) {
     return (
-      <TouchableOpacity
-        activeOpacity={0.75}
-        onPress={() => router.push('/(tabs)/' as any)}
-        style={[styles.card, { backgroundColor: T.card, borderColor: T.border }]}
-      >
-        <Text style={[styles.label, { color: T.textMuted }]}>NÄSTA BÖN</Text>
-        <Text style={[styles.prayerName, { color: T.text, marginTop: 4 }]}>Laddar…</Text>
-      </TouchableOpacity>
+      <View style={[styles.card, styles.cardPlaceholder, { backgroundColor: T.card, borderColor: T.border }]} />
     );
   }
 
@@ -372,6 +365,10 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     shadowOffset: { width: 0, height: 6 },
     elevation: 3,
+  },
+  cardPlaceholder: {
+    height: 118,
+    marginBottom: 12,
   },
   label: {
   fontSize: 10,

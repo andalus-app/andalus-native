@@ -116,6 +116,13 @@ let _fontPromise: Promise<void> | null = null;
 /** True once all 606 fonts are verified on disk. */
 let _fontsFullyCached = false;
 
+/**
+ * Mirrors the pause state set by pauseDownloads() / resumeDownloads().
+ * Passed to preWarmPageFonts() so font file checks/downloads stop during
+ * swipe gestures — exactly like the page-data download queue does.
+ */
+let _downloadsPaused = false;
+
 // ── Global startup entry point ────────────────────────────────────────────────
 
 /**
@@ -274,10 +281,11 @@ async function _doFontDownload(): Promise<void> {
   await preWarmSharedFonts();
 
   // Download all 604 QCF page fonts with concurrency 2.
-  // preWarmPageFonts skips fonts that are already on disk (idempotent).
-  // Each batch of 2 runs in parallel; batches are sequential with a small
-  // yield in between so the JS thread stays responsive.
-  await preWarmPageFonts(1, 604, 2);
+  // Pass _downloadsPaused so the loop suspends during swipe gestures — the same
+  // pause/resume that governs the page-data queue (pauseDownloads / resumeDownloads).
+  // Without this, font file I/O continued at full speed during swipes even while
+  // the page-data queue was paused, competing with the animation frame budget.
+  await preWarmPageFonts(1, 604, 2, () => _downloadsPaused);
 }
 
 // ── Page access ───────────────────────────────────────────────────────────────
@@ -338,11 +346,13 @@ export function prioritize(currentPage: number): void {
 
 /** Pauses the download queue. Call from QuranPager's onScrollBeginDrag. */
 export function pauseDownloads(): void {
+  _downloadsPaused = true;
   pauseQueue();
 }
 
 /** Resumes the download queue. Call from QuranPager's onMomentumScrollEnd. */
 export function resumeDownloads(): void {
+  _downloadsPaused = false;
   resumeQueue();
 }
 
