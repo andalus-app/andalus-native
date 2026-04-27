@@ -664,14 +664,14 @@ function ListRow({ g, count, onPress, T, isDark }: { g: Grupp; count: number; on
 }
 
 // ─── Category detail view (slides over home) ──────────────────────────────────
-function CatDetailView({ g, onClose, onSelectDhikr, favorites, T, isDark }: {
+function CatDetailView({ g, onClose, onSelectDhikr, favorites, initialOpenIdx, T, isDark }: {
   g: Grupp; onClose: () => void;
   onSelectDhikr: (d: DhikrPost, siblings: DhikrPost[]) => void;
-  favorites: string[]; T: any; isDark: boolean;
+  favorites: string[]; initialOpenIdx?: number; T: any; isDark: boolean;
 }) {
   const insets = useSafeAreaInsets();
   const { translateX, edgePan, shadowOpacity, goBack } = useSlideIn(onClose);
-  const [openIdx, setOpenIdx] = useState<number | null>(null);
+  const [openIdx, setOpenIdx] = useState<number | null>(initialOpenIdx ?? null);
   const count = groupCount(g);
 
   return (
@@ -1139,10 +1139,11 @@ export default function DhikrScreen() {
   const insets  = useSafeAreaInsets();
   const router  = useRouter();
   const searchRef = useRef<TextInput>(null);
-  const params  = useLocalSearchParams<{ dhikrId?: string }>();
+  const params  = useLocalSearchParams<{ dhikrId?: string; openGroup?: string; openSection?: string }>();
 
   const [mainTab,  setMainTab]  = useState<'grid' | 'list' | 'saved' | 'wellbeing' | 'search'>('grid');
   const [selGrupp, setSelGrupp] = useState<Grupp | null>(null);
+  const [selGruppInitialOpenIdx, setSelGruppInitialOpenIdx] = useState<number | null>(null);
   const [selDhikr, setSelDhikr] = useState<DhikrPost | null>(null);
   const [siblings, setSiblings] = useState<DhikrPost[]>([]);
   const [searchQ,  setSearchQ]  = useState('');
@@ -1272,6 +1273,20 @@ export default function DhikrScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.dhikrId]);
 
+  // Deep-link from home widgets: open a specific group with an optional pre-expanded section.
+  useEffect(() => {
+    if (!params.openGroup) return;
+    const grupp = GRUPPER.find(g => g.id === params.openGroup);
+    if (!grupp) return;
+    const sectionIdx = params.openSection !== undefined ? parseInt(params.openSection, 10) : null;
+    const timer = setTimeout(() => {
+      setSelGrupp(grupp);
+      setSelGruppInitialOpenIdx(Number.isFinite(sectionIdx) ? sectionIdx : null);
+    }, 80);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.openGroup, params.openSection]);
+
   const saveFavs = (val: string[]) => AsyncStorage.setItem(STORAGE_FAV, JSON.stringify(val));
 
   const toggleFav = useCallback((key: string) => {
@@ -1281,10 +1296,10 @@ export default function DhikrScreen() {
     });
   }, []);
 
-  const goToCat   = (g: Grupp)   => { setSelGrupp(g); };
+  const goToCat   = (g: Grupp, initialOpenIdx?: number) => { setSelGrupp(g); setSelGruppInitialOpenIdx(initialOpenIdx ?? null); };
   const goToDhikr = (d: DhikrPost, sibs: DhikrPost[]) => { setSelDhikr(d); setSiblings(sibs); };
   const closeDhikr = () => { setSelDhikr(null); setSiblings([]); };
-  const closeCat   = () => { setSelGrupp(null); };
+  const closeCat   = () => { setSelGrupp(null); setSelGruppInitialOpenIdx(null); };
 
   const switchTab = (id: typeof mainTab) => { setMainTab(id); };
   const hasBadge  = favorites.length > 0;
@@ -1403,6 +1418,7 @@ export default function DhikrScreen() {
       {selGrupp && (
         <CatDetailView
           g={selGrupp} onClose={closeCat} onSelectDhikr={goToDhikr}
+          initialOpenIdx={selGruppInitialOpenIdx ?? undefined}
           favorites={favorites} T={T} isDark={isDark}
         />
       )}

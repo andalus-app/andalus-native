@@ -15,7 +15,6 @@ import { useRouter } from 'expo-router';
 import { useTheme } from '@/context/ThemeContext';
 import { getDailyHadith } from '@/services/dailyReminder';
 
-const GOLD_DARK = '#cab488';
 const COLLAPSED_HEIGHT = 63;
 
 function todayStr(): string {
@@ -33,7 +32,8 @@ function msUntilMidnight(): number {
 export default function DagensHadithCard() {
   const { theme: T, isDark } = useTheme();
   const router = useRouter();
-  const accentColor = isDark ? GOLD_DARK : T.accent;
+  const titleColor = isDark ? 'rgba(255,255,255,0.72)' : 'rgba(0,0,0,0.68)';
+  const bodyColor  = isDark ? 'rgba(255,255,255,0.90)' : 'rgba(0,0,0,0.86)';
   const [dateKey, setDateKey] = useState<string>(todayStr);
   const opacity = useRef(new Animated.Value(1)).current;
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -128,14 +128,14 @@ export default function DagensHadithCard() {
         {
           backgroundColor: T.card,
           borderColor: T.border,
-          shadowColor: isDark ? '#000' : '#1a1a1a',
-          shadowOpacity: isDark ? 0.08 : 0.16,
-          shadowRadius: isDark ? 12 : 18,
+          shadowColor: '#000',
+          shadowOpacity: isDark ? 0.04 : 0.07,
+          shadowRadius: isDark ? 8 : 10,
         },
       ]}
     >
       <Animated.View style={{ opacity }}>
-        <Text style={[styles.title, { color: T.text }]}>Dagens Hadith</Text>
+        <Text style={[styles.title, { color: titleColor }]}>Dagens Hadith</Text>
 
         {/* Hidden full-height measurer — absolutely positioned, no clipping.
             Reports true line count AND full natural height for the animation. */}
@@ -158,7 +158,7 @@ export default function DagensHadithCard() {
         {/* Animated height container — clips text during animation */}
         <Animated.View style={[styles.textContainer, truncated && { height: animHeight }]}>
           <Text
-            style={[styles.swedish, { color: T.text }]}
+            style={[styles.swedish, { color: bodyColor }]}
             numberOfLines={truncated && !expanded ? 3 : undefined}
           >
             {hadith.svenska}
@@ -174,7 +174,7 @@ export default function DagensHadithCard() {
             activeOpacity={0.7}
             style={styles.expandZone}
           >
-            <Text style={[styles.visaMerLabel, { color: accentColor }]}>
+            <Text style={[styles.visaMerLabel, { color: T.accent }]}>
               {expanded ? 'Visa mindre' : 'Visa mer'}
             </Text>
             <Text style={[styles.source, { color: T.textMuted }]}>
@@ -193,21 +193,21 @@ export default function DagensHadithCard() {
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 0.5,
-    paddingHorizontal: 16,
-    paddingTop: 11,
-    paddingBottom: 11,
-    marginBottom: 11,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    paddingBottom: 10,
+    marginBottom: 16,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
   },
   title: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '700',
     letterSpacing: 0.1,
     textAlign: 'left',
-    marginBottom: 5,
+    marginBottom: 4,
   },
   measuringText: {
     position: 'absolute',

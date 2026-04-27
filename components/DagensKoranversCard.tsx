@@ -149,12 +149,12 @@ export default function DagensKoranversCard() {
         {
           backgroundColor: T.card,
           borderColor: borderSideColor,
-          borderTopColor: accentColor,
-          borderTopWidth: 3.5,
+          borderTopColor: 'rgba(201,168,76,0.78)',
+          borderTopWidth: 1,
           shadowColor: '#000',
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: isDark ? 0.08 : 0.16,
-          shadowRadius: isDark ? 12 : 18,
+          shadowOffset: { width: 0, height: 3 },
+          shadowOpacity: isDark ? 0.05 : 0.09,
+          shadowRadius: isDark ? 10 : 14,
         },
       ]}
     >
@@ -221,9 +221,9 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     borderWidth: 0.5,
     paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 10,
-    marginBottom: 12,
+    paddingTop: 10,
+    paddingBottom: 8,
+    marginBottom: 16,
     elevation: 2,
   },
   dividerRow: {
@@ -277,17 +277,17 @@ const styles = StyleSheet.create({
   },
   swedish: {
     fontSize: 14.5,
-    lineHeight: 22,
+    lineHeight: 24,
     fontWeight: '400',
     textAlign: 'center',
     alignSelf: 'center',
     width: '94%',
   },
   reference: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '500',
     fontStyle: 'italic',
     textAlign: 'center',
-    opacity: 0.62,
+    opacity: 0.70,
   },
 });

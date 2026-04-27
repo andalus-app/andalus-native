@@ -6,6 +6,9 @@ import HidayahLogo from '../../components/HidayahLogo';
 import DagensKoranversCard from '../../components/DagensKoranversCard';
 import NextPrayerCard from '../../components/NextPrayerCard';
 import DagensHadithCard from '../../components/DagensHadithCard';
+import { useCurrentMinute } from '../../hooks/useCurrentMinute';
+import { getHomeV2State } from '../../services/homeV2TimeEngine';
+import { useApp } from '../../context/AppContext';
 import SvgIcon from '../../components/SvgIcon';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -520,6 +523,15 @@ function BookingBellPanel({
   );
 }
 
+const FORTSATT_ITEM_DEFS = {
+  quran:   { title: 'Läs Koranen',         subtitle: 'Öppna Koranen',    icon: 'quran'       as const, route: '/quran'  },
+  rem:     { title: 'Läs åminnelser',       subtitle: 'Hisnul Muslim',   icon: 'dhikr'       as const, route: '/dhikr'  },
+  names:   { title: 'Lär dig Allahs namn', subtitle: 'Asma ul-Husna',  icon: 'allahs-namn' as const, route: '/asmaul' },
+  morning: { title: 'Läs morgon adhkar',    subtitle: 'Morgon dhikr',   icon: 'dhikr'       as const, route: '/dhikr?openGroup=morgon&openSection=0' },
+  evening: { title: 'Läs kvälls adhkar',    subtitle: 'Kvälls dhikr',   icon: 'dhikr'       as const, route: '/dhikr?openGroup=morgon&openSection=1' },
+  umrah:   { title: 'Läs Umrah Guide',      subtitle: 'Förbered din Umrah', icon: 'umrah'   as const, route: '/umrah'  },
+} as const;
+
 export default function HomeScreen() {
   const { theme: T, isDark } = useTheme();
   const router = useRouter();
@@ -530,6 +542,8 @@ export default function HomeScreen() {
 
   const { pendingCount, cancelledCount, pendingBookings, bookingNotifs, totalUnread: bookingUnread, isAdmin, isLoggedIn, dismissNotif, markAllSeen, refresh: refreshBookingNotif } = useBookingNotif();
   const { stream, isLive, isUpcoming, refresh: refreshYoutube } = useYoutubeLive();
+  const now = useCurrentMinute();
+  const { prayerTimes: rawPrayer } = useApp();
   const scrollRef                 = useRef<ScrollView>(null);
   const youtubeCardYRef           = useRef<number>(0);
   // Set to true when a live-notification tap is pending. Triggers scroll either
@@ -567,6 +581,51 @@ export default function HomeScreen() {
   const [nameModalVisible, setNameModalVisible] = useState(false);
   const [nameInput,        setNameInput]        = useState('');
   const nameSlideAnim = useRef(new Animated.Value(-400)).current;
+
+  // ── HomeV2: time-aware greeting + dynamic Fortsätt items ─────────────────
+  const prayerTimesForEngine = useMemo(() => {
+    const parse = (hhmm: string | null | undefined): Date | null => {
+      if (!hhmm) return null;
+      const [h, m] = hhmm.split(':').map(Number);
+      if (isNaN(h) || isNaN(m)) return null;
+      const d = new Date();
+      d.setHours(h, m, 0, 0);
+      return d;
+    };
+    return {
+      fajr:     parse(rawPrayer?.Fajr),
+      shuruq:   parse(rawPrayer?.Sunrise),
+      dhuhr:    parse(rawPrayer?.Dhuhr),
+      maghrib:  parse(rawPrayer?.Maghrib),
+      isha:     parse(rawPrayer?.Isha),
+      midnight: parse(rawPrayer?.Midnight),
+    };
+  }, [rawPrayer]);
+
+  const homeV2State = useMemo(
+    () => getHomeV2State(now, prayerTimesForEngine, preferredName),
+    [now, prayerTimesForEngine, preferredName],
+  );
+
+  const isUmrahSeason = useMemo(() => {
+    const m = now.getMonth() + 1;
+    const d = now.getDate();
+    return m > 8 || (m === 8 && d >= 25) || m < 4 || (m === 4 && d < 7);
+  }, [now]);
+
+  const fortsattItems = useMemo(() => {
+    const mapped = homeV2State.items.flatMap(item => {
+      if (item.id === 'quran' && isUmrahSeason) return [{ id: 'umrah', ...FORTSATT_ITEM_DEFS.umrah }];
+      const def = FORTSATT_ITEM_DEFS[item.id as keyof typeof FORTSATT_ITEM_DEFS];
+      return def ? [{ id: item.id, ...def }] : [];
+    });
+    // Adhkar (morning/evening) is always first so the primary card is always position 0.
+    return mapped.sort((a, b) => {
+      const aP = a.id === 'morning' || a.id === 'evening' ? 0 : 1;
+      const bP = b.id === 'morning' || b.id === 'evening' ? 0 : 1;
+      return aP - bP;
+    });
+  }, [homeV2State.items, isUmrahSeason]);
 
   const closeNameModal = useCallback(() => {
     Animated.timing(nameSlideAnim, { toValue: -400, duration: 220, easing: Easing.in(Easing.quad), useNativeDriver: true }).start(() => setNameModalVisible(false));
@@ -923,15 +982,21 @@ export default function HomeScreen() {
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 120, flexGrow: 1 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={T.accent} />}
       >
+        {/* Nästa bön */}
+        <NextPrayerCard />
+
         {/* ── Greeting / Home-top banner (crossfade) ── */}
-        <View style={{ marginBottom: 10, alignSelf: 'stretch' }}>
+        <View style={{ marginTop: -5, marginBottom: 5, alignSelf: 'stretch' }}>
           {homeTopBanner ? (
             // When a home-top banner is active: slide out left, new slides in from right
             <View style={{ position: 'relative', overflow: 'hidden' }}>
               {/* Greeting layer */}
               <Animated.View style={{ transform: [{ translateX: greetingX }], alignItems: 'center' }} pointerEvents="box-none">
                 <Text style={{ fontSize: 22, fontWeight: '700', color: T.text, letterSpacing: -0.2, textAlign: 'center', alignSelf: 'stretch' }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
-                  {preferredName ? `As-salāmo ʿalaykom, ${preferredName}` : 'As-salāmo ʿalaykom'}
+                  {homeV2State.greeting}
+                </Text>
+                <Text style={{ fontSize: 13, color: T.textMuted, textAlign: 'center', marginTop: 2 }}>
+                  {homeV2State.subtitle}
                 </Text>
                 {preferredName === null && (
                   <TouchableOpacity activeOpacity={0.6} onPress={openNameModal} hitSlop={{ top: 4, bottom: 8, left: 16, right: 16 }}>
@@ -964,7 +1029,10 @@ export default function HomeScreen() {
             // No banner — plain greeting
             <View style={{ alignItems: 'center' }}>
               <Text style={{ fontSize: 22, fontWeight: '700', color: T.text, letterSpacing: -0.2, textAlign: 'center', alignSelf: 'stretch' }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
-                {preferredName ? `As-salāmo ʿalaykom, ${preferredName}` : 'As-salāmo ʿalaykom'}
+                {homeV2State.greeting}
+              </Text>
+              <Text style={{ fontSize: 13, color: T.textMuted, textAlign: 'center', marginTop: 2 }}>
+                {homeV2State.subtitle}
               </Text>
               {preferredName === null && (
                 <TouchableOpacity activeOpacity={0.6} onPress={openNameModal} hitSlop={{ top: 4, bottom: 8, left: 16, right: 16 }}>
@@ -980,42 +1048,17 @@ export default function HomeScreen() {
         {/* Dagens Koranvers */}
         <DagensKoranversCard />
 
-        {/* Nästa bön */}
-        <NextPrayerCard />
-
         {/* Dagens Hadith */}
         <DagensHadithCard />
 
-        {/* ── Fortsätt ── */}
+        {/* ── Fortsätt ── (items ordered by homeV2TimeEngine based on prayer time) */}
         {(() => {
           // 2 full cards + ~40 px peek of third card, aligned to screen edge.
           // marginHorizontal: -16 breaks out of the parent ScrollView's paddingHorizontal.
           const CARD_W = Math.floor((screenWidth - 72) / 2); // ~159 px on 390 w
           const GAP    = 8;
-
-          // Show Umrah Guide from Aug 25 until Apr 7 the following year.
-          // Outside that window, show Koranen.
-          const _now   = new Date();
-          const _month = _now.getMonth() + 1; // 1-based
-          const _day   = _now.getDate();
-          const _showUmrah =
-            (_month > 8) ||
-            (_month === 8 && _day >= 25) ||
-            (_month < 4) ||
-            (_month === 4 && _day < 7);
-
-          const _firstCard = _showUmrah
-            ? { title: 'Läs Umrah Guide', subtitle: 'Förbered din Umrah', icon: 'umrah' as const, route: '/umrah' as const }
-            : { title: 'Läs Koranen',     subtitle: 'Öppna Koranen',      icon: 'quran' as const, route: '/quran' as const };
-
-          const ITEMS = [
-            _firstCard,
-            { title: 'Läs åminnelser',      subtitle: 'Hisnul Muslim',    icon: 'dhikr'       as const, route: '/dhikr'  as const },
-            { title: 'Lär dig Allahs namn', subtitle: 'Asma ul-Husna',   icon: 'allahs-namn' as const, route: '/asmaul' as const },
-          ];
-
           return (
-            <View style={{ marginTop: 0, marginBottom: 4 }}>
+            <View style={{ marginTop: 8, marginBottom: 4 }}>
               <Text style={{
                 fontSize: 12, fontWeight: '600', color: T.textMuted,
                 letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 11,
@@ -1024,55 +1067,86 @@ export default function HomeScreen() {
               </Text>
 
               {/* Negative margin lets the scroll row bleed to screen edges */}
-              {/* paddingBottom 22 gives the shadow (offset 3 + radius 10–14) room to
-                  breathe. marginBottom matches so no extra whitespace is added. */}
               <View style={{ marginHorizontal: -16, marginTop: -18, marginBottom: -22 }}>
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
                   decelerationRate="fast"
-                  // Snap[0]: card 1+2 visible, card 3 peeks.
-                  // Snap[1]: iOS clamps to max offset → cards 2+3 fully visible.
                   snapToOffsets={[0, CARD_W + GAP]}
                   snapToAlignment="start"
                   contentContainerStyle={{ paddingLeft: 16, paddingRight: 20, paddingTop: 18, paddingBottom: 22 }}
                 >
-                  {ITEMS.map((item, index) => (
-                    <TouchableOpacity
-                      key={item.route}
-                      activeOpacity={0.7}
-                      onPress={() => router.push(item.route as any)}
-                      style={{
-                        width: CARD_W,
-                        backgroundColor: T.card,
-                        borderRadius: 14,
-                        borderWidth: 0.5,
-                        borderColor: T.border,
-                        paddingHorizontal: 12,
-                        paddingVertical: 9,
-                        marginRight: index < ITEMS.length - 1 ? GAP : 0,
-                        shadowColor: '#000',
-                        shadowOffset: { width: 0, height: 3 },
-                        shadowOpacity: isDark ? 0.08 : 0.15,
-                        shadowRadius: isDark ? 10 : 14,
-                      }}
-                    >
-                      <View style={{
-                        width: 26, height: 26, borderRadius: 8,
-                        backgroundColor: T.accentGlow,
-                        alignItems: 'center', justifyContent: 'center',
-                        marginBottom: 7,
-                      }}>
-                        <SvgIcon name={item.icon} size={15} color={T.accent} />
-                      </View>
-                      <Text style={{ fontSize: 13, fontWeight: '600', color: T.text, lineHeight: 18 }}>
-                        {item.title}
-                      </Text>
-                      <Text style={{ fontSize: 11, fontWeight: '400', color: T.textMuted, marginTop: 2 }}>
-                        {item.subtitle}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
+                  {fortsattItems.map((item, index) => {
+                    const isPrimary    = item.id === 'morning' || item.id === 'evening';
+                    const showBadge    = isPrimary;
+                    const ADHKAR_GOLD  = '#c9a84c';
+                    const primBg       = isDark ? 'rgba(201,168,76,0.10)' : 'rgba(36,100,93,0.06)';
+                    const primBorder   = isDark ? 'rgba(201,168,76,0.15)' : 'rgba(36,100,93,0.14)';
+                    const primIconBg   = isDark ? 'rgba(201,168,76,0.09)' : T.accentGlow;
+                    const primIconClr  = isDark ? ADHKAR_GOLD : T.accent;
+                    const badgeBg      = isDark ? 'rgba(201,168,76,0.09)' : T.accentGlow;
+                    return (
+                      <TouchableOpacity
+                        key={item.route + index}
+                        activeOpacity={0.7}
+                        onPress={() => router.push(item.route as any)}
+                        style={{
+                          width: CARD_W,
+                          backgroundColor: isPrimary ? primBg : T.card,
+                          borderRadius: 14,
+                          borderWidth: 0.5,
+                          borderColor: isPrimary ? primBorder : T.border,
+                          paddingHorizontal: 12,
+                          paddingTop: 10,
+                          paddingBottom: isPrimary ? 14 : 10,
+                          marginRight: index < fortsattItems.length - 1 ? GAP : 0,
+                          shadowColor: '#000',
+                          shadowOffset: { width: 0, height: 3 },
+                          shadowOpacity: isDark ? 0.08 : 0.15,
+                          shadowRadius: isDark ? 10 : 14,
+                        }}
+                      >
+                        {/* Icon */}
+                        <View style={{
+                          width: isPrimary ? 30 : 28,
+                          height: isPrimary ? 30 : 28,
+                          borderRadius: isPrimary ? 9 : 8,
+                          backgroundColor: isPrimary ? primIconBg : T.accentGlow,
+                          alignItems: 'center', justifyContent: 'center',
+                          marginBottom: 7,
+                          opacity: isPrimary ? 0.80 : 1,
+                        }}>
+                          <SvgIcon
+                            name={item.icon}
+                            size={isPrimary ? 17 : 15}
+                            color={isPrimary ? primIconClr : T.accent}
+                          />
+                        </View>
+                        <Text style={{ fontSize: isPrimary ? 13 : 12, fontWeight: '600', color: T.text, lineHeight: 17 }}>
+                          {item.title}
+                        </Text>
+                        {showBadge ? (
+                          <View style={{
+                            alignSelf: 'flex-start',
+                            marginTop: 2,
+                            marginLeft: -4,
+                            paddingHorizontal: 4, paddingVertical: 1,
+                            borderRadius: 4,
+                            backgroundColor: badgeBg,
+                            opacity: 0.62,
+                          }}>
+                            <Text style={{ fontSize: 8, fontWeight: '600', color: primIconClr, letterSpacing: 0.2 }}>
+                              Bästa tiden nu
+                            </Text>
+                          </View>
+                        ) : (
+                          <Text style={{ fontSize: 10, fontWeight: '400', color: T.textMuted, marginTop: 2 }}>
+                            {item.subtitle}
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
                 </ScrollView>
               </View>
             </View>

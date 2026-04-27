@@ -200,6 +200,8 @@ function AppContent({ onFontsReady }: { onFontsReady: () => void }) {
         <Stack.Screen name="umrah" options={{ gestureEnabled: false }} />
         {/* Hadj Guide: edge-only swipe back — prevents accidental dismiss while navigating steps */}
         <Stack.Screen name="hajj" options={{ fullScreenGestureEnabled: false }} />
+        {/* Hadith: edge-only swipe back — inner Stack handles swipe between list and detail */}
+        <Stack.Screen name="hadith" options={{ fullScreenGestureEnabled: false }} />
       </Stack>
 
       {/* YouTube background audio player — always mounted outside the tab/stack

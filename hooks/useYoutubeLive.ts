@@ -65,7 +65,7 @@ async function fetchStream(): Promise<YTStream | null> {
     headers: { Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
   });
   if (!res.ok) {
-    console.warn('[YT] endpoint error:', res.status);
+    console.log('[YT] endpoint error:', res.status);
     return null;
   }
   const json = await res.json();
