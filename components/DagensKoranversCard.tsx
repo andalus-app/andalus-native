@@ -41,7 +41,7 @@ function AccentDivider({ color, small }: { color: string; small?: boolean }) {
   );
 }
 
-export default function DagensKoranversCard() {
+function DagensKoranversCard() {
   const { theme: T, isDark } = useTheme();
   const router = useRouter();
   const [dateKey, setDateKey] = useState<string>(todayStr);
@@ -215,6 +215,7 @@ export default function DagensKoranversCard() {
     </TouchableOpacity>
   );
 }
+export default React.memo(DagensKoranversCard);
 
 const styles = StyleSheet.create({
   card: {

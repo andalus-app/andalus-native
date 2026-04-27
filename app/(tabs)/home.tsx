@@ -613,11 +613,16 @@ export default function HomeScreen() {
     return m > 8 || (m === 8 && d >= 25) || m < 4 || (m === 4 && d < 7);
   }, [now]);
 
+  // Stable string key derived from item IDs — homeV2State.items is a new reference
+  // every minute (now dep), but content only changes at prayer-time period boundaries.
+  // Keying on the ID string prevents fortsattItems from recomputing every 60 s.
+  const homeItemsKey = homeV2State.items.map(i => i.id).join(',');
   const fortsattItems = useMemo(() => {
-    const mapped = homeV2State.items.flatMap(item => {
-      if (item.id === 'quran' && isUmrahSeason) return [{ id: 'umrah', ...FORTSATT_ITEM_DEFS.umrah }];
-      const def = FORTSATT_ITEM_DEFS[item.id as keyof typeof FORTSATT_ITEM_DEFS];
-      return def ? [{ id: item.id, ...def }] : [];
+    const itemIds = homeItemsKey.split(',');
+    const mapped = itemIds.flatMap(id => {
+      if (id === 'quran' && isUmrahSeason) return [{ id: 'umrah', ...FORTSATT_ITEM_DEFS.umrah }];
+      const def = FORTSATT_ITEM_DEFS[id as keyof typeof FORTSATT_ITEM_DEFS];
+      return def ? [{ id, ...def }] : [];
     });
     // Adhkar (morning/evening) is always first so the primary card is always position 0.
     return mapped.sort((a, b) => {
@@ -625,7 +630,12 @@ export default function HomeScreen() {
       const bP = b.id === 'morning' || b.id === 'evening' ? 0 : 1;
       return aP - bP;
     });
-  }, [homeV2State.items, isUmrahSeason]);
+  }, [homeItemsKey, isUmrahSeason]);
+
+  // Stable snap offsets — new array every render would cause the native ScrollView
+  // to recalculate snap points every minute. Screenwidth never changes mid-session.
+  const FORTSATT_CARD_W = useMemo(() => Math.floor((screenWidth - 72) / 2), [screenWidth]);
+  const fortsattSnapOffsets = useMemo(() => [0, FORTSATT_CARD_W + 8], [FORTSATT_CARD_W]);
 
   const closeNameModal = useCallback(() => {
     Animated.timing(nameSlideAnim, { toValue: -400, duration: 220, easing: Easing.in(Easing.quad), useNativeDriver: true }).start(() => setNameModalVisible(false));
@@ -1053,10 +1063,7 @@ export default function HomeScreen() {
 
         {/* ── Fortsätt ── (items ordered by homeV2TimeEngine based on prayer time) */}
         {(() => {
-          // 2 full cards + ~40 px peek of third card, aligned to screen edge.
-          // marginHorizontal: -16 breaks out of the parent ScrollView's paddingHorizontal.
-          const CARD_W = Math.floor((screenWidth - 72) / 2); // ~159 px on 390 w
-          const GAP    = 8;
+          const GAP = 8;
           return (
             <View style={{ marginTop: 8, marginBottom: 4 }}>
               <Text style={{
@@ -1072,7 +1079,7 @@ export default function HomeScreen() {
                   horizontal
                   showsHorizontalScrollIndicator={false}
                   decelerationRate="fast"
-                  snapToOffsets={[0, CARD_W + GAP]}
+                  snapToOffsets={fortsattSnapOffsets}
                   snapToAlignment="start"
                   contentContainerStyle={{ paddingLeft: 16, paddingRight: 20, paddingTop: 18, paddingBottom: 22 }}
                 >
@@ -1087,11 +1094,11 @@ export default function HomeScreen() {
                     const badgeBg      = isDark ? 'rgba(201,168,76,0.09)' : T.accentGlow;
                     return (
                       <TouchableOpacity
-                        key={item.route + index}
+                        key={item.id}
                         activeOpacity={0.7}
                         onPress={() => router.push(item.route as any)}
                         style={{
-                          width: CARD_W,
+                          width: FORTSATT_CARD_W,
                           backgroundColor: isPrimary ? primBg : T.card,
                           borderRadius: 14,
                           borderWidth: 0.5,

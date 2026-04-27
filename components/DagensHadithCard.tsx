@@ -29,7 +29,7 @@ function msUntilMidnight(): number {
   return midnight.getTime() - now.getTime();
 }
 
-export default function DagensHadithCard() {
+function DagensHadithCard() {
   const { theme: T, isDark } = useTheme();
   const router = useRouter();
   const titleColor = isDark ? 'rgba(255,255,255,0.72)' : 'rgba(0,0,0,0.68)';
@@ -190,6 +190,7 @@ export default function DagensHadithCard() {
     </TouchableOpacity>
   );
 }
+export default React.memo(DagensHadithCard);
 
 const styles = StyleSheet.create({
   card: {
