@@ -17,7 +17,7 @@ import { getDailyQuranVerse } from '@/services/dailyReminder';
 import { prewarmDailyVerseTarget } from '@/services/quranPrewarmService';
 
 const GOLD_DARK = '#cab488';
-const COLLAPSED_HEIGHT = 66;
+const COLLAPSED_HEIGHT = 78; // 3 lines × lineHeight(24) + 6px buffer
 
 function todayStr(): string {
   const d = new Date();
@@ -179,8 +179,10 @@ function DagensKoranversCard() {
           {verse.swedish}
         </Text>
 
-        {/* Animated height container — clips text to animated height */}
-        <Animated.View style={[styles.verseContainer, truncated && { height: animHeight }]}>
+        {/* Animated height container — clips text only when truncated */}
+        <Animated.View
+          style={truncated ? [styles.verseContainerTruncated, { height: animHeight }] : undefined}
+        >
           <Text
             style={[styles.swedish, { color: verseColor }]}
             numberOfLines={truncated && !expanded ? 3 : undefined}
@@ -258,14 +260,11 @@ const styles = StyleSheet.create({
   measuringText: {
     position: 'absolute',
     opacity: 0,
-    left: 0,
-    right: 0,
     top: 0,
     pointerEvents: 'none',
   },
-  verseContainer: {
+  verseContainerTruncated: {
     overflow: 'hidden',
-    height: COLLAPSED_HEIGHT,
   },
   expandZone: {
     paddingTop: 4,
