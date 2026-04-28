@@ -205,7 +205,7 @@ function DagensKoranversCard() {
               {expanded ? 'Visa mindre' : 'Visa mer'}
             </Text>
             <Text style={[styles.reference, { color: verseColor }]}>
-              {verse.surahName} · {verse.surahNumber}:{verse.ayahNumber}
+              {verse.surahName} · {verse.displayRef}
             </Text>
           </TouchableOpacity>
         ) : (
@@ -223,7 +223,7 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: 18,
     borderWidth: 0.5,
-    paddingHorizontal: 20,
+    paddingHorizontal: 14,
     paddingTop: 10,
     paddingBottom: 8,
     marginBottom: 16,
@@ -267,7 +267,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   expandZone: {
-    paddingTop: 4,
+    marginTop: -6,
   },
   visaMerLabel: {
     fontSize: 12,
@@ -280,8 +280,6 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     fontWeight: '400',
     textAlign: 'center',
-    alignSelf: 'center',
-    width: '94%',
   },
   reference: {
     fontSize: 12,

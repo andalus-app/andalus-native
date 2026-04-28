@@ -921,7 +921,7 @@ The `ios/` directory was completely empty — no `Podfile`, no `AppDelegate.swif
 | When to use | Never for React Native / Expo apps | Always — this is the correct entry point |
 | What happens if wrong | CocoaPods modules missing, `No such module` errors | Builds correctly |
 
-**Rule: Always open `ios/AndalusApp.xcworkspace`, never `ios/AndalusApp.xcodeproj`.**
+**Rule: Always open `ios/Hidayah.xcworkspace`, never `ios/Hidayah.xcodeproj`.**
 
 #### `pod install` vs `expo prebuild --clean`
 
@@ -957,7 +957,7 @@ npx expo prebuild --clean
 cd ios && pod install && cd ..
 
 # 3. Open the workspace (NOT .xcodeproj) in Xcode
-open ios/AndalusApp.xcworkspace
+open ios/Hidayah.xcworkspace
 ```
 
 Then in Xcode: select a simulator or device, press ▶ (Run).
@@ -991,10 +991,10 @@ npx expo run:ios
 After running `expo prebuild --clean` and `pod install`:
 
 - [ ] `ios/Podfile` exists
-- [ ] `ios/AndalusApp.xcworkspace` exists
+- [ ] `ios/Hidayah.xcworkspace` exists
 - [ ] `ios/Pods/` directory is populated
-- [ ] `ios/AndalusApp/AppDelegate.swift` exists and contains `ExpoAppDelegate` (for Expo SDK 50+)
-- [ ] Opening `ios/AndalusApp.xcworkspace` in Xcode shows no red errors in the project navigator
+- [ ] `ios/Hidayah/AppDelegate.swift` exists and contains `ExpoAppDelegate` (for Expo SDK 50+)
+- [ ] Opening `ios/Hidayah.xcworkspace` in Xcode shows no red errors in the project navigator
 - [ ] Xcode → Product → Build succeeds
 - [ ] App launches on simulator
 

@@ -1255,7 +1255,7 @@ export default function DhikrScreen() {
     });
   }, []);
 
-  // Deep-link from DailyReminderCard: open the specific post directly.
+  // Deep-link via dhikrId param: open the specific post directly.
   // Uses a small delay so the screen layout is ready before state updates.
   useEffect(() => {
     if (!params.dhikrId) return;
