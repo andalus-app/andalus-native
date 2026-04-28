@@ -227,9 +227,23 @@ function QuranPager() {
     // during the animated scroll (prevents header from flickering 567→568→567).
     isProgrammaticScrollRef.current = true;
     const index = TOTAL_PAGES - currentPage;
+    // Pause background font/data downloads so the scroll animation and the
+    // target-page font loading (Font.loadAsync) have the full JS thread budget.
+    // This prevents the JS-thread-heavy background pre-caching from competing
+    // with the navigation animation and causing the "app feels sluggish" issue.
+    pauseDownloads();
     listRef.current?.scrollToIndex({ index, animated: true });
-    // Clear the flag after the animation window (typical scroll animation ≤ 400ms).
-    setTimeout(() => { isProgrammaticScrollRef.current = false; }, 500);
+    // Clear programmatic flag after animation window (≤ 400 ms).
+    const programmaticTimer = setTimeout(() => { isProgrammaticScrollRef.current = false; }, 500);
+    // Resume background downloads 200 ms after animation ends — gives the
+    // target-page font loading (triggered by QuranVerseView) time to start and
+    // register with Core Text before the background queue resumes.
+    const resumeTimer = setTimeout(() => resumeDownloads(), 700);
+    return () => {
+      clearTimeout(programmaticTimer);
+      clearTimeout(resumeTimer);
+      resumeDownloads();
+    };
   }, [currentPage]);
 
   // ── Re-align after rotation ───────────────────────────────────────────────

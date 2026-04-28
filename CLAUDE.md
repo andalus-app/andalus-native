@@ -607,14 +607,36 @@ Navigating to `/quran?verseKey=X:Y` (e.g. from Dagens Koranvers) caused a black 
 2. `QuranScreen` (inside the provider) runs the API fetch in `useEffect` and calls `goToVerse(verseKey, exactPage)` when it resolves. `goToVerse` navigates the pager to the correct page and sets `pendingVerseHighlight` so `QuranVerseView` scrolls+flashes the verse.
 3. An 8-second `AbortController` timeout prevents the fetch from hanging forever. If it times out, the user stays on the approx page silently — no error state.
 
-**Behavioral change vs. old code:**
-- Old: `initialVerseKey` was passed to `QuranProvider` → `activeVerseKey` was set on mount → verse showed a permanent highlight slab until audio started. 
-- New: `activeVerseKey` starts `null` → `pendingVerseHighlight` fires via `goToVerse` → verse flashes then returns to normal. This is better UX.
-
 **Permanent rules:**
 - NEVER block `QuranProvider` mounting on a network call. Always start with `approxPageForVerseKey()` and resolve asynchronously inside `QuranScreen` via `goToVerse`.
 - ALWAYS add an `AbortController` + timeout to the page-resolution fetch — no unbounded waits.
 - NEVER pass `initialVerseKey` to `QuranProvider` for deep-link navigation; use `goToVerse` instead.
+
+---
+
+### `app/quran.tsx` + `quranPrewarmService.ts` — intermittent scroll failure on Dagens Koranvers — fixed 2026-04-28
+
+Tapping "Dagens Koranvers" failed to scroll to the correct verse ~60-70% of the time. Worked on some taps, not others (e.g. works on tap 3, 6, 8 but not 1, 2, 4, 5, 7). App also became sluggish inside the Quran reader.
+
+**Root causes:**
+1. **API abort on every retap (primary cause):** The old effect's `return () => controller.abort()` cleanup fired whenever `deepLinkNonce` changed (each tap). This aborted the exact-page API fetch every time, so it never resolved during rapid taps. The user stayed on `approxPage` (surah first page). For mid-surah verses (e.g. 2:255 on page 42, approxPage=2), the verse wasn't on that page. The 1.6s retry loop gave up → no scroll.
+2. **Prewarm used wrong page:** `quranPrewarmService` pre-warmed fonts only for `surah.firstPage ± 2`. Mid-surah verses needing a different page got no font pre-warm benefit.
+3. **No exact-page cache:** Every tap made a fresh API call. The first tap to complete its fetch had to fight against the next tap aborting it.
+4. **Background downloads during navigation:** `pauseDownloads()` was only called on user drag gestures. Programmatic `scrollToIndex()` navigation competed with background font downloads.
+
+**Fixes:**
+1. **Module-level in-flight tracker** (`_inflightVerseKey`, `_inflightController`): retaps for the SAME verse reuse the existing fetch instead of aborting it (priority 2 in the effect). The fetch's AbortController is no longer returned from the effect cleanup.
+2. **Exact-page cache** (shared between `quranPrewarmService.ts` and `app/quran.tsx`): `getCachedExactPage()` / `setCachedExactPage()`. After the first successful fetch, all subsequent taps for the same verse skip the network entirely (priority 1).
+3. **Prewarm now fetches exact page:** `_doPrewarm` in `quranPrewarmService.ts` makes a real API call for the exact word-level page, caches it, and pre-warms fonts for the EXACT page ± 2. By the time the user taps, the cache is populated and the correct page fonts are loaded.
+4. **Pause downloads during programmatic navigation:** `pauseDownloads()` called in the `currentPage` effect in `QuranPager.tsx` when a programmatic `scrollToIndex` fires. `resumeDownloads()` called 700ms later (animation + target-page font-load head start).
+5. **Wider scroll retry window:** `QuranVerseView` retry loop extended from 20×80ms (1.6s) to 37×80ms (3s) as a safety net for slow devices.
+
+**Permanent rules:**
+- NEVER return `controller.abort()` from a `useEffect` cleanup for an API fetch that must survive retaps. Use module-level state to track in-flight requests instead.
+- NEVER start a new fetch for the same verseKey when one is already in-flight. Check `_inflightVerseKey === deepLinkVerseKey` first.
+- ALWAYS cache the exact page after the first successful API response so subsequent navigations are instant.
+- ALWAYS call `pauseDownloads()` before programmatic FlatList navigation and `resumeDownloads()` after the animation window.
+- `quranPrewarmService._doPrewarm` must fetch the exact page AND pre-warm its font range. Pre-warming only the approxPage is insufficient for mid-surah verses.
 
 ---
 

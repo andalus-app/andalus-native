@@ -1006,7 +1006,7 @@ function QuranVerseView({ pageNumber, width, height, isActive }: Props) {
         clearPendingVerseHighlight();
         scrollRef.current.scrollTo({ y: Math.max(0, verseY - scrollOffsetRef.current), animated: true });
         setFlashingVerseKey(verseKey);
-      } else if (attempts < 20) { // 20 × 80ms = 1.6s window (up from 15 × 80ms = 1.2s)
+      } else if (attempts < 37) { // 37 × 80ms = ~3 s window — handles slow font loading
         attempts++;
         flashTimerRef.current = setTimeout(tryScrollAndFlash, 80);
       } else {

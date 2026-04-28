@@ -21,6 +21,7 @@ import * as ScreenOrientation from 'expo-screen-orientation';
 import { QuranProvider } from '../context/QuranContext';
 import { getCachedLastPage } from '../services/quranLastPage';
 import { SURAH_INDEX } from '../data/surahIndex';
+import { getCachedExactPage, setCachedExactPage } from '../services/quranPrewarmService';
 
 import { useTheme } from '../context/ThemeContext';
 import { useQuranContext } from '../context/QuranContext';
@@ -59,6 +60,15 @@ function serialOrientation(fn: () => Promise<void>) {
   _orientationChain = _orientationChain.then(fn, fn);
 }
 
+// Module-level exact-page fetch state.
+// Kept outside the component so multiple retaps for the SAME verse share one
+// fetch rather than aborting and restarting it. This is the primary fix for the
+// intermittent "didn't scroll" bug: rapid taps used to abort the previous fetch,
+// so the exact page was never resolved and the user stayed on the approx page.
+let _inflightVerseKey: string | null = null;
+let _inflightController: AbortController | null = null;
+let _inflightTimeoutId: ReturnType<typeof setTimeout> | null = null;
+
 // ── Inner screen (consumes context) ──────────────────────────────────────────
 
 function QuranScreen({ deepLinkVerseKey, deepLinkNonce }: { deepLinkVerseKey?: string; deepLinkNonce?: string }) {
@@ -71,6 +81,13 @@ function QuranScreen({ deepLinkVerseKey, deepLinkNonce }: { deepLinkVerseKey?: s
   // always re-trigger the deep-link fetch and re-set pendingVerseHighlight, regardless
   // of whether the QuranProvider was remounted or is being reused from the stack.
   const handledNavKeyRef = useRef('');
+
+  // Guards goToVerse calls inside async fetch .then() so they don't fire after unmount.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   useEffect(() => {
     Animated.timing(chromeAnim, {
@@ -89,12 +106,22 @@ function QuranScreen({ deepLinkVerseKey, deepLinkNonce }: { deepLinkVerseKey?: s
   // Word-level page_number (via code_v2 field) is accurate; verse-level field
   // is not — see CLAUDE.md "Previously Fixed Bugs / mushafTimingService.ts".
   //
-  // If the network is unavailable or slow, the timeout aborts and the user stays
-  // on the approximate page (surah's first page) with no error — they can scroll manually.
+  // ── Rapid-tap fix ─────────────────────────────────────────────────────────────
+  // Each tap from DagensKoranversCard carries a new nonce, re-triggering this
+  // effect. The previous design aborted the API fetch on every retap (via effect
+  // cleanup returning controller.abort()), which meant the exact page was never
+  // resolved during rapid taps — the user stayed on approxPage (surah first page)
+  // and the 1.6 s retry loop gave up without scrolling.
   //
-  // The nonce in deepLinkNonce ensures this effect re-runs on every tap from
-  // DagensKoranversCard even when the verseKey is the same and the Quran screen
-  // was not unmounted (reused from the navigation stack).
+  // Fix: the API fetch is managed by module-level state (_inflightController /
+  // _inflightVerseKey) instead of the effect's cleanup return. This decouples the
+  // fetch lifecycle from React's re-render cycle. Retaps for the SAME verseKey
+  // reuse the in-flight fetch (priority 2 below) rather than aborting it.
+  //
+  // Priority chain on every tap:
+  //   1. Exact page already in cache (prewarm or previous tap) → instant, no fetch
+  //   2. Fetch for this verseKey already in flight → refresh approxPage highlight, wait
+  //   3. First tap (or new verseKey) → start fetch, navigate to approxPage meanwhile
   useEffect(() => {
     if (!deepLinkVerseKey) return;
 
@@ -107,16 +134,49 @@ function QuranScreen({ deepLinkVerseKey, deepLinkNonce }: { deepLinkVerseKey?: s
 
     if (__DEV__) console.log('[QuranTargetScroll] received target', deepLinkVerseKey, 'nonce', deepLinkNonce);
 
-    // Navigate to the approximate page immediately (surah first page, no network needed).
-    // This re-sets pendingVerseHighlight even if the QuranProvider was not remounted
-    // (i.e. the screen was reused from the stack and its pendingVerseHighlight is null).
+    // ── Priority 1: cache hit ──────────────────────────────────────────────────
+    // Populated by quranPrewarmService (runs on home screen) or a previous tap.
+    // Skip the network entirely.
+    const cached = getCachedExactPage(deepLinkVerseKey);
+    if (cached) {
+      if (__DEV__) console.log('[QuranTargetScroll] cache hit → page', cached);
+      goToVerse(deepLinkVerseKey, cached);
+      return;
+    }
+
+    // ── Priority 2: same verseKey fetch already in flight ─────────────────────
+    // A previous tap started this fetch. Refresh the pending highlight so the
+    // correct page view picks up the scroll when the fetch completes.
+    if (_inflightVerseKey === deepLinkVerseKey) {
+      if (__DEV__) console.log('[QuranTargetScroll] fetch in-flight, refreshing approxPage highlight');
+      goToVerse(deepLinkVerseKey, approxPageForVerseKey(deepLinkVerseKey));
+      return;
+    }
+
+    // ── Priority 3: start a new fetch ─────────────────────────────────────────
+    // Abort any in-flight fetch for a DIFFERENT verse (user changed the target).
+    if (_inflightController !== null) {
+      _inflightController.abort();
+      if (_inflightTimeoutId !== null) { clearTimeout(_inflightTimeoutId); _inflightTimeoutId = null; }
+      _inflightController = null;
+      _inflightVerseKey   = null;
+    }
+
+    // Navigate immediately to approx page (surah first page) while the exact
+    // page resolves. Sets pendingVerseHighlight so the correct QuranVerseView
+    // instance starts the scroll retry loop as soon as its fonts load.
     goToVerse(deepLinkVerseKey, approxPageForVerseKey(deepLinkVerseKey));
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    const controller  = new AbortController();
+    const timeoutId   = setTimeout(() => controller.abort(), 8000);
+    _inflightController = controller;
+    _inflightTimeoutId  = timeoutId;
+    _inflightVerseKey   = deepLinkVerseKey;
+
+    const fetchVerseKey = deepLinkVerseKey; // capture for async closure
 
     fetch(
-      `https://api.quran.com/api/v4/verses/by_key/${deepLinkVerseKey}` +
+      `https://api.quran.com/api/v4/verses/by_key/${fetchVerseKey}` +
       `?words=true&word_fields=code_v2,page_number&mushaf=1`,
       { signal: controller.signal },
     )
@@ -124,19 +184,32 @@ function QuranScreen({ deepLinkVerseKey, deepLinkNonce }: { deepLinkVerseKey?: s
       .then((data: { verse?: { words?: Array<{ page_number?: number }> } }) => {
         const page = data?.verse?.words?.[0]?.page_number;
         if (typeof page === 'number') {
-          goToVerse(deepLinkVerseKey, page);
+          setCachedExactPage(fetchVerseKey, page); // all future taps → instant
+          if (mountedRef.current) {
+            goToVerse(fetchVerseKey, page);
+          }
         }
       })
       .catch(() => {
-        // Network error or 8 s timeout — user already sees the approximate page.
+        // Network error or 8 s timeout — user stays on approxPage silently.
+      })
+      .finally(() => {
+        if (_inflightVerseKey === fetchVerseKey) {
+          _inflightController = null;
+          _inflightTimeoutId  = null;
+          _inflightVerseKey   = null;
+        }
       });
 
-    return () => {
-      clearTimeout(timeoutId);
-      controller.abort();
-    };
-  // goToVerse is stable (useCallback in QuranContext) — omitted to avoid re-runs
-  // on unrelated QuranProvider re-renders. deepLinkNonce is the real trigger.
+    // No cleanup return — the fetch is NOT tied to React's re-render cycle.
+    // Retap cleanup (nonce changes, same verseKey): effect returns early at
+    // priority 2 on the next run, leaving this fetch alive.
+    // Screen-unmount: mountedRef.current = false (set by the separate useEffect
+    // above) prevents the stale goToVerse call in .then().
+    // Different verseKey: priority 3 above aborts via _inflightController.
+
+  // goToVerse is stable (useCallback in QuranContext) — safe to omit.
+  // deepLinkNonce is the real trigger; deepLinkVerseKey is included for safety.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deepLinkVerseKey, deepLinkNonce]);
 
