@@ -167,6 +167,7 @@ export default function HadithDetailScreen() {
         arabiska: hadith.arabiska,
         svenska:  hadith.svenska,
         källa:    hadith.källa,
+        isDark,
       });
     } finally { setSharingImage(false); }
   }, [hadith]);

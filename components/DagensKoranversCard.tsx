@@ -149,7 +149,7 @@ function DagensKoranversCard() {
         {
           backgroundColor: T.card,
           borderColor: borderSideColor,
-          borderTopColor: 'rgba(201,168,76,0.78)',
+          borderTopColor: isDark ? 'rgba(201,168,76,0.78)' : T.accent,
           borderTopWidth: 1,
           shadowColor: '#000',
           shadowOffset: { width: 0, height: 3 },

@@ -50,8 +50,6 @@ async function loadLogoBase64(): Promise<string> {
 // ── HTML + canvas builder ────────────────────────────────────────────────────
 
 function buildHtml(data: VerseShareData, logoBase64: string): string {
-  // Serialize all data as JSON embedded in the script.
-  // Escape </script> to prevent tag injection.
   const safeJson = (v: unknown) =>
     JSON.stringify(v).replace(/<\/script>/gi, '<\\/script>');
 
@@ -70,7 +68,7 @@ function buildHtml(data: VerseShareData, logoBase64: string): string {
 <meta name="viewport" content="width=1080,initial-scale=1">
 <style>
 * { margin:0; padding:0; }
-body { width:1080px; height:1350px; overflow:hidden; background:#000; }
+body { width:1080px; height:1350px; overflow:hidden; background:#0C1A17; }
 canvas { display:block; }
 </style>
 </head>
@@ -86,7 +84,7 @@ canvas { display:block; }
     var ctx = canvas.getContext('2d');
     var W = 1080, H = 1350;
 
-    // ── 1. Load logo image ──────────────────────────────────────────────────
+    // ── 1. Load logo ────────────────────────────────────────────────────────
     var logo = await new Promise(function(res, rej) {
       var img = new Image();
       img.onload = function() { res(img); };
@@ -108,16 +106,22 @@ canvas { display:block; }
     ctx.fillStyle = '#0C1A17';
     ctx.fillRect(0, 0, W, H);
 
-    // ── 4. Accent bar ───────────────────────────────────────────────────────
-    ctx.fillStyle = '#24645d';
+    // Subtle radial glow in the content region (single premium touch)
+    var grad = ctx.createRadialGradient(W / 2, H * 0.48, 0, W / 2, H * 0.48, 580);
+    grad.addColorStop(0, 'rgba(36,100,93,0.11)');
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+
+    // ── 4. Gold accent bar at top ───────────────────────────────────────────
+    ctx.fillStyle = '#cab488';
     ctx.fillRect(0, 0, W, 6);
 
     // ── 5. Header (logo + app name) ─────────────────────────────────────────
-    var PAD_H = 56, PAD_TOP = 48;
+    var PAD_H = 56, PAD_TOP = 40;
     var LOGO_SIZE = 56, LOGO_RADIUS = 14;
     var lx = PAD_H, ly = PAD_TOP;
 
-    // Rounded-rect clip for icon
     ctx.save();
     ctx.beginPath();
     ctx.moveTo(lx + LOGO_RADIUS, ly);
@@ -134,23 +138,17 @@ canvas { display:block; }
     ctx.drawImage(logo, lx, ly, LOGO_SIZE, LOGO_SIZE);
     ctx.restore();
 
-    // App name
     ctx.fillStyle = '#fff';
     ctx.font = '700 28px -apple-system, system-ui, sans-serif';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
     ctx.fillText('Hidayah', lx + LOGO_SIZE + 16, ly + LOGO_SIZE / 2);
 
-    // ── 6. Top divider ──────────────────────────────────────────────────────
-    var DIV1_Y = PAD_TOP + LOGO_SIZE + 24;
-    ctx.fillStyle = 'rgba(36,100,93,0.4)';
-    ctx.fillRect(PAD_H, DIV1_Y, W - PAD_H * 2, 1);
-
-    // ── 7. Footer (calculate height, draw later) ────────────────────────────
-    var PAD_BOT = 44;
-    var BADGE_FONT = 18, BADGE_PAD_H = 22, BADGE_PAD_V = 8;
-    var FOOTER_ARABIC_SIZE = 26, FOOTER_TEXT_SIZE = 17;
-    var FOOTER_GAP = 12;
+    // ── 6. Footer metrics (compute first, draw after content) ───────────────
+    var PAD_BOT = 40;
+    var BADGE_FONT = 22, BADGE_PAD_H = 24, BADGE_PAD_V = 9;
+    var FOOTER_ARABIC_SIZE = 28, FOOTER_TEXT_SIZE = 18;
+    var FOOTER_GAP = 14;
 
     ctx.font = '700 ' + BADGE_FONT + 'px -apple-system, sans-serif';
     var badgeTextW = ctx.measureText(DATA.verseKey).width;
@@ -160,67 +158,21 @@ canvas { display:block; }
     var footerH = badgeH + FOOTER_GAP + Math.round(FOOTER_ARABIC_SIZE * 1.4)
                 + FOOTER_GAP + Math.round(FOOTER_TEXT_SIZE * 1.4);
 
-    // Bottom divider
-    var DIV2_Y = H - PAD_BOT - 24 - footerH - 1;
-    ctx.fillStyle = 'rgba(36,100,93,0.4)';
-    ctx.fillRect(PAD_H, DIV2_Y, W - PAD_H * 2, 1);
+    // Footer sits at fixed distance from bottom — no divider gap
+    var footerY = H - PAD_BOT - footerH;
 
-    // Draw footer elements
-    var footerY = DIV2_Y + 1 + 24;
-
-    // Badge pill
-    var bx = (W - badgeW) / 2;
-    ctx.fillStyle = 'rgba(36,100,93,0.3)';
-    ctx.beginPath();
-    var br = 16;
-    ctx.moveTo(bx + br, footerY);
-    ctx.lineTo(bx + badgeW - br, footerY);
-    ctx.quadraticCurveTo(bx + badgeW, footerY, bx + badgeW, footerY + br);
-    ctx.lineTo(bx + badgeW, footerY + badgeH - br);
-    ctx.quadraticCurveTo(bx + badgeW, footerY + badgeH, bx + badgeW - br, footerY + badgeH);
-    ctx.lineTo(bx + br, footerY + badgeH);
-    ctx.quadraticCurveTo(bx, footerY + badgeH, bx, footerY + badgeH - br);
-    ctx.lineTo(bx, footerY + br);
-    ctx.quadraticCurveTo(bx, footerY, bx + br, footerY);
-    ctx.closePath();
-    ctx.fill();
-
-    ctx.fillStyle = '#cab488';
-    ctx.font = '700 ' + BADGE_FONT + 'px -apple-system, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(DATA.verseKey, W / 2, footerY + badgeH / 2);
-
-    // Surah name (Arabic)
-    var arabicFooterY = footerY + badgeH + FOOTER_GAP + FOOTER_ARABIC_SIZE;
-    ctx.fillStyle = '#fff';
-    ctx.font = '600 ' + FOOTER_ARABIC_SIZE + "px 'Geeza Pro', 'Arabic Typesetting', serif";
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'alphabetic';
-    ctx.fillText(DATA.surahNameArabic, W / 2, arabicFooterY);
-
-    // Footer text
-    ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    ctx.font = '500 ' + FOOTER_TEXT_SIZE + 'px -apple-system, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(
-      'Surah ' + DATA.surahName + ', Vers ' + DATA.verseNumber,
-      W / 2,
-      arabicFooterY + FOOTER_GAP + FOOTER_TEXT_SIZE,
-    );
-
-    // ── 8. Content area — Arabic + translation ──────────────────────────────
-    var contentTop = DIV1_Y + 1 + 32;
-    var contentBot = DIV2_Y - 32;
+    // ── 7. Content area (no dividers — direct padding from header/footer) ───
+    var contentTop = PAD_TOP + LOGO_SIZE + 30;   // 40+56+30 = 126
+    var contentBot = footerY - 40;
     var contentH   = contentBot - contentTop;
     var TEXT_MAX_W = W - PAD_H * 2 - 16;
 
-    // Choose font size based on word count
+    // Arabic size by word count (unchanged — QCF font is already premium)
     var wordCount = DATA.qcfWords.length;
     var ARABIC_SIZE = wordCount > 35 ? 48 : wordCount > 22 ? 60 : wordCount > 12 ? 72 : 82;
     var LINE_H = Math.round(ARABIC_SIZE * 1.75);
 
-    // ── Word-wrap (RTL: first word = rightmost) ─────────────────────────────
+    // ── Word-wrap Arabic (RTL, glyph-by-glyph measurement) ──────────────────
     var wrapLines = [];
     var curWords = [], curW = 0;
     for (var wi = 0; wi < DATA.qcfWords.length; wi++) {
@@ -242,8 +194,8 @@ canvas { display:block; }
     var TRANS_SIZE = 0, TRANS_LINE_H = 0;
     if (DATA.translation) {
       var tLen = DATA.translation.length;
-      TRANS_SIZE = tLen > 500 ? 28 : tLen > 280 ? 34 : 40;
-      TRANS_LINE_H = Math.round(TRANS_SIZE * 1.65);
+      TRANS_SIZE   = tLen > 500 ? 32 : tLen > 280 ? 38 : 46;
+      TRANS_LINE_H = Math.round(TRANS_SIZE * 1.72);
       ctx.font = 'italic ' + TRANS_SIZE + 'px -apple-system, sans-serif';
       var tWords = DATA.translation.split(' ');
       var tCur = '';
@@ -261,17 +213,15 @@ canvas { display:block; }
 
     // ── Vertical centering ──────────────────────────────────────────────────
     var arabicBlockH = wrapLines.length * LINE_H;
-    var transBlockH  = transLines.length > 0
-      ? 20 + 2 + 20 + transLines.length * TRANS_LINE_H
-      : 0;
-    var totalTextH = arabicBlockH + transBlockH;
-    var textStartY = contentTop + Math.max(0, (contentH - totalTextH) / 2);
+    var SEP_BLOCK_H  = transLines.length > 0 ? 2 + 44 : 0;  // gold line + margins
+    var transBlockH  = transLines.length > 0 ? transLines.length * TRANS_LINE_H : 0;
+    var totalTextH   = arabicBlockH + SEP_BLOCK_H + transBlockH;
+    var textStartY   = contentTop + Math.max(0, Math.floor((contentH - totalTextH) / 2));
 
-    // ── Draw Arabic lines (RTL) ─────────────────────────────────────────────
+    // ── Draw Arabic lines (RTL, glyph-by-glyph) ────────────────────────────
     for (var li = 0; li < wrapLines.length; li++) {
       var line = wrapLines[li];
       var baseY = textStartY + li * LINE_H + ARABIC_SIZE;
-      // Start from right edge of the centered block
       var x = (W + line.totalW) / 2;
       for (var gi = 0; gi < line.words.length; gi++) {
         var g = line.words[gi];
@@ -287,11 +237,13 @@ canvas { display:block; }
 
     // ── Draw translation ────────────────────────────────────────────────────
     if (transLines.length > 0) {
-      var transBlockY = textStartY + arabicBlockH + 20;
-      // Separator line
+      var transBlockY = textStartY + arabicBlockH + 22;
+
+      // Elegant gold separator
       ctx.fillStyle = '#cab488';
-      ctx.fillRect((W - 56) / 2, transBlockY, 56, 2);
-      ctx.fillStyle = 'rgba(255,255,255,0.75)';
+      ctx.fillRect((W - 72) / 2, transBlockY, 72, 2);
+
+      ctx.fillStyle = 'rgba(255,255,255,0.90)';
       ctx.font = 'italic ' + TRANS_SIZE + 'px -apple-system, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'alphabetic';
@@ -304,7 +256,66 @@ canvas { display:block; }
       }
     }
 
-    // ── 9. Export ───────────────────────────────────────────────────────────
+    // ── Footer: badge pill ──────────────────────────────────────────────────
+    var bx = (W - badgeW) / 2, br = 18;
+
+    // Fill
+    ctx.fillStyle = 'rgba(36,100,93,0.42)';
+    ctx.beginPath();
+    ctx.moveTo(bx + br, footerY);
+    ctx.lineTo(bx + badgeW - br, footerY);
+    ctx.quadraticCurveTo(bx + badgeW, footerY, bx + badgeW, footerY + br);
+    ctx.lineTo(bx + badgeW, footerY + badgeH - br);
+    ctx.quadraticCurveTo(bx + badgeW, footerY + badgeH, bx + badgeW - br, footerY + badgeH);
+    ctx.lineTo(bx + br, footerY + badgeH);
+    ctx.quadraticCurveTo(bx, footerY + badgeH, bx, footerY + badgeH - br);
+    ctx.lineTo(bx, footerY + br);
+    ctx.quadraticCurveTo(bx, footerY, bx + br, footerY);
+    ctx.closePath();
+    ctx.fill();
+
+    // Border stroke
+    ctx.strokeStyle = 'rgba(202,180,136,0.45)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(bx + br, footerY);
+    ctx.lineTo(bx + badgeW - br, footerY);
+    ctx.quadraticCurveTo(bx + badgeW, footerY, bx + badgeW, footerY + br);
+    ctx.lineTo(bx + badgeW, footerY + badgeH - br);
+    ctx.quadraticCurveTo(bx + badgeW, footerY + badgeH, bx + badgeW - br, footerY + badgeH);
+    ctx.lineTo(bx + br, footerY + badgeH);
+    ctx.quadraticCurveTo(bx, footerY + badgeH, bx, footerY + badgeH - br);
+    ctx.lineTo(bx, footerY + br);
+    ctx.quadraticCurveTo(bx, footerY, bx + br, footerY);
+    ctx.closePath();
+    ctx.stroke();
+
+    // Badge label (verse key)
+    ctx.fillStyle = '#cab488';
+    ctx.font = '700 ' + BADGE_FONT + 'px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(DATA.verseKey, W / 2, footerY + badgeH / 2);
+
+    // Surah name in Arabic script
+    var arabicFooterY = footerY + badgeH + FOOTER_GAP + FOOTER_ARABIC_SIZE;
+    ctx.fillStyle = '#fff';
+    ctx.font = '600 ' + FOOTER_ARABIC_SIZE + "px 'Geeza Pro', 'Arabic Typesetting', serif";
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText(DATA.surahNameArabic, W / 2, arabicFooterY);
+
+    // Surah name + verse in Latin
+    ctx.fillStyle = 'rgba(255,255,255,0.65)';
+    ctx.font = '500 ' + FOOTER_TEXT_SIZE + 'px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(
+      'Surah ' + DATA.surahName + ', Vers ' + DATA.verseNumber,
+      W / 2,
+      arabicFooterY + FOOTER_GAP + FOOTER_TEXT_SIZE,
+    );
+
+    // ── Export ──────────────────────────────────────────────────────────────
     var base64 = canvas.toDataURL('image/png').split(',')[1];
     window.ReactNativeWebView.postMessage(base64);
 
@@ -351,7 +362,7 @@ const VerseShareCard = forwardRef<VerseShareCardRef, object>(
       setHtml(null);
       if (!base64) return;
 
-      const dest = `${FileSystem.cacheDirectory}andalus_verse_share.png`;
+      const dest = `${FileSystem.cacheDirectory}Hidayah_verse_share.png`;
       await FileSystem.writeAsStringAsync(dest, base64, {
         encoding: FileSystem.EncodingType.Base64,
       });

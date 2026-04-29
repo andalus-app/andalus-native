@@ -1087,7 +1087,7 @@ export default function HomeScreen() {
                     const isPrimary    = item.id === 'morning' || item.id === 'evening';
                     const showBadge    = isPrimary;
                     const ADHKAR_GOLD  = '#c9a84c';
-                    const primBg       = isDark ? 'rgba(201,168,76,0.10)' : 'rgba(36,100,93,0.06)';
+                    const primBg       = isDark ? 'rgba(201,168,76,0.13)' : 'rgba(36,100,93,0.09)';
                     const primBorder   = isDark ? 'rgba(201,168,76,0.15)' : 'rgba(36,100,93,0.14)';
                     const primIconBg   = isDark ? 'rgba(201,168,76,0.09)' : T.accentGlow;
                     const primIconClr  = isDark ? ADHKAR_GOLD : T.accent;
@@ -1103,14 +1103,17 @@ export default function HomeScreen() {
                           borderRadius: 14,
                           borderWidth: 0.5,
                           borderColor: isPrimary ? primBorder : T.border,
+                          borderTopWidth: isPrimary ? 1 : 0.5,
+                          borderTopColor: isPrimary ? (isDark ? 'rgba(201,168,76,0.78)' : T.accent) : T.border,
                           paddingHorizontal: 12,
                           paddingTop: 10,
                           paddingBottom: isPrimary ? 14 : 10,
                           marginRight: index < fortsattItems.length - 1 ? GAP : 0,
                           shadowColor: '#000',
-                          shadowOffset: { width: 0, height: 3 },
-                          shadowOpacity: isDark ? 0.08 : 0.15,
-                          shadowRadius: isDark ? 10 : 14,
+                          shadowOffset: { width: 0, height: 2 },
+                          shadowOpacity: isDark ? 0.06 : 0.08,
+                          shadowRadius: 6,
+                          elevation: 2,
                         }}
                       >
                         {/* Icon */}
@@ -1140,7 +1143,7 @@ export default function HomeScreen() {
                             paddingHorizontal: 4, paddingVertical: 1,
                             borderRadius: 4,
                             backgroundColor: badgeBg,
-                            opacity: 0.62,
+                            opacity: 0.85,
                           }}>
                             <Text style={{ fontSize: 8, fontWeight: '600', color: primIconClr, letterSpacing: 0.2 }}>
                               Bästa tiden nu

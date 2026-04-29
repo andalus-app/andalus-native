@@ -484,8 +484,12 @@ function QuranPageView({ pageNumber, width, height, viewportHeight, screenWidth,
       {/* Transparent long-press zones over each verse line / surah header */}
       <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
         {loadState.page.slots.map((slot) => {
-          const slotIndex = slot.slotNumber - 1;
-          const topY      = padV + slotIndex * slotH + verticalShift;
+          // The rendered text center for slot N is at padV + N*slotH (MushafRenderer
+          // formula: centerY = padV + (i+1)*slotH where i = slotNumber-1).
+          // Touch zones must be centred on that position, not anchored at the top
+          // of the slot area — otherwise every touch on the visual text falls into
+          // the NEXT slot's zone, selecting the verse below the intended one.
+          const topY = padV + (slot.slotNumber - 0.5) * slotH + verticalShift;
 
           if (slot.kind === 'verse_line') {
             // Compute per-verse glyph counts for precise touch-position verse selection.

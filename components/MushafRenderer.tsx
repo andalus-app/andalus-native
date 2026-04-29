@@ -127,7 +127,7 @@ const C = {
     headerBg:      '#FFFFFF',   // matches T.card light
     headerBorder:  '#C8A84B',
     headerText:    '#7B5900',
-    bismillahText: '#7B5900',
+    bismillahText: '#1A1106',
     ornamentLine:  '#C8A84B',
   },
 };

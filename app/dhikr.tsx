@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, TextInput, ScrollView,
-  Animated, Easing, PanResponder, Dimensions, StyleSheet, ActivityIndicator, Share,
+  Animated, Easing, LayoutAnimation, PanResponder, Dimensions, StyleSheet, ActivityIndicator, Share,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
@@ -544,33 +544,36 @@ function AccordionSection({ us, isOpen, onToggle, onSelectDhikr, favorites, T, i
 }) {
   const hasFav    = us.dhikr_poster.some(d => favorites.includes(dhikrKey(d)));
   const hasAudio  = us.dhikr_poster.some(d => d.mp3_url);
-  const rowBg     = isDark ? 'rgba(255,255,255,0.025)' : T.accentGlow;
+  const rowBg     = isDark ? 'rgba(255,255,255,0.025)' : T.card;
   const badgeBg   = T.accentGlow;
   const openBg    = T.accentGlow;
-  const openAnim = useRef(new Animated.Value(isOpen ? 1 : 0)).current;
+  // Chevron rotation only — useNativeDriver: true is safe for transforms
+  const chevAnim = useRef(new Animated.Value(isOpen ? 1 : 0)).current;
 
   useEffect(() => {
-    const anim = Animated.spring(openAnim, {
+    Animated.timing(chevAnim, {
       toValue: isOpen ? 1 : 0,
-      useNativeDriver: false,
-      tension: 120, friction: 16,
-    });
-    anim.start();
-    return () => {
-      anim.stop();
-      // stopAnimation clears the internal tracking nodes created by interpolate(),
-      // preventing the "onAnimatedValueUpdate with no listeners" warning.
-      openAnim.stopAnimation();
-    };
-  }, [isOpen, openAnim]);
+      duration: 200,
+      useNativeDriver: true,
+      easing: Easing.out(Easing.quad),
+    }).start();
+  }, [isOpen, chevAnim]);
 
-  const maxHeight  = openAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 2000] });
-  const chevRotate = openAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '90deg'] });
+  const chevRotate = chevAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '90deg'] });
 
   return (
     <View style={{ borderBottomWidth: 1, borderBottomColor: T.border }}>
       {/* Header */}
-      <TouchableOpacity onPress={() => { Haptics.selectionAsync(); onToggle(); }}
+      <TouchableOpacity onPress={() => {
+          Haptics.selectionAsync();
+          LayoutAnimation.configureNext({
+            duration: 240,
+            create: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
+            update: { type: LayoutAnimation.Types.easeInEaseOut },
+            delete: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
+          });
+          onToggle();
+        }}
         style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 15, backgroundColor: isOpen ? openBg : T.bg }}>
         <View style={{ width: 3, height: 36, borderRadius: 2, backgroundColor: isOpen ? T.accent : (isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.1)') }} />
         <View style={{ flex: 1 }}>
@@ -593,8 +596,9 @@ function AccordionSection({ us, isOpen, onToggle, onSelectDhikr, favorites, T, i
         </View>
       </TouchableOpacity>
 
-      {/* Animated content */}
-      <Animated.View style={{ maxHeight, overflow: 'hidden' }}>
+      {/* Content — height animated natively via LayoutAnimation */}
+      {isOpen && (
+        <View>
         <View style={{ height: 1, backgroundColor: T.border, marginHorizontal: 16 }} />
           {us.dhikr_poster.map((d, i) => {
             const k = dhikrKey(d);
@@ -621,7 +625,8 @@ function AccordionSection({ us, isOpen, onToggle, onSelectDhikr, favorites, T, i
               </TouchableOpacity>
             );
           })}
-      </Animated.View>
+        </View>
+      )}
     </View>
   );
 }
