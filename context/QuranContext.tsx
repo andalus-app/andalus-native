@@ -10,7 +10,7 @@ import React, {
 
 import { surahForPage, SURAH_INDEX, type SurahInfo } from '../data/surahIndex';
 import { useQuranSettings, QuranSettings, ReadingMode } from '../hooks/quran/useQuranSettings';
-import { saveLastPage } from '../services/quranLastPage';
+import { saveLastPage, getCachedLastPage, whenLastPageReady } from '../services/quranLastPage';
 import { useQuranBookmarks, Bookmark } from '../hooks/quran/useQuranBookmarks';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -129,20 +129,26 @@ export function useQuranContext(): QuranContextValue {
 
 type Props = {
   children: React.ReactNode;
-  initialPage?: number;
-  initialVerseKey?: string;
-  initialReadingMode?: ReadingMode;
 };
 
-export function QuranProvider({ children, initialPage = 1, initialVerseKey, initialReadingMode }: Props) {
-  const [currentPage, setCurrentPage] = useState(initialPage);
+// Hoisted to app root (see app/_layout.tsx) so its state — including the audio
+// player commands ref, current page, and reading mode — survives navigation
+// away from /quran. This is what enables Quran audio to keep playing in the
+// background while the user browses other tabs / the home screen, and to be
+// stopped only when the user comes back to the Quran reader.
+//
+// Deep-link entries (Asmaul Husna verse tap, in-Quran search, push notifications)
+// no longer pass props here. They use goToPage / goToVerse imperatively from
+// app/quran.tsx's effect once the route mounts.
+export function QuranProvider({ children }: Props) {
+  // Lazy-init from the synchronous last-page cache (warmed at app import).
+  // Falls back to page 1 if the cache hasn't resolved yet.
+  const [currentPage, setCurrentPage] = useState<number>(() => getCachedLastPage());
   const [chromeVisible, setChromeVisible] = useState(true);
-  const [activeVerseKey, setActiveVerseKey] = useState<string | null>(initialVerseKey ?? null);
+  const [activeVerseKey, setActiveVerseKey] = useState<string | null>(null);
   const [longPressedVerse, setLongPressedVerseState] = useState<LongPressedVerse | null>(null);
   const [pendingSurahScroll, setPendingSurahScroll] = useState<{ surahId: number; pageNumber: number } | null>(null);
-  const [pendingVerseHighlight, setPendingVerseHighlight] = useState<{ verseKey: string; pageNumber: number } | null>(
-    initialVerseKey ? { verseKey: initialVerseKey, pageNumber: initialPage } : null,
-  );
+  const [pendingVerseHighlight, setPendingVerseHighlight] = useState<{ verseKey: string; pageNumber: number } | null>(null);
 
   // Explicit surah override — set when user navigates via goToSurah (sidebar, search).
   // Uses a REF (not state) to avoid race conditions with React's batched render cycle.
@@ -163,13 +169,33 @@ export function QuranProvider({ children, initialPage = 1, initialVerseKey, init
   // Keep currentPageRef in sync every render
   useEffect(() => { currentPageRef.current = currentPage; }, [currentPage]);
 
-  // Persist last visited page so QuranRoute can reopen here next time.
+  // Once-only sync: the lazy-init useState read getCachedLastPage() may have
+  // returned the default of 1 because the AsyncStorage load hadn't resolved
+  // yet. Now that QuranProvider mounts at app root (before the user navigates),
+  // wait for the async load and update state if the user hasn't navigated and
+  // the cached value differs. Without this, the saveLastPage debounce below
+  // would persist "1" over the real last page.
+  const [initialSyncDone, setInitialSyncDone] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    whenLastPageReady().then((cached) => {
+      if (cancelled) return;
+      setCurrentPage((prev) => (prev === 1 && cached !== 1 ? cached : prev));
+      setInitialSyncDone(true);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Persist last visited page so the next launch reopens here.
   // saveLastPage updates the in-memory cache immediately (no flash on next open)
   // and writes to AsyncStorage. Debounced 400ms so rapid swipes only write once.
+  // Skipped until the initial sync has run, otherwise we'd overwrite the stored
+  // value with the lazy-init default of 1 before the cache resolves.
   useEffect(() => {
+    if (!initialSyncDone) return;
     const timer = setTimeout(() => saveLastPage(currentPage), 400);
     return () => clearTimeout(timer);
-  }, [currentPage]);
+  }, [currentPage, initialSyncDone]);
 
   // Helper to clear the explicit surah override (called on manual scroll)
   const clearExplicitSurah = useCallback(() => {
@@ -179,7 +205,7 @@ export function QuranProvider({ children, initialPage = 1, initialVerseKey, init
     }
   }, []);
 
-  const { settings, updateSettings } = useQuranSettings(initialReadingMode);
+  const { settings, updateSettings, setReadingModeSession } = useQuranSettings();
   const { bookmarks, addBookmark, removeBookmark, updateNote, isBookmarked } =
     useQuranBookmarks();
 
@@ -255,13 +281,21 @@ export function QuranProvider({ children, initialPage = 1, initialVerseKey, init
 
   // Navigate to a specific verse: switch to verse-by-verse mode, go to its page,
   // and scroll to the verse (pendingVerseHighlight consumed by QuranVerseView).
+  //
+  // Session-only mode switch: setReadingModeSession does NOT persist to AsyncStorage.
+  // Reason: this is invoked by deep-link entries (Asmaul Husna verse tap, in-Quran
+  // search results) where verse mode is the right view for THIS action only — it
+  // must not become the persisted default for the next time the user opens the
+  // Quran tab manually. Persisting it caused page 604 (three short surahs sharing
+  // one Mushaf page) to render three full SurahHeaderCards in verse mode on the
+  // next manual entry, blocking the JS thread for ~10s.
   const goToVerse = useCallback(
     (verseKey: string, pageNumber: number) => {
-      updateSettings({ readingMode: 'verse' });
+      setReadingModeSession('verse');
       goToPage(pageNumber);
       setPendingVerseHighlight({ verseKey, pageNumber });
     },
-    [goToPage, updateSettings],
+    [goToPage, setReadingModeSession],
   );
 
   // Chrome

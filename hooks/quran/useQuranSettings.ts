@@ -91,5 +91,20 @@ export function useQuranSettings(overrideReadingMode?: ReadingMode) {
     });
   }, []);
 
-  return { settings, updateSettings };
+  // Session-only reading mode change — updates in-memory state but does NOT
+  // persist to AsyncStorage. Used for one-shot verse-mode switches (deep-link
+  // from Asmaul Husna, in-Quran search results) so the user's stored default
+  // is preserved for the next Quran session.
+  //
+  // Why: previously these flows called updateSettings({ readingMode: 'verse' })
+  // which persisted 'verse' to AsyncStorage. The next time the user opened the
+  // Quran tab manually, settings loaded with readingMode='verse', and tapping
+  // a multi-surah page (e.g. 604: Al-Ikhlas / Al-Falaq / An-Nas) rendered three
+  // heavy SurahHeaderCards (each with the 60-clip 178-group knut SVG) plus all
+  // verse cards synchronously, blocking the JS thread for ~10s.
+  const setReadingModeSession = useCallback((mode: ReadingMode) => {
+    setSettings((prev) => (prev.readingMode === mode ? prev : { ...prev, readingMode: mode }));
+  }, []);
+
+  return { settings, updateSettings, setReadingModeSession };
 }

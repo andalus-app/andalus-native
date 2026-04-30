@@ -10,7 +10,7 @@
  *   - All modal overlays (contents, settings, search, reciter) sit at higher z-indices
  */
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -18,7 +18,6 @@ import {
 } from 'react-native';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import * as ScreenOrientation from 'expo-screen-orientation';
-import { QuranProvider } from '../context/QuranContext';
 import { getCachedLastPage } from '../services/quranLastPage';
 import { SURAH_INDEX } from '../data/surahIndex';
 import { getCachedExactPage, setCachedExactPage } from '../services/quranPrewarmService';
@@ -28,7 +27,6 @@ import { useQuranContext } from '../context/QuranContext';
 import QuranPager from '../components/quran/QuranPager';
 import QuranHeader from '../components/quran/QuranHeader';
 import QuranPagePicker from '../components/quran/QuranPagePicker';
-import QuranAudioPlayer from '../components/quran/QuranAudioPlayer';
 import QuranSettingsPanel from '../components/quran/QuranSettingsPanel';
 import QuranContentsScreen from '../components/quran/QuranContentsScreen';
 import QuranSearchModal from '../components/quran/QuranSearchModal';
@@ -69,11 +67,37 @@ let _inflightVerseKey: string | null = null;
 let _inflightController: AbortController | null = null;
 let _inflightTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
+// ── Lazy modal gate ──────────────────────────────────────────────────────────
+//
+// The Quran reader has five hidden overlays (contents, settings, search,
+// reciter, verse-actions). They are not visible at tab entry, but each owns a
+// non-trivial subtree (BlurView + 114-row FlatList for contents, full settings
+// form, search index FlatList, reciter list, share/action sheet). Mounting all
+// five during the Stack slide-in animation creates a perceptible frys on
+// entry.
+//
+// LazyOverlay defers mounting until the overlay is opened for the FIRST time.
+// After that it stays mounted (so reopens are instant and animation state is
+// preserved). Closing does not unmount. This trades the modal's first-open
+// cost — masked by its slide/fade-in animation — for a cheaper tab-entry path.
+function LazyOverlay({ active, children }: { active: boolean; children: React.ReactNode }) {
+  const [mounted, setMounted] = useState(active);
+  useEffect(() => {
+    if (active && !mounted) setMounted(true);
+  }, [active, mounted]);
+  if (!mounted) return null;
+  return <>{children}</>;
+}
+
 // ── Inner screen (consumes context) ──────────────────────────────────────────
 
 function QuranScreen({ deepLinkVerseKey, deepLinkNonce }: { deepLinkVerseKey?: string; deepLinkNonce?: string }) {
   const { isDark } = useTheme();
-  const { chromeVisible, goToVerse } = useQuranContext();
+  const {
+    chromeVisible, goToVerse,
+    contentsMenuOpen, settingsPanelOpen, searchOpen, reciterSelectorOpen,
+    longPressedVerse,
+  } = useQuranContext();
 
   const chromeAnim = useRef(new Animated.Value(1)).current;
   // Tracks the last-handled navigation key: "<verseKey>:<nonce>" or "<verseKey>:initial".
@@ -231,20 +255,28 @@ function QuranScreen({ deepLinkVerseKey, deepLinkNonce }: { deepLinkVerseKey?: s
         <KhatmahQuickComplete />
       </Animated.View>
 
-      {/* Audio player — fades with chrome but has own pointerEvents so buttons stay tappable */}
-      <Animated.View
-        style={[StyleSheet.absoluteFill, { opacity: chromeAnim }]}
-        pointerEvents={chromeVisible ? 'box-none' : 'none'}
-      >
-        <QuranAudioPlayer />
-      </Animated.View>
+      {/* Audio player UI is mounted at app root (see app/_layout.tsx) so it
+          survives leaving /quran for background playback. The component reads
+          chromeVisible / pathname from context to position itself and fade
+          with the Quran chrome only when the user is on /quran. */}
 
-      {/* Permanent overlays — always interactive regardless of chrome state */}
-      <QuranContentsScreen />
-      <QuranSettingsPanel />
-      <QuranSearchModal />
-      <QuranReciterSelector />
-      <VerseActionsMenu />
+      {/* Lazy-mounted overlays — see LazyOverlay above for the rationale.
+          Each stays mounted after the first time it opens, so reopens are instant. */}
+      <LazyOverlay active={contentsMenuOpen}>
+        <QuranContentsScreen />
+      </LazyOverlay>
+      <LazyOverlay active={settingsPanelOpen}>
+        <QuranSettingsPanel />
+      </LazyOverlay>
+      <LazyOverlay active={searchOpen}>
+        <QuranSearchModal />
+      </LazyOverlay>
+      <LazyOverlay active={reciterSelectorOpen}>
+        <QuranReciterSelector />
+      </LazyOverlay>
+      <LazyOverlay active={longPressedVerse !== null}>
+        <VerseActionsMenu />
+      </LazyOverlay>
     </View>
   );
 }
@@ -254,17 +286,26 @@ function QuranScreen({ deepLinkVerseKey, deepLinkNonce }: { deepLinkVerseKey?: s
 export default function QuranRoute() {
   const params = useLocalSearchParams<{ page?: string; verseKey?: string; nonce?: string }>();
   const initialVerseKey = params.verseKey ?? undefined;
+  const { goToPage } = useQuranContext();
 
-  // Determine the initial page immediately — no blocking network call:
-  //   1. If a page param is provided, use it (e.g. navigating from Asmaul Husna).
-  //   2. If a verseKey is present, use the surah's first page as a fast approximation.
-  //      QuranScreen resolves the exact word-level page asynchronously via goToVerse().
-  //   3. Otherwise restore the last-read page from cache.
-  const initialPage = (() => {
-    if (params.page) return Math.max(1, Math.min(604, parseInt(params.page, 10)));
-    if (initialVerseKey) return approxPageForVerseKey(initialVerseKey);
-    return getCachedLastPage();
-  })();
+  // QuranProvider lives at app root (above the Stack), so it does NOT remount
+  // each time /quran is opened. Its currentPage state is whatever it was on the
+  // last visit. If this open carries a `page` param (deep-link without verseKey),
+  // apply it once here. With a verseKey, we leave the navigation to QuranScreen's
+  // deep-link effect (it calls goToVerse with the exact word-level page once
+  // resolved).
+  const handledRef = useRef(false);
+  useEffect(() => {
+    if (handledRef.current) return;
+    handledRef.current = true;
+    if (initialVerseKey) return; // deep-link effect in QuranScreen handles it
+    if (params.page) {
+      const p = Math.max(1, Math.min(604, parseInt(params.page, 10)));
+      goToPage(p);
+    }
+    // goToPage is stable; params resolved once per route entry.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     // Unlock rotation for the Quran reader (landscape mode support).
@@ -279,13 +320,10 @@ export default function QuranRoute() {
   }, []);
 
   return (
-    <QuranProvider
-      initialPage={initialPage}
-      initialReadingMode={initialVerseKey ? 'verse' : undefined}
-    >
+    <>
       <Stack.Screen options={{ gestureEnabled: false, fullScreenGestureEnabled: false }} />
       <QuranScreen deepLinkVerseKey={initialVerseKey} deepLinkNonce={params.nonce} />
-    </QuranProvider>
+    </>
   );
 }
 

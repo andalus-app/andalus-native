@@ -514,7 +514,7 @@ export default function SettingsScreen() {
         <View style={{backgroundColor:T.card,borderRadius:14,borderWidth:0.5,borderColor:T.border,padding:16}}>
           <Text style={{fontSize:15,fontWeight:'700',color:T.text}}>Hidayah</Text>
           <Text style={{fontSize:13,color:T.textMuted,marginTop:2}}>Bönetider och Qibla-kompass</Text>
-          <Text style={{fontSize:12,color:T.textMuted,marginTop:6,opacity:0.7}}>Version 1.2.4</Text>
+          <Text style={{fontSize:12,color:T.textMuted,marginTop:6,opacity:0.7}}>Version 1.3.0</Text>
           <Text style={{fontSize:11,color:T.textMuted,marginTop:2,opacity:0.55}}>
             © {new Date().getFullYear()} Fatih Köker. Alla rättigheter förbehållna.
           </Text>

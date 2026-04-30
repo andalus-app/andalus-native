@@ -21,6 +21,7 @@ import { fetchComposedMushafPage } from './mushafApi';
 export const QURAN_LAST_PAGE_KEY = 'andalus_quran_last_page';
 
 let _cache: number | null = null;
+let _readyResolvers: Array<(page: number) => void> = [];
 
 function prewarmPage(page: number): void {
   // Pre-warm the saved page and its immediate neighbors.
@@ -43,12 +44,33 @@ AsyncStorage.getItem(QURAN_LAST_PAGE_KEY)
     const n = raw ? parseInt(raw, 10) : 1;
     _cache = Number.isFinite(n) && n >= 1 && n <= 604 ? n : 1;
     prewarmPage(_cache);
+    const resolvers = _readyResolvers;
+    _readyResolvers = [];
+    resolvers.forEach((r) => r(_cache as number));
   })
-  .catch(() => { _cache = 1; });
+  .catch(() => {
+    _cache = 1;
+    const resolvers = _readyResolvers;
+    _readyResolvers = [];
+    resolvers.forEach((r) => r(1));
+  });
 
 /** Synchronous read — returns cached value or 1 if not yet loaded. */
 export function getCachedLastPage(): number {
   return _cache ?? 1;
+}
+
+/**
+ * Awaits the AsyncStorage load. Resolves immediately if already cached.
+ *
+ * Used by QuranProvider (mounted at app root) so the initial currentPage state
+ * can sync to the actual stored value once it resolves, instead of being
+ * permanently stuck at the lazy-init default of 1 when the provider mounts
+ * before the AsyncStorage read finishes.
+ */
+export function whenLastPageReady(): Promise<number> {
+  if (_cache !== null) return Promise.resolve(_cache);
+  return new Promise<number>((resolve) => { _readyResolvers.push(resolve); });
 }
 
 /**

@@ -42,6 +42,7 @@ import {
 } from 'expo-audio';
 import { Asset } from 'expo-asset';
 import { BlurView } from 'expo-blur';
+import { usePathname } from 'expo-router';
 import SvgIcon from '../SvgIcon';
 import { useTheme } from '../../context/ThemeContext';
 import { useQuranContext } from '../../context/QuranContext';
@@ -241,7 +242,15 @@ function QuranAudioPlayer() {
     currentPage,
     setPlaybackVerse,
     activeVerseKey,
+    chromeVisible,
   } = useQuranContext();
+
+  // This component is mounted at app root (see app/_layout.tsx) so the audio
+  // engine — player ref, status listener, lock-screen integration, repeat
+  // logic — survives navigation away from /quran. The UI bar, however, must
+  // only appear while the user is actually on the Quran screen.
+  const pathname = usePathname();
+  const isOnQuranScreen = pathname === '/quran';
 
   const [playerState, setPlayerState] = useState<PlayerState>({ mode: 'hidden' });
   const [isRepeat, setIsRepeat] = useState(false);
@@ -539,6 +548,18 @@ function QuranAudioPlayer() {
     }).catch(() => undefined);
   }, []);
 
+  // ── Chrome fade — replicated locally now that the player is mounted at app
+  // root rather than wrapped by QuranScreen's chromeAnim Animated.View. The
+  // visual behavior on /quran is unchanged: opacity follows chromeVisible.
+  const chromeAnim = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    Animated.timing(chromeAnim, {
+      toValue: chromeVisible ? 1 : 0,
+      duration: 220,
+      useNativeDriver: true,
+    }).start();
+  }, [chromeVisible, chromeAnim]);
+
   // Pre-warm the lock-screen artwork URI at mount.
   // resolveArtworkUri() is idempotent (module-level cache) — safe to call here
   // even though _layout.tsx may have already kicked off resolution.
@@ -800,6 +821,12 @@ function QuranAudioPlayer() {
               const fromTiming = verseTimingsRef.current.find((t) => t.verseKey === fromKey);
               const seekMs = fromTiming?.timestampFrom ?? 0;
               playerRef.current?.seekTo(seekMs / 1000);
+              // Defensive: AVPlayer can briefly enter a non-playing state immediately
+              // after a seek, especially with the screen locked. Without an explicit
+              // play() the audio session deactivates after a few loops in background
+              // and playback dies. Mirrors the verse-repeat seek pattern below and
+              // the didJustFinish interval-repeat path.
+              playerRef.current?.play();
             } else {
               // Cross-surah — load the from-surah and start at from-verse.
               intervalRepeatSeekingRef.current = false; // new player instance clears state
@@ -1657,11 +1684,22 @@ function QuranAudioPlayer() {
     }
   }, [currentSurahId, currentPage, settings.reciterId, loadAndPlay, loadAndPlayFromVerse]);
 
+  // ── Off-screen: hide UI but keep audio engine running ────────────────────
+  // The hooks above continue to execute (status listener, repeat logic, lock
+  // screen integration), so playback survives navigation away from /quran.
+  // When the user returns, the UI re-renders with current state.
+  if (!isOnQuranScreen) {
+    return null;
+  }
+
   // ── Idle mode — compact bar ────────────────────────────────────────────────
 
   if (isIdle) {
     return (
-      <View style={[styles.idleChipContainer, { left: landscapeInset, right: landscapeInset }]}>
+      <Animated.View
+        style={[styles.idleChipContainer, { left: landscapeInset, right: landscapeInset, opacity: chromeAnim }]}
+        pointerEvents={chromeVisible ? 'auto' : 'none'}
+      >
         {/* Shadow wrapper — overflow:visible so shadow renders outside */}
         <View style={styles.idleChipShadow}>
           {/* Clip wrapper — rounded corners + BlurView */}
@@ -1699,25 +1737,28 @@ function QuranAudioPlayer() {
             </TouchableOpacity>
           </View>
         </View>
-      </View>
+      </Animated.View>
     );
   }
 
   // ── Active mode — full Ayah-style card ────────────────────────────────────
 
   return (
-    <View style={[
-      styles.container,
-      styles.containerActive,
-      { left: landscapeInset, right: landscapeInset },
-      isDark && {
-        shadowColor: 'rgba(0,255,150,0.06)',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 1,
-        shadowRadius: 8,
-        elevation: 8,
-      },
-    ]}>
+    <Animated.View
+      pointerEvents={chromeVisible ? 'auto' : 'none'}
+      style={[
+        styles.container,
+        styles.containerActive,
+        { left: landscapeInset, right: landscapeInset, opacity: chromeAnim },
+        isDark && {
+          shadowColor: 'rgba(0,255,150,0.06)',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 1,
+          shadowRadius: 8,
+          elevation: 8,
+        },
+      ]}
+    >
       {/* Speed menu rendered OUTSIDE the clipping wrapper so it isn't clipped */}
       {showSpeedMenu && (
         <>
@@ -1927,7 +1968,7 @@ function QuranAudioPlayer() {
         onUpdate={handleUpdateRepeatSettings}
         currentSurahId={currentSurahId}
       />
-    </View>
+    </Animated.View>
   );
 }
 

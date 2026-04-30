@@ -10,6 +10,8 @@ import { ThemeProvider, useTheme } from '../context/ThemeContext';
 import { AppProvider, useApp } from '../context/AppContext';
 import { NotificationProvider } from '../context/NotificationContext';
 import { BookingNotifProvider } from '../context/BookingNotifContext';
+import { QuranProvider } from '../context/QuranContext';
+import QuranAudioPlayer from '../components/quran/QuranAudioPlayer';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { initStorage } from '../services/storage';
 import { syncKahfReminderOnStartup, savePushToken, syncAllahNamesReminderOnStartup } from '../services/notifications';
@@ -208,6 +210,14 @@ function AppContent({ onFontsReady }: { onFontsReady: () => void }) {
           navigator so iOS never suspends its JS when the user switches tabs. */}
       <YoutubeBackgroundPlayer />
 
+      {/* Quran audio player — mounted at root for the same reason: leaving the
+          /quran route (X button, tab switch, navigation to home) must not stop
+          recitation. The component renders its own UI bar only when the user is
+          on /quran (gated by usePathname inside) and stays alive otherwise so
+          audio + lock-screen controls keep working. The user can return to the
+          Quran tab to access pause/stop, or use the iOS lock-screen controls. */}
+      <QuranAudioPlayer />
+
       {/* Onboarding — visas en gång för nya användare */}
       {showOnboarding && (
         <OnboardingFlow
@@ -320,7 +330,11 @@ export default function RootLayout() {
             <BookingNotifProvider>
                 <NotificationProvider>
                   <YoutubePlayerProvider>
-                    <AppContent onFontsReady={handleFontsReady} />
+                    {/* QuranProvider is hoisted above the Stack so its state
+                        survives leaving /quran — required for background audio. */}
+                    <QuranProvider>
+                      <AppContent onFontsReady={handleFontsReady} />
+                    </QuranProvider>
                   </YoutubePlayerProvider>
                 </NotificationProvider>
               </BookingNotifProvider>
