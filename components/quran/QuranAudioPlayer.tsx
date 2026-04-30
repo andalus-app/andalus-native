@@ -427,6 +427,21 @@ function QuranAudioPlayer() {
       if (!mountedRef.current) return;
       setPlayerState({ mode: 'loading', surahId });
 
+      // Re-apply audio mode before every player start. expo-audio's native
+      // shouldPlayInBackground flag is a single global value, and other screens
+      // (or older sessions) may have left it in a state where iOS pauses all
+      // players when the screen locks. Re-asserting it here guarantees that
+      // every Quran playback session starts with the correct background config,
+      // regardless of what other audio surfaces (dhikr, asmaul, umrah, youtube)
+      // have done. Fire-and-forget — the AVAudioSession is reconfigured
+      // synchronously by the time the player begins buffering.
+      setAudioModeAsync({
+        allowsRecording: false,
+        playsInSilentMode: true,
+        shouldPlayInBackground: true,
+        interruptionMode: 'duckOthers',
+      }).catch(() => undefined);
+
       // keepAudioSessionActive: true — prevents the iOS AVAudioSession from
       // being deactivated when this player is paused or destroyed. This is
       // critical during the bismillah → surah transition: the Al-Fatiha player
@@ -826,11 +841,20 @@ function QuranAudioPlayer() {
 
         // ── Verse-repeat seek confirmation ────────────────────────────────
         // While a seek-back is in-flight, ticks still report the old (new-verse)
-        // position. Once the position is back inside lastVerseKeyRef's range the
-        // seek has taken effect — clear the lock so normal logic resumes.
+        // position. Clear the lock as soon as positionMs has dropped below the
+        // boundary of the verse we're repeating (mirrors the interval pattern).
+        // Earlier this used `verse.verseKey === lastVerseKeyRef.current`, but
+        // that fails when the seek lands on a tie-breaking entry like BSMLLH_
+        // at positionMs=0 or when seek tolerance puts the position a few ms
+        // before the verse's timestampFrom — leaving seekingRef stuck true and
+        // permanently disabling the verse-transition logic.
         if (verseRepeatSeekingRef.current) {
-          if (verse && verse.verseKey === lastVerseKeyRef.current) {
-            verseRepeatSeekingRef.current = false;
+          const prevKey = lastVerseKeyRef.current;
+          const prevTiming = prevKey
+            ? verseTimingsRef.current.find((t) => t.verseKey === prevKey)
+            : null;
+          if (prevTiming && positionMs < prevTiming.timestampTo) {
+            verseRepeatSeekingRef.current = false; // seek confirmed
           }
           // Still mid-seek: skip all transition logic for this tick.
           // Fall through to setPlayerState so the seek-bar stays accurate.
@@ -855,6 +879,11 @@ function QuranAudioPlayer() {
               if (shouldLoop) {
                 verseRepeatSeekingRef.current = true; // lock until seek confirmed
                 playerRef.current?.seekTo(prevVerseTiming.timestampFrom / 1000);
+                // Defensive: AVPlayer can briefly enter a non-playing state
+                // immediately after a seek (especially in background). Re-issue
+                // play() so iOS doesn't deactivate the audio session, which
+                // would silently stop playback when the screen is locked.
+                playerRef.current?.play();
                 return; // stay on this verse — don't update lastVerseKeyRef
               }
               // Count reached — reset and fall through to advance to next verse.

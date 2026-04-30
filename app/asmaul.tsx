@@ -6,6 +6,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, Stack, useLocalSearchParams } from 'expo-router';
 import BackButton from '../components/BackButton';
+import ArabicText from '../components/ArabicText';
 import * as Haptics from 'expo-haptics';
 import Svg, { Path, Circle, Line, Rect } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -162,7 +163,11 @@ function useNameAudio(nr: number) {
 
   useEffect(() => {
     mountedRef.current = true;
-    try { require('expo-audio').setAudioModeAsync({ playsInSilentModeIOS: true }); } catch {}
+    // Audio mode is configured globally at app startup (app/_layout.tsx) with
+    // shouldPlayInBackground: true. Do NOT call setAudioModeAsync here — the
+    // old expo-av prop name `playsInSilentModeIOS` is unknown to expo-audio
+    // and resets shouldPlayInBackground to false, killing Quran background
+    // playback on screen lock.
     return () => {
       mountedRef.current = false;
       if (_stopActiveNameAudio === stopSelf) _stopActiveNameAudio = null;
@@ -612,9 +617,9 @@ function DetailScreen({ name, onBack, isFav, onToggleFav, T }: { name: Name; onB
               backgroundColor: T.isDark ? 'rgba(45,139,120,0.1)' : 'rgba(36,100,93,0.06)',
               borderWidth: 1, borderColor: T.accent + '30', borderRadius: 16, padding: 16,
             }}>
-              <Text style={{ fontSize: Math.round(koranversFs * 1.7), lineHeight: Math.round(koranversFs * 1.7 * 1.7), textAlign: 'center', color: T.text, writingDirection: 'rtl', marginBottom: 14 }}>
+              <ArabicText style={{ fontSize: Math.round(koranversFs * 1.7), lineHeight: Math.round(koranversFs * 1.7 * 1.7), textAlign: 'center', color: T.text, writingDirection: 'rtl', marginBottom: 14 }}>
                 {name.koranvers_arabiska}
-              </Text>
+              </ArabicText>
               <View style={{ height: 1, backgroundColor: T.accent + '25', marginBottom: 12 }} />
               <Text style={{ fontSize: koranversFs, color: T.textMuted, lineHeight: Math.round(koranversFs * 1.64) }}>{name.koranvers_svenska}</Text>
               {!!name.sura_ayat && (

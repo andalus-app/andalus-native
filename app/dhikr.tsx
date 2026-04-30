@@ -158,7 +158,11 @@ function AudioPlayer({ url, T, isDark }: { url: string; T: any; isDark: boolean 
 
     setLoading(true);
     try {
-      await audio.setAudioModeAsync({ playsInSilentModeIOS: true, staysActiveInBackground: true });
+      // Audio mode is configured globally at app startup (app/_layout.tsx) with
+      // shouldPlayInBackground: true. Do NOT call setAudioModeAsync here — the
+      // old expo-av prop names (playsInSilentModeIOS / staysActiveInBackground)
+      // are unknown to expo-audio and reset shouldPlayInBackground to false,
+      // which kills Quran background playback on screen lock.
       const player = audio.createAudioPlayer({ uri: url });
       playerRef.current = player;
       _stopActiveAudio = stopSelf;

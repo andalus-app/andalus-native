@@ -102,7 +102,7 @@ type QuranContextValue = {
   clearPendingSurahScroll: () => void;
 
   // Initial verse highlight — set when opened via a deep-link (e.g. from Asmaul Husna).
-  // QuranVerseView scrolls to the verse and flashes it, then clears this.
+  // QuranVerseView scrolls to the verse, then clears this.
   pendingVerseHighlight: { verseKey: string; pageNumber: number } | null;
   clearPendingVerseHighlight: () => void;
 
@@ -254,7 +254,7 @@ export function QuranProvider({ children, initialPage = 1, initialVerseKey, init
   );
 
   // Navigate to a specific verse: switch to verse-by-verse mode, go to its page,
-  // and scroll/flash the verse (pendingVerseHighlight consumed by QuranVerseView).
+  // and scroll to the verse (pendingVerseHighlight consumed by QuranVerseView).
   const goToVerse = useCallback(
     (verseKey: string, pageNumber: number) => {
       updateSettings({ readingMode: 'verse' });

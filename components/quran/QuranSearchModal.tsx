@@ -204,7 +204,7 @@ function QuranSearchModal() {
         .then((data: { verse?: { words?: Array<{ page_number?: number }> } }) => {
           const page = data?.verse?.words?.[0]?.page_number;
           if (typeof page === 'number') {
-            // goToVerse: switches to verse mode, navigates to page, flashes verse
+            // goToVerse: switches to verse mode, navigates to page, scrolls to the verse
             goToVerse(match.verseKey, page);
           }
         })

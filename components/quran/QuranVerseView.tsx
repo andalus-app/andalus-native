@@ -425,10 +425,6 @@ type VerseCardProps = {
   onLongPress: (verseKey: string) => void;
   // Called on short tap — forwards to chrome toggle (same as outer Pressable in QuranPager).
   onPress: () => void;
-  // Flash: true when this card was just scrolled to from a deep-link.
-  // Triggers a 2-cycle pulse animation then calls onFlashDone.
-  shouldFlash: boolean;
-  onFlashDone: () => void;
 };
 
 const VerseCard = memo(function VerseCard({
@@ -449,17 +445,13 @@ const VerseCard = memo(function VerseCard({
   pendingScrollCbRef,
   onLongPress,
   onPress,
-  shouldFlash,
-  onFlashDone,
 }: VerseCardProps) {
   const { theme: T } = useTheme();
 
   // Native-driver opacity — no JS thread work during recitation.
   const highlightAnim = useRef(new Animated.Value(isHighlighted ? 1 : 0)).current;
   const animRef = useRef<Animated.CompositeAnimation | null>(null);
-  // Stable refs so flash/longpress callbacks never become memo deps.
-  const onFlashDoneRef = useRef(onFlashDone);
-  onFlashDoneRef.current = onFlashDone;
+  // Stable refs so longpress/press callbacks never become memo deps.
   const onLongPressRef = useRef(onLongPress);
   onLongPressRef.current = onLongPress;
   const onPressRef = useRef(onPress);
@@ -477,9 +469,9 @@ const VerseCard = memo(function VerseCard({
 
   useEffect(() => {
     // Cleanup: always stop the running animation when deps change or on unmount.
-    // Without this, swipe-away while a flash/highlight animation is in progress
-    // leaves orphaned native animation nodes alive on the UI thread. Over many
-    // page swipes these accumulate and slow the entire native animation system.
+    // Without this, swipe-away while a highlight fade is in progress leaves
+    // orphaned native animation nodes alive on the UI thread. Over many page
+    // swipes these accumulate and slow the entire native animation system.
     const cleanup = () => {
       animRef.current?.stop();
       animRef.current = null;
@@ -492,31 +484,16 @@ const VerseCard = memo(function VerseCard({
     }
 
     animRef.current?.stop();
-    if (shouldFlash) {
-      // 2-cycle pulse: fade in → dim → in → dim → in (settle highlighted).
-      // toValue 0.12 keeps the card barely visible between flashes.
-      animRef.current = Animated.sequence([
-        Animated.timing(highlightAnim, { toValue: 1,    duration: 280, useNativeDriver: true }),
-        Animated.timing(highlightAnim, { toValue: 0.12, duration: 200, useNativeDriver: true }),
-        Animated.timing(highlightAnim, { toValue: 1,    duration: 280, useNativeDriver: true }),
-        Animated.timing(highlightAnim, { toValue: 0.12, duration: 200, useNativeDriver: true }),
-        Animated.timing(highlightAnim, { toValue: 1,    duration: 280, useNativeDriver: true }),
-      ]);
-      animRef.current.start(({ finished }) => {
-        if (finished) onFlashDoneRef.current();
-      });
-    } else {
-      animRef.current = Animated.timing(highlightAnim, {
-        toValue: shouldShow ? 1 : 0,
-        duration: 180,
-        useNativeDriver: true,
-      });
-      animRef.current.start();
-    }
+    animRef.current = Animated.timing(highlightAnim, {
+      toValue: shouldShow ? 1 : 0,
+      duration: 180,
+      useNativeDriver: true,
+    });
+    animRef.current.start();
     return cleanup;
     // highlightAnim is a stable ref — safe to omit from deps
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shouldShow, shouldFlash]);
+  }, [shouldShow]);
 
   // Stable handlers — created once, read latest values through refs.
   // Using RN Pressable instead of RNGH GestureDetector because:
@@ -771,9 +748,7 @@ function QuranVerseView({ pageNumber, width, height, isActive }: Props) {
   // when two rapid rotations happen within the 600 ms settle window.
   const restoreVersionRef  = useRef(0);
   const surahScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const flashTimerRef       = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [flashingVerseKey, setFlashingVerseKey] = useState<string | null>(null);
-  const clearFlashingVerse = useCallback(() => setFlashingVerseKey(null), []);
+  const scrollRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Direct-trigger ref: called by VerseCard's onLayout when the laid-out verse
   // matches the pending deep-link scroll target. Fires immediately instead of
@@ -807,7 +782,7 @@ function QuranVerseView({ pageNumber, width, height, isActive }: Props) {
       abortRef.current?.abort();
       if (restoreTimerRef.current) clearTimeout(restoreTimerRef.current);
       if (surahScrollTimerRef.current) clearTimeout(surahScrollTimerRef.current);
-      if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+      if (scrollRetryTimerRef.current) clearTimeout(scrollRetryTimerRef.current);
     };
   }, []);
 
@@ -993,11 +968,11 @@ function QuranVerseView({ pageNumber, width, height, isActive }: Props) {
     if (!pendingVerseHighlight || loadState.status !== 'ready' || !isActive) return;
     if (pendingVerseHighlight.pageNumber !== pageNumber) return;
     const verseKey = pendingVerseHighlight.verseKey;
-    if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+    if (scrollRetryTimerRef.current) clearTimeout(scrollRetryTimerRef.current);
     if (__DEV__) console.log('[QuranTargetScroll] list ready for', verseKey, 'page', pageNumber);
     let attempts = 0;
-    const tryScrollAndFlash = () => {
-      flashTimerRef.current = null;
+    const tryScroll = () => {
+      scrollRetryTimerRef.current = null;
       if (!mountedRef.current || !scrollRef.current) return;
       const verseY = verseYMap.current[verseKey];
       if (__DEV__) console.log('[QuranTargetScroll] scroll attempt', attempts, 'for', verseKey, 'found:', verseY !== undefined);
@@ -1005,20 +980,19 @@ function QuranVerseView({ pageNumber, width, height, isActive }: Props) {
         if (__DEV__) console.log('[QuranTargetScroll] success via retry loop', verseKey);
         clearPendingVerseHighlight();
         scrollRef.current.scrollTo({ y: Math.max(0, verseY - scrollOffsetRef.current), animated: true });
-        setFlashingVerseKey(verseKey);
       } else if (attempts < 37) { // 37 × 80ms = ~3 s window — handles slow font loading
         attempts++;
-        flashTimerRef.current = setTimeout(tryScrollAndFlash, 80);
+        scrollRetryTimerRef.current = setTimeout(tryScroll, 80);
       } else {
         if (__DEV__) console.warn('[QuranTargetScroll] gave up after', attempts, 'retries for', verseKey, 'page', pageNumber);
         clearPendingVerseHighlight(); // give up — verse not found on this page
       }
     };
-    flashTimerRef.current = setTimeout(tryScrollAndFlash, 80);
+    scrollRetryTimerRef.current = setTimeout(tryScroll, 80);
     return () => {
-      if (flashTimerRef.current) {
-        clearTimeout(flashTimerRef.current);
-        flashTimerRef.current = null;
+      if (scrollRetryTimerRef.current) {
+        clearTimeout(scrollRetryTimerRef.current);
+        scrollRetryTimerRef.current = null;
       }
     };
   // clearPendingVerseHighlight is stable — safe to omit
@@ -1064,7 +1038,6 @@ function QuranVerseView({ pageNumber, width, height, isActive }: Props) {
         scrollRef.current.scrollTo({ y: scrollY, animated: true });
       }
     });
-    setFlashingVerseKey(verseKey);
   };
 
   // ── Render states ──────────────────────────────────────────────────────────
@@ -1183,8 +1156,6 @@ function QuranVerseView({ pageNumber, width, height, isActive }: Props) {
             isDark={isDark}
             verseYMapRef={verseYMap}
             pendingScrollCbRef={pendingScrollCbRef}
-            shouldFlash={flashingVerseKey === item.verseKey}
-            onFlashDone={clearFlashingVerse}
             onLongPress={handleVerseLongPress}
             onPress={toggleChrome}
           />

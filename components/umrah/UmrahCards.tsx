@@ -11,7 +11,7 @@
 
 import React, { memo, useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
+import { createAudioPlayer, type AudioPlayer } from 'expo-audio';
 import { UmrahTheme } from './umrahTheme';
 import ArabicText from '@/components/ArabicText';
 import SvgIcon from '@/components/SvgIcon';
@@ -151,7 +151,11 @@ export const DuaCard = memo(function DuaCard({
     }
 
     if (!playerRef.current) {
-      await setAudioModeAsync({ playsInSilentMode: true }).catch(() => {});
+      // Audio mode is configured globally at app startup (app/_layout.tsx) with
+      // shouldPlayInBackground: true. Do NOT call setAudioModeAsync here — a
+      // partial mode object resets the unspecified fields to their defaults
+      // (shouldPlayInBackground=false), which kills Quran background playback
+      // on screen lock.
       const player = createAudioPlayer(audioSource);
       playerRef.current = player;
       player.addListener('playbackStatusUpdate', status => {

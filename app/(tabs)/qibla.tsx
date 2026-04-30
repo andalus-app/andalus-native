@@ -252,14 +252,30 @@ export default function QiblaScreen() {
   // useFocusEffect: starts the magnetometer only when this tab is visible and
   // stops it (+ clears the compass-alive indicator) when the user navigates
   // away. Using plain useEffect left the sensor running on every other tab.
+  //
+  // ── Async-cleanup race (fixed 2026-04-30) ──
+  // watchHeadingAsync is async. If the user leaves the tab WHILE the await is
+  // still pending, the cleanup runs before headingSubRef has been assigned —
+  // the subscription is then installed orphaned and streams forever. Each
+  // quick Qibla→other-tab cycle leaks another subscription, which is what
+  // caused the progressive slowdown reported after navigating tabs for a few
+  // minutes. The fix: keep the subscription in a closure-local var and
+  // re-check `active` after the await — if cleanup already ran, remove the
+  // just-resolved subscription immediately. A second guard inside the callback
+  // discards any events that arrive after blur but before native fully tears
+  // the listener down.
   useFocusEffect(
     useCallback(() => {
       let active = true;
+      let sub: Location.LocationSubscription | null = null;
       (async () => {
         // Check only — never request automatically.
         const { status } = await Location.getForegroundPermissionsAsync();
         if (status !== 'granted' || !active) return;
-        headingSubRef.current = await Location.watchHeadingAsync((headingData) => {
+        const installed = await Location.watchHeadingAsync((headingData) => {
+          // Drop events that arrive after cleanup — protects against state
+          // updates on an unfocused screen if native delivers a queued event.
+          if (!active) return;
           const raw = headingData.trueHeading >= 0
             ? headingData.trueHeading : headingData.magHeading;
           headingRef.current = normDeg(raw);
@@ -271,10 +287,20 @@ export default function QiblaScreen() {
             if (p >= 100) setShowCalib(false);
           }
         });
+        // Cleanup may have already run while we awaited — if so, remove the
+        // newly-installed subscription before it leaks.
+        if (!active) {
+          installed.remove();
+          return;
+        }
+        sub = installed;
+        headingSubRef.current = installed;
       })();
       return () => {
         active = false;
-        headingSubRef.current?.remove();
+        const s = sub ?? headingSubRef.current;
+        s?.remove();
+        sub = null;
         headingSubRef.current = null;
         setCompassAlive(false);
       };
