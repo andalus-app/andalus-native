@@ -3,10 +3,39 @@ new file mode 100644
 index 0000000..bc5503a
 Binary files /dev/null and b/node_modules/expo-audio/.DS_Store differ
 diff --git a/node_modules/expo-audio/ios/MediaController.swift b/node_modules/expo-audio/ios/MediaController.swift
-index 2dd3fb2..2fda4c9 100644
+index 2dd3fb2..ab55b94 100644
 --- a/node_modules/expo-audio/ios/MediaController.swift
 +++ b/node_modules/expo-audio/ios/MediaController.swift
-@@ -110,6 +110,20 @@ class MediaController {
+@@ -22,6 +22,28 @@ class MediaController {
+ 
+     DispatchQueue.main.async {
+       if let player {
++        // iOS lockscreen Now Playing controls only appear when the active
++        // AVAudioSession category is .playback. expo-audio's setAudioMode
++        // sets this when called with playsInSilentMode:true, but the call is
++        // async + fire-and-forget on the JS side, so by the time
++        // setActiveForLockScreen runs the category may still be the previous
++        // session's category (e.g. .ambient from a paused track in a
++        // different app). Without the lockscreen card iOS also tends to
++        // suspend background audio after a few stalls, which manifests as
++        // "stops after ~5 repeats" with no media controls visible.
++        //
++        // Fix from upstream PR expo/expo#40919: explicitly assert the
++        // .playback category here, right before registering the player as
++        // the lockscreen owner. options:[] is intentional — extra options
++        // (.duckOthers / .mixWithOthers) can prevent iOS from treating this
++        // app as the primary Now Playing source.
++        let session = AVAudioSession.sharedInstance()
++        do {
++          try session.setCategory(.playback, mode: .default, options: [])
++          try session.setActive(true)
++        } catch {
++          NSLog("expo-audio: failed to configure audio session for lockscreen controls: \(error.localizedDescription)")
++        }
+         self.enableRemoteCommands(options: options)
+         self.updateNowPlayingInfo(for: player)
+       } else {
+@@ -110,6 +132,20 @@ class MediaController {
    }
  
    private func loadArtworkFromURL(url: URL, completion: @escaping (MPMediaItemArtwork?) -> Void) {

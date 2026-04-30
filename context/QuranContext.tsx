@@ -113,6 +113,11 @@ type QuranContextValue = {
 
   // Clear the explicit surah override (call when user manually scrolls to a new page)
   clearExplicitSurah: () => void;
+
+  // Called by QuranAudioPlayer when the user starts new playback (loadAndPlay /
+  // loadAndPlayFromVerse). Resets the user-navigation grace timer so the audio
+  // status callback can resume auto-paging the reader to the playing verse.
+  clearUserPageOverride: () => void;
 };
 
 // ── Context ───────────────────────────────────────────────────────────────────
@@ -240,27 +245,56 @@ export function QuranProvider({ children }: Props) {
     return surahForPage(currentPage).id;
   }, [currentPage, explicitSurahVersion]);
 
+  // Sticky flag: true while the user has explicitly chosen a page that may
+  // differ from the audio's current page. While true, the audio status callback
+  // does not auto-advance the reader to the playing verse's page — the user is
+  // reading where they want, audio plays in the background.
+  //
+  // Set by:  goToPage (manual swipe, picker tap, contents tap, search result,
+  //          deep-link, bookmark) — anywhere the user explicitly navigates.
+  // Cleared by: clearUserPageOverride() — called from QuranAudioPlayer when
+  //          the user starts new playback (loadAndPlay / loadAndPlayFromVerse)
+  //          or resumes (resume), i.e. an explicit "follow this audio" signal.
+  //
+  // Without this flag, the playback callback fires ~4×/s and would drag the
+  // pager forward to the audio's page each time the user manually swiped
+  // backwards — which feels like the app is frozen.
+  const userPageOverrideRef = useRef<boolean>(false);
+
   const goToPage = useCallback((page: number) => {
     const clamped = Math.min(604, Math.max(1, page));
+    userPageOverrideRef.current = true;
     setCurrentPage(clamped);
     setContentsMenuOpen(false);
+  }, []);
+
+  // Called by QuranAudioPlayer (loadAndPlay / loadAndPlayFromVerse / resume) so
+  // the audio's auto-page resumes after a user-initiated navigation override.
+  const clearUserPageOverride = useCallback(() => {
+    userPageOverrideRef.current = false;
   }, []);
 
   // Stable callback — audio player calls this ~every 250ms during playback.
   // Uses currentPageRef (not currentPage state) to avoid stale closures in the
   // long-lived status update callback registered by QuranAudioPlayer.
+  //
+  // setActiveVerseKey runs every tick (cheap — same value is a no-op in React).
+  // setCurrentPage only runs when the audio's page actually changed AND the
+  // user hasn't taken manual control. This prevents the playback callback from
+  // continuously dragging the pager forward while the user browses backwards.
   const setPlaybackVerse = useCallback(
     (verseKey: string | null, pageNumber: number | null) => {
       setActiveVerseKey(verseKey);
       if (
         pageNumber !== null &&
         pageNumber > 0 &&
-        pageNumber !== currentPageRef.current
+        pageNumber !== currentPageRef.current &&
+        !userPageOverrideRef.current
       ) {
-        goToPage(pageNumber);
+        setCurrentPage(pageNumber);
       }
     },
-    [goToPage],
+    [],
   );
 
   const clearPendingSurahScroll = useCallback(() => setPendingSurahScroll(null), []);
@@ -399,6 +433,7 @@ export function QuranProvider({ children }: Props) {
       khatmahRange,
       setKhatmahRange,
       clearExplicitSurah,
+      clearUserPageOverride,
     }),
     [
       currentPage,
@@ -441,6 +476,7 @@ export function QuranProvider({ children }: Props) {
       khatmahRange,
       setKhatmahRange,
       clearExplicitSurah,
+      clearUserPageOverride,
     ],
   );
 

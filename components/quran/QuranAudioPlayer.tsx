@@ -29,6 +29,8 @@ import {
   Easing,
   PanResponder,
   useWindowDimensions,
+  AppState,
+  type AppStateStatus,
   type GestureResponderEvent,
   type LayoutChangeEvent,
 } from 'react-native';
@@ -54,6 +56,7 @@ import {
   isSurahDownloaded,
   getBismillahAudioUri,
   isBismillahDownloaded,
+  getVerseAudioUri,
   RECITERS,
   DownloadCancelledError,
 } from '../../services/quranAudioService';
@@ -85,6 +88,12 @@ const PICKER_CLEARANCE = Platform.OS === 'ios'
 // Sorted highest-first so top of popup = fastest, bottom = slowest
 const RATE_STEPS = [2, 1.75, 1.5, 1.25, 1, 0.75, 0.5] as const;
 const DEFAULT_RATE_INDEX = 4; // 1× normal speed
+
+// Album field shown on iOS Now Playing / lock-screen card. Branded so the
+// user can tell at a glance which app owns the audio session, and so the
+// card looks complete (iOS hides the album line when only title+artist are
+// set, which can make the card look "empty"/uninitialised at a glance).
+const LOCK_SCREEN_ALBUM = 'Hidayah Quran';
 
 // ── Lock-screen artwork ────────────────────────────────────────────────────────
 //
@@ -243,14 +252,32 @@ function QuranAudioPlayer() {
     setPlaybackVerse,
     activeVerseKey,
     chromeVisible,
+    contentsMenuOpen,
+    settingsPanelOpen,
+    searchOpen,
+    reciterSelectorOpen,
+    longPressedVerse,
+    clearUserPageOverride,
   } = useQuranContext();
 
   // This component is mounted at app root (see app/_layout.tsx) so the audio
   // engine — player ref, status listener, lock-screen integration, repeat
   // logic — survives navigation away from /quran. The UI bar, however, must
-  // only appear while the user is actually on the Quran screen.
+  // only appear while the user is actually on the Quran reader page itself.
+  //
+  // Two gates:
+  //   1. pathname must be /quran — hides the chip when the user navigates to
+  //      home, prayer times, qibla etc. while audio plays in the background.
+  //   2. No full-screen Quran modal (contents / settings / search / reciter /
+  //      verse-actions) is open. Pre-hoist these used a higher z-index in the
+  //      same render tree to cover the chip; now the chip lives in a different
+  //      tree so we must hide it explicitly.
   const pathname = usePathname();
   const isOnQuranScreen = pathname === '/quran';
+  const isAnyModalOpen =
+    contentsMenuOpen || settingsPanelOpen || searchOpen ||
+    reciterSelectorOpen || longPressedVerse !== null;
+  const showPlayerUi = isOnQuranScreen && !isAnyModalOpen;
 
   const [playerState, setPlayerState] = useState<PlayerState>({ mode: 'hidden' });
   const [isRepeat, setIsRepeat] = useState(false);
@@ -283,6 +310,40 @@ function QuranAudioPlayer() {
   const repeatSettingsRef = useRef(repeatSettings);
   repeatSettingsRef.current = repeatSettings;
 
+  // True when native AVPlayer-level looping is active. Set when the user has
+  // configured "play this whole surah on infinite repeat-interval" — the most
+  // common background-listening case. With native loop on, AVPlayer rewinds
+  // immediately at end-of-file with no JS involvement and no audible gap, so
+  // the iOS audio session stays continuously active and iOS does not terminate
+  // the app for going silent — even after many loops in the background.
+  //
+  // While this is true, the JS interval-repeat boundary check and the
+  // didJustFinish interval-repeat handler are skipped (otherwise JS would
+  // also try to seek and would compete with the native loop).
+  const useNativeLoopRef = useRef(false);
+
+  /**
+   * Returns true when the audio player can use native AVPlayer looping for the
+   * given repeat settings. Conditions:
+   *   - repeatInterval is on
+   *   - repeatCount is null (infinite — finite counts need JS bookkeeping)
+   *   - The interval is the entire surah (from verse 1 of fromSurahId to the
+   *     last verse of the same surah)
+   *   - fromSurahId equals the currently playing surah (cross-surah loops
+   *     can't use a single track loop)
+   */
+  function canUseNativeLoop(rs: RepeatSettings, surahId: number | null): boolean {
+    if (surahId === null) return false;
+    if (!rs.repeatInterval) return false;
+    if (rs.repeatCount !== null) return false;
+    if (rs.fromSurahId !== rs.toSurahId) return false;
+    if (rs.fromSurahId !== surahId) return false;
+    if (rs.fromVerse !== 1) return false;
+    const surah = SURAH_INDEX.find((s) => s.id === rs.fromSurahId);
+    if (!surah) return false;
+    return rs.toVerse === surah.versesCount;
+  }
+
   // Tracks how many times the interval has looped so far.
   // 1 = the interval is playing for the first time (not yet looped).
   // Reset to 1 whenever repeatInterval is toggled on or a new interval starts.
@@ -290,7 +351,59 @@ function QuranAudioPlayer() {
 
   // Tracks per-verse repeat state: which verse is being looped and how many times it has played.
   // { key: verseKey, plays: number } — null when no verse repeat is active.
+  // Used by the LEGACY chapter-file fallback path (when per-verse audio URL
+  // can't be derived for a reciter). The primary verse-repeat path now uses
+  // verseLoopActiveRef + a per-verse audio file with native AVPlayer loop.
   const verseRepeatLoopRef = useRef<{ key: string; plays: number } | null>(null);
+
+  // Set when the player is currently sourced from a per-verse audio file
+  // (one ayah, played end-to-end and looped) instead of the chapter file.
+  // While active:
+  //   • verseTimingsRef.current is null — no verse-transition / highlight sync.
+  //   • The chapter-file repeat-interval / verse-transition logic in
+  //     onPlaybackStatusUpdate is bypassed.
+  //   • didJustFinish either reseeks-and-replays (finite count, JS counts) or
+  //     never fires at all (infinite count, native AVPlayer loop handles it).
+  //
+  // For finite count: `count` is the target number of plays; `plays` starts at 1
+  // (the first end-to-end play) and increments on each didJustFinish.
+  // For infinite count: count = null, plays is unused (AVPlayer.loop = true does
+  // the work natively, didJustFinish is suppressed by the native loop branch).
+  const verseLoopActiveRef = useRef<{
+    surahId: number;
+    verseId: number;     // 0 for bismillah (BSMLLH_X)
+    verseKey: string;    // canonical key for highlight + lock-screen metadata
+    count: number | null;
+    plays: number;
+    pageNumber: number;
+  } | null>(null);
+
+  // Set true while loadAndLoopVerse is invoking its chapter-mode fallback
+  // (per-verse CDN URL didn't resolve). Tells loadAndPlayFromVerse to skip
+  // its repeat-verse → verse-loop routing, otherwise the two functions
+  // would tail-recurse via promise chain forever, the audio session
+  // would never get a real player, and nothing would play.
+  const bypassVerseLoopRoutingRef = useRef(false);
+
+  // Reciter IDs whose CDN doesn't expose per-verse audio files. Populated
+  // the first time loadAndLoopVerse falls back for a reciter; checked by
+  // the auto-enter-on-first-verse hook in onPlaybackStatusUpdate so we
+  // don't retry verse-loop on every verse transition (which would tear
+  // down the chapter player every few seconds and prevent any audio from
+  // playing). The set is intentionally not persisted across app launches —
+  // expo-audio's reciter list and QuranCDN slugs both change rarely; a
+  // restart simply gives the user one more chance to discover availability.
+  const verseLoopUnavailableReciterRef = useRef<Set<number>>(new Set());
+
+  // Tracks whether the app is in the foreground or background. Read inside
+  // the playback status callback to suppress non-essential JS work
+  // (verse-highlight updates, lock-screen metadata churn) while audio is
+  // playing on a locked screen. iOS treats background audio apps as
+  // "well-behaved" only as long as they don't do significant non-audio
+  // work; per-verse React state updates × ~12 chapter loops were enough to
+  // trip the suspension heuristic on full-surah native-loop and kill the
+  // session after ~10 cycles.
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
 
   // Set to true immediately after a verse-repeat seek is issued.
   // Blocks the verse-transition check on subsequent ticks until the seek
@@ -403,6 +516,7 @@ function QuranAudioPlayer() {
     verseRepeatLoopRef.current = null;
     verseRepeatSeekingRef.current = false;
     intervalRepeatSeekingRef.current = false;
+    verseLoopActiveRef.current = null;
     stopAtTimestampRef.current = null;
     bismillahLockUntilMsRef.current = 0;
     // Cancel the 750ms play-retry timer (startPlayer) if it's still pending.
@@ -478,6 +592,15 @@ function QuranAudioPlayer() {
       playerSubRef.current = subscription;
       player.setPlaybackRate(RATE_STEPS[rateIndexRef.current]);
 
+      // Apply native AVPlayer-level looping if the user has set up "infinite
+      // repeat-interval over the whole surah" — the most common background
+      // listening case. Native loop avoids the brief silent gap between JS
+      // seekTo + play() that can cause iOS to deactivate the audio session
+      // and terminate the app after a few loops.
+      const nativeLoop = canUseNativeLoop(repeatSettingsRef.current, surahId);
+      useNativeLoopRef.current = nativeLoop;
+      try { player.loop = nativeLoop; } catch {}
+
       if (startMs > 0) player.seekTo(startMs / 1000);
 
       pendingPlayRef.current = true;
@@ -512,6 +635,7 @@ function QuranAudioPlayer() {
           {
             title: surahName,
             artist: reciterName,
+            albumTitle: LOCK_SCREEN_ALBUM,
             artworkUrl: artworkUriRef.current ?? undefined, // use cached URI if already resolved
           },
         );
@@ -528,6 +652,7 @@ function QuranAudioPlayer() {
             player.updateLockScreenMetadata({
               title: surahName,
               artist: reciterName,
+              albumTitle: LOCK_SCREEN_ALBUM,
               artworkUrl: iconUri,
             });
           } catch {}
@@ -536,6 +661,22 @@ function QuranAudioPlayer() {
     },
     [], // stable: uses onPlaybackStatusUpdateRef wrapper — no deps needed
   );
+
+  // Sync native AVPlayer loop flag whenever repeat settings or current surah
+  // change mid-playback. Without this, toggling "repeat interval" during
+  // playback wouldn't apply native looping until the next loadAndPlay.
+  useEffect(() => {
+    const player = playerRef.current;
+    if (!player) return;
+    const surahId = currentSurahIdRef.current;
+    const nativeLoop = canUseNativeLoop(repeatSettings, surahId);
+    if (nativeLoop !== useNativeLoopRef.current) {
+      useNativeLoopRef.current = nativeLoop;
+      try { player.loop = nativeLoop; } catch {}
+    }
+    // canUseNativeLoop is a pure function; intentional re-eval on each settings change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [repeatSettings, currentSurahId]);
 
   // ── Audio mode setup ───────────────────────────────────────────────────────
 
@@ -569,6 +710,16 @@ function QuranAudioPlayer() {
     }).catch(() => {});
   }, []);
 
+  // Mirror AppState into a ref so the playback status callback (deps=[]) can
+  // read the latest value without going stale. Subscription is once per
+  // mount; the callback is module-stable after creation.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      appStateRef.current = state;
+    });
+    return () => sub.remove();
+  }, []);
+
   // ── Cleanup ────────────────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -593,6 +744,59 @@ function QuranAudioPlayer() {
     if (surahId === null) return;
 
     if (status.didJustFinish) {
+      // ── Verse-loop mode (per-verse audio file) ─────────────────────────
+      // For infinite verse-repeat the AVPlayer.loop=true path handles the
+      // rewind natively and didJustFinish is NOT emitted, so reaching this
+      // branch implies finite count. Increment the play counter and either
+      // restart the same file (next loop) or hand back to chapter playback.
+      const vl = verseLoopActiveRef.current;
+      if (vl !== null) {
+        // Infinite verse-loop: AVPlayer.loop=true should have absorbed the
+        // end-of-file natively, so reaching this branch means native loop
+        // didn't engage (timing race, expo-audio bridge oddity, etc.). Do
+        // the JS-driven seek+play as a defensive backstop AND re-assert
+        // player.loop=true so subsequent end-of-file events ARE handled
+        // natively. End-of-file seek+play is far more iOS-tolerant than
+        // mid-track seek (which is what the chapter-mode legacy path did
+        // and what iOS suspended after ~5 cycles).
+        if (vl.count === null) {
+          try { playerRef.current!.loop = true; } catch {}
+          try { playerRef.current?.seekTo(0, 0, 0); } catch {}
+          playerRef.current?.play();
+          return;
+        }
+        vl.plays += 1;
+        if (vl.plays <= vl.count) {
+          // End-of-file → seek-to-start + play. Cleaner state than mid-track
+          // seek (the previous chapter-mode approach iOS suspended after ~5
+          // cycles): the AVPlayerItem reaches its natural end, we rewind a
+          // file that just finished, no mid-stream interruption.
+          try { playerRef.current?.seekTo(0, 0, 0); } catch {}
+          playerRef.current?.play();
+          return;
+        }
+        // Count reached — match the legacy "each verse plays N times before
+        // the next" semantic by chaining the loop onto the next verse with
+        // the same count. For bismillah-loop (verseId=0) the next verse is
+        // verse 1 of the same surah; no bismillah pre-play, since the user
+        // already heard it `count` times.
+        const nextSurah = vl.surahId;
+        const nextVerse = vl.verseId === 0 ? 1 : vl.verseId + 1;
+        verseLoopActiveRef.current = null;
+        const surahMeta = SURAH_INDEX.find((s) => s.id === nextSurah);
+        if (surahMeta && nextVerse <= surahMeta.versesCount) {
+          // pageNumber is reused — verses that span a page boundary will
+          // look slightly off in the reader for one verse until the user
+          // swipes; not worth a per-verse timings fetch on every advance.
+          loadAndLoopVerseRef.current?.(nextSurah, nextVerse, vl.count, vl.pageNumber);
+        } else {
+          // End of surah and no next verse on this surah — stop.
+          try { playerRef.current?.pause(); } catch {}
+          setPlayerState({ mode: 'paused', surahId: nextSurah, positionMs: 0, durationMs: 0 });
+        }
+        return;
+      }
+
       // Bismillah clip finished naturally (short verse-level audio).
       // Transition to surah immediately and cancel the safety timer.
       // If the timer already fired first, bismillahPendingRef is null — no-op.
@@ -635,8 +839,24 @@ function QuranAudioPlayer() {
           const shouldLoop = rs.repeatVerseCount === null || plays < rs.repeatVerseCount;
           if (shouldLoop) {
             verseRepeatSeekingRef.current = true;
-            playerRef.current?.seekTo(prevVerseTiming.timestampFrom / 1000);
+            // pendingPlayRef + zero-tolerance seek + safety retry — see note at
+            // the in-flight verse-repeat path below for the full rationale.
+            // Same pattern is required here because didJustFinish fires at
+            // end-of-file, which is the most fragile state for resuming on a
+            // locked screen — AVPlayer has just stopped output and iOS is
+            // most likely to drop the immediate play() on the way back.
+            pendingPlayRef.current = true;
+            playerRef.current?.seekTo(prevVerseTiming.timestampFrom / 1000, 0, 0);
             playerRef.current?.play();
+            const retryTarget = playerRef.current;
+            if (startRetryTimerRef.current) clearTimeout(startRetryTimerRef.current);
+            startRetryTimerRef.current = setTimeout(() => {
+              startRetryTimerRef.current = null;
+              if (!mountedRef.current) return;
+              if (playerRef.current === retryTarget && pendingPlayRef.current) {
+                retryTarget?.play();
+              }
+            }, 300);
             return;
           }
           // Count reached — reset and fall through to normal surah-end handling.
@@ -646,7 +866,11 @@ function QuranAudioPlayer() {
       }
 
       // Interval repeat: advance through the interval or loop back to start.
-      if (rs.repeatInterval) {
+      // Skipped when native AVPlayer looping is active — the player handles the
+      // rewind itself, so didJustFinish should not actually fire for that case.
+      // The guard is defensive (against a brief window during repeat-settings
+      // toggles where loop may not yet be applied).
+      if (rs.repeatInterval && !useNativeLoopRef.current) {
         const fromKey = `${rs.fromSurahId}:${rs.fromVerse}`;
         if (surahId < rs.fromSurahId) {
           // Current surah is before the interval — jump directly to the from-verse
@@ -735,6 +959,30 @@ function QuranAudioPlayer() {
       return;
     }
 
+    // ── Background-locked native-loop fast path ─────────────────────────
+    // When AVPlayer is doing a native loop (full-surah interval-repeat with
+    // canUseNativeLoop=true) AND the app is in the background, there is no
+    // useful JS work to do per status tick — audio plays continuously,
+    // verse-transition events would only fan out through React Context to
+    // re-render hidden views, and lock-screen metadata updates would thrash
+    // MPNowPlayingInfoCenter. iOS treats both as "this app is doing
+    // non-audio background work" and starts suspending the session after
+    // ~10 chapter loops (the user-observed residual cut). Skipping the rest
+    // of the callback keeps the JS thread quiet so iOS keeps treating us
+    // as a pure audio app. When the user foregrounds/unlocks, the next
+    // tick goes through the full path and re-syncs state.
+    //
+    // Single-ayah verse-loop hits this same fast path because didJustFinish
+    // is suppressed natively by AVPlayer.loop=true; the only reason that
+    // case already worked is verseTimingsRef.current is null there, which
+    // naturally short-circuits everything below — but skipping explicitly
+    // is cheaper than running through the entire callback to no-op.
+    const inBackgroundNativeLoop =
+      (useNativeLoopRef.current || verseLoopActiveRef.current !== null) &&
+      appStateRef.current !== 'active' &&
+      !status.didJustFinish;
+    if (inBackgroundNativeLoop) return;
+
     const isNowPlaying = status.timeControlStatus === 'playing';
     const isBuffering  = status.timeControlStatus === 'waitingToPlayAtSpecifiedRate';
 
@@ -796,8 +1044,11 @@ function QuranAudioPlayer() {
 
     // ── Repeat interval boundary check ───────────────────────────────────
     // If repeat interval is active and we've passed the "to" verse, seek back to "from".
+    // Skipped when AVPlayer-level native looping is active (full-surah infinite repeat) —
+    // in that case the rewind is handled natively without JS, so the JS seek
+    // would compete with it.
     const rs = repeatSettingsRef.current;
-    if (isNowPlaying && rs.repeatInterval && verseTimingsRef.current && surahId === rs.toSurahId) {
+    if (isNowPlaying && rs.repeatInterval && !useNativeLoopRef.current && verseTimingsRef.current && surahId === rs.toSurahId) {
       const toKey = `${rs.toSurahId}:${rs.toVerse}`;
       const toTiming = verseTimingsRef.current.find((t) => t.verseKey === toKey);
       if (toTiming) {
@@ -886,9 +1137,40 @@ function QuranAudioPlayer() {
           // Still mid-seek: skip all transition logic for this tick.
           // Fall through to setPlayerState so the seek-bar stays accurate.
         } else if (verse && verse.verseKey !== lastVerseKeyRef.current) {
+          // ── Auto-enter verse-loop on first verse detected during chapter
+          // playback when repeat-verse is on. This catches the common flow
+          // where the user toggled repeat-verse before pressing play (or
+          // before any verse was active) — handleUpdateRepeatSettings'
+          // newly-enabled branch couldn't enter the loop then because
+          // activeVerse was null. Now, the moment chapter playback reaches
+          // any content verse, we hand off to the per-verse audio file +
+          // AVPlayer.loop path so iOS keeps the session alive on locked
+          // screen. Without this, chapter playback continues and the legacy
+          // mid-track seek+play repeat below runs — which iOS suspends
+          // after ~5 cycles in the background.
+          if (
+            rs.repeatVerse &&
+            !verseLoopActiveRef.current &&
+            !verse.verseKey.startsWith('BSMLLH_') &&
+            !verseLoopUnavailableReciterRef.current.has(reciterIdRef.current)
+          ) {
+            const parts = verse.verseKey.split(':').map(Number);
+            if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+              loadAndLoopVerseRef.current?.(
+                parts[0],
+                parts[1],
+                rs.repeatVerseCount,
+                verse.pageNumber,
+              );
+              return; // hand off to verse-loop — chapter player will be torn down
+            }
+          }
+
           // ── Repeat verse: seek back to start of the previous verse ────
-          // When repeatVerse is on, each verse plays N times (repeatVerseCount)
-          // before the player is allowed to advance. null = infinite.
+          // Legacy chapter-file fallback. Reached only when verse-loop
+          // wasn't entered above (e.g. CDN URL pattern mismatch caused
+          // loadAndLoopVerse to fall back here). Has the known
+          // ~5-repeat-on-locked-screen limitation.
           if (rs.repeatVerse && lastVerseKeyRef.current !== null) {
             const prevKey = lastVerseKeyRef.current;
             const prevVerseTiming = verseTimingsRef.current.find(
@@ -905,12 +1187,45 @@ function QuranAudioPlayer() {
               const shouldLoop = rs.repeatVerseCount === null || plays < rs.repeatVerseCount;
               if (shouldLoop) {
                 verseRepeatSeekingRef.current = true; // lock until seek confirmed
-                playerRef.current?.seekTo(prevVerseTiming.timestampFrom / 1000);
+                // Set pendingPlayRef so the next status tick (which can briefly
+                // report 'paused' while AVPlayer settles on the new position)
+                // is suppressed by the early-return guard at the top of this
+                // callback — without this the UI flips to paused, and worse,
+                // setPlayerState updates churn iOS Now Playing info during the
+                // gap, which after several repeats on a locked screen has been
+                // observed to cause iOS to deactivate the audio session and
+                // silently drop the post-seek play() (the "stops after ~4
+                // repeats" symptom).
+                pendingPlayRef.current = true;
+                // Zero-tolerance seek: without this, expo-audio passes
+                // CMTime.positiveInfinity for both before/after tolerances and
+                // AVPlayer can land on the nearest keyframe — for short verses
+                // this may sit outside the verse range, making the next-tick
+                // verse-transition detection misfire and the seekingRef guard
+                // fail to clear.
+                playerRef.current?.seekTo(prevVerseTiming.timestampFrom / 1000, 0, 0);
                 // Defensive: AVPlayer can briefly enter a non-playing state
                 // immediately after a seek (especially in background). Re-issue
                 // play() so iOS doesn't deactivate the audio session, which
                 // would silently stop playback when the screen is locked.
                 playerRef.current?.play();
+                // Safety retry — if the post-seek play() was silently dropped
+                // by iOS (no 'playing' status arrives), re-issue it once after
+                // 300ms. pendingPlayRef is cleared automatically the moment a
+                // 'playing' or 'buffering' status update is received, so this
+                // is a no-op on the happy path. Mirrors the same recovery
+                // pattern used in startPlayer for the bismillah → surah
+                // transition. Reuses startRetryTimerRef since startPlayer's
+                // retry has long since fired by this point.
+                const retryTarget = playerRef.current;
+                if (startRetryTimerRef.current) clearTimeout(startRetryTimerRef.current);
+                startRetryTimerRef.current = setTimeout(() => {
+                  startRetryTimerRef.current = null;
+                  if (!mountedRef.current) return;
+                  if (playerRef.current === retryTarget && pendingPlayRef.current) {
+                    retryTarget?.play();
+                  }
+                }, 300);
                 return; // stay on this verse — don't update lastVerseKeyRef
               }
               // Count reached — reset and fall through to advance to next verse.
@@ -925,16 +1240,32 @@ function QuranAudioPlayer() {
           // in Swift. Always include artworkUrl here — omitting it causes Swift to
           // set artworkUrl=nil, which clears the artwork from the lock screen on
           // every verse transition.
-          const parsed = parseVerseKey(verse.verseKey);
-          if (parsed) {
-            const reciterName = RECITERS.find((r) => r.id === reciterIdRef.current)?.name ?? '';
-            try {
-              playerRef.current?.updateLockScreenMetadata({
-                title: `${parsed.surahName}: ${parsed.verseNum}`,
-                artist: reciterName,
-                artworkUrl: artworkUriRef.current ?? undefined,
-              });
-            } catch {}
+          //
+          // Skipped while native AVPlayer-loop is active for the full surah
+          // (canUseNativeLoop). Reason: in that mode the chapter file is
+          // looping continuously in the background; a metadata swap on every
+          // verse boundary (4–286× per surah loop) thrashes
+          // MPNowPlayingInfoCenter, which iOS interprets as instability and
+          // suspends the audio session after a handful of cycles
+          // (the user-observed "stops after 5 repeats" symptom for full-surah
+          // interval-repeat). The lock-screen card stays on the surah-level
+          // title set in startPlayer — slightly less informative on the
+          // locked screen, but keeps the session alive indefinitely. The
+          // in-app verse highlight (setPlaybackVerseRef just above) still
+          // updates so the reader stays in sync when the user unlocks.
+          if (!useNativeLoopRef.current) {
+            const parsed = parseVerseKey(verse.verseKey);
+            if (parsed) {
+              const reciterName = RECITERS.find((r) => r.id === reciterIdRef.current)?.name ?? '';
+              try {
+                playerRef.current?.updateLockScreenMetadata({
+                  title: `${parsed.surahName}: ${parsed.verseNum}`,
+                  artist: reciterName,
+                  albumTitle: LOCK_SCREEN_ALBUM,
+                  artworkUrl: artworkUriRef.current ?? undefined,
+                });
+              } catch {}
+            }
           }
         }
       }
@@ -1080,6 +1411,9 @@ function QuranAudioPlayer() {
       const myGen = ++loadGenerationRef.current;
       // Pause YouTube live stream if it's playing — Quran audio takes priority.
       pauseYoutubePlayer();
+      // User explicitly chose to play this audio — re-enable auto-page so the
+      // reader follows along with playback. (See QuranContext.userPageOverrideTsRef.)
+      clearUserPageOverride();
       teardown();
       currentSurahIdRef.current = surahId;
       // Show spinner immediately while we check cache
@@ -1137,7 +1471,7 @@ function QuranAudioPlayer() {
         setPlayerState({ mode: 'error', surahId, message: 'Kunde inte ladda ljud' });
       }
     },
-    [settings.reciterId, teardown, startPlayer, startWithBismillah, audioCacheRefreshRef],
+    [settings.reciterId, teardown, startPlayer, startWithBismillah, audioCacheRefreshRef, clearUserPageOverride],
   );
 
   // Keep ref in sync so onPlaybackStatusUpdate can call loadAndPlay without a
@@ -1159,13 +1493,16 @@ function QuranAudioPlayer() {
   const resume = useCallback(() => {
     pendingPlayRef.current = true;
     playerRef.current?.play();
+    // User actively resumed playback — re-enable auto-page so the reader follows
+    // along again. (See QuranContext.userPageOverrideTsRef.)
+    clearUserPageOverride();
     // Immediate UI feedback — flip to playing so the icon changes instantly.
     setPlayerState((prev) =>
       prev.mode === 'paused'
         ? { mode: 'playing', surahId: prev.surahId, positionMs: prev.positionMs, durationMs: prev.durationMs }
         : prev,
     );
-  }, []);
+  }, [clearUserPageOverride]);
 
   const stop = useCallback(() => {
     continuousPlayRef.current = false;
@@ -1345,10 +1682,43 @@ function QuranAudioPlayer() {
   const loadAndPlayFromVerse = useCallback(
     async (surahId: number, startVerseKey: string, stopAtVerseKey: string | null, continuous?: boolean) => {
       if (__DEV__) console.log('[LAFV] called surah=' + surahId + ' start=' + startVerseKey + ' stop=' + stopAtVerseKey);
+
+      // Verse-loop fast path: if the user has "repeat verse" enabled and this
+      // is a plain "play this verse" request (no stop-at, not continuous,
+      // not part of a cross-surah advance), bypass chapter playback entirely
+      // and hand off to loadAndLoopVerse — which sources a single-ayah file
+      // and uses AVPlayer's native loop. This is what makes verse-repeat
+      // survive a locked screen indefinitely.
+      //
+      // BSMLLH_ keys are excluded: when the caller asks to start at a
+      // surah's bismillah it's the surah-start orchestration (bismillah
+      // pre-play → surah audio), not a request to loop the bismillah.
+      // To loop bismillah specifically, the user toggles repeat-verse while
+      // the bismillah is the active verse — handleUpdateRepeatSettings'
+      // "newly enabled" branch handles that case.
+      const rsForLoop = repeatSettingsRef.current;
+      const verseIdMatch = startVerseKey.match(/^(\d+):(\d+)$/);
+      if (
+        rsForLoop.repeatVerse &&
+        !continuous &&
+        stopAtVerseKey === null &&
+        verseIdMatch &&
+        parseInt(verseIdMatch[1], 10) === surahId &&
+        !bypassVerseLoopRoutingRef.current
+      ) {
+        const verseId = parseInt(verseIdMatch[2], 10);
+        const surahMeta = SURAH_INDEX.find((s) => s.id === surahId);
+        const targetPage = surahMeta?.firstPage ?? 1;
+        await loadAndLoopVerseRef.current?.(surahId, verseId, rsForLoop.repeatVerseCount, targetPage);
+        return;
+      }
+
       // Increment load generation so any in-flight concurrent call becomes stale.
       const myGen = ++loadGenerationRef.current;
       // Pause YouTube live stream — Quran audio takes priority.
       pauseYoutubePlayer();
+      // User explicitly chose to play this audio — re-enable auto-page.
+      clearUserPageOverride();
       continuousPlayRef.current = continuous ?? false;
 
       // Reset any previous cross-surah stop (new session replaces it).
@@ -1460,6 +1830,7 @@ function QuranAudioPlayer() {
               playerRef.current?.updateLockScreenMetadata({
                 title: `${parsed.surahName}: ${parsed.verseNum}`,
                 artist: reciterName,
+                albumTitle: LOCK_SCREEN_ALBUM,
                 artworkUrl: artworkUriRef.current ?? undefined,
               });
             } catch {}
@@ -1474,11 +1845,142 @@ function QuranAudioPlayer() {
         setPlayerState({ mode: 'error', surahId, message: 'Kunde inte ladda ljud' });
       }
     },
-    [teardown, startPlayer, startWithBismillah, audioCacheRefreshRef],
+    [teardown, startPlayer, startWithBismillah, audioCacheRefreshRef, clearUserPageOverride],
   );
   // Assign ref here, after the useCallback — assigning it before the declaration
   // (line ~843) would set it to undefined on every render due to const hoisting.
   loadAndPlayFromVerseRef.current = loadAndPlayFromVerse;
+
+  // ── Verse-loop mode ─────────────────────────────────────────────────────────
+  //
+  // Loads a single ayah audio file as the player source and (for infinite
+  // repeat) hands the loop to AVPlayer's native `loop = true` — iOS rewinds
+  // and replays inside the audio engine without ever emitting JS callbacks
+  // or letting the audio session go silent. This is what makes verse-repeat
+  // survive a locked screen for hours; the previous implementation did
+  // chapter-file + JS-driven `seekTo + play()` mid-track every loop, which
+  // iOS suspended after ~5 cycles in the background.
+  //
+  // Falls back gracefully when the QuranCDN per-verse URL pattern doesn't
+  // match for the current reciter — caller resumes the legacy chapter-file
+  // path in that case.
+  const loadAndLoopVerse = useCallback(
+    async (surahId: number, verseId: number, count: number | null, pageNumber: number) => {
+      if (!mountedRef.current) return;
+      const myGen = ++loadGenerationRef.current;
+      pauseYoutubePlayer();
+      clearUserPageOverride();
+      teardown();
+      currentSurahIdRef.current = surahId;
+      setPlayerState({ mode: 'loading', surahId });
+
+      // verseId 0 = bismillah of this surah (BSMLLH_{surahId}). For all
+      // non-Al-Fatihah, non-At-Tawbah surahs the bismillah audio is the
+      // dedicated short clip we already cache for surah-start playback.
+      const verseKey = verseId === 0 ? `BSMLLH_${surahId}` : `${surahId}:${verseId}`;
+      const reciterId = reciterIdRef.current;
+
+      let uri: string | null;
+      try {
+        if (verseId === 0) {
+          uri = await getBismillahAudioUri(reciterId);
+        } else {
+          uri = await getVerseAudioUri(reciterId, surahId, verseId);
+        }
+      } catch {
+        uri = null;
+      }
+      if (!mountedRef.current || loadGenerationRef.current !== myGen) return;
+
+      if (!uri) {
+        // Per-verse URL couldn't be derived (CDN pattern mismatch or download
+        // failure). Fall back to the legacy chapter-file repeat path so the
+        // user still gets *some* repeat behaviour — just without the
+        // background-stable native loop.
+        //
+        // Mark this reciter as verse-loop-unavailable so the verse-transition
+        // auto-enter hook in onPlaybackStatusUpdate doesn't retry on every
+        // verse boundary (which would tear down the chapter player on each
+        // transition and prevent any audio from playing).
+        verseLoopUnavailableReciterRef.current.add(reciterId);
+        //
+        // bypassVerseLoopRoutingRef stops loadAndPlayFromVerse from re-routing
+        // straight back into loadAndLoopVerse (which would loop forever via
+        // promise tail-recursion since the per-verse URL is still failing).
+        // Cleared synchronously after the call returns.
+        bypassVerseLoopRoutingRef.current = true;
+        try {
+          if (verseId === 0) {
+            // Bismillah-loop fallback — load the surah from the start so the
+            // existing bismillah pre-play orchestration runs as normal.
+            await loadAndPlayRef.current?.(surahId);
+          } else {
+            await loadAndPlayFromVerseRef.current?.(surahId, verseKey, null);
+          }
+        } finally {
+          bypassVerseLoopRoutingRef.current = false;
+        }
+        return;
+      }
+
+      // No verse timings during a single-ayah loop: there is only one verse,
+      // its highlight is set explicitly below, and the chapter-file
+      // repeat-interval / verse-transition checks in onPlaybackStatusUpdate
+      // are gated on verseTimingsRef.current being non-null.
+      verseTimingsRef.current = null;
+      lastVerseKeyRef.current = verseKey;
+      setPlaybackVerseRef.current(verseKey, pageNumber);
+
+      verseLoopActiveRef.current = {
+        surahId,
+        verseId,
+        verseKey,
+        count,
+        plays: 1, // first playthrough is play #1
+        pageNumber,
+      };
+
+      // bismillahLockUntilMsRef is for chapter playback (verse 1 vs BSMLLH_X
+      // tie-break at positionMs=0). In verse-loop mode the verse key is set
+      // explicitly above and never changes, so the lock is irrelevant.
+      bismillahLockUntilMsRef.current = 0;
+
+      if (loadGenerationRef.current !== myGen) return;
+      await startPlayer(uri, surahId, 0);
+      if (!mountedRef.current || loadGenerationRef.current !== myGen) return;
+
+      // Native AVPlayer loop — this is the whole point. With loop=true, iOS
+      // performs `seek(.zero) + play()` inside AVPlayer when end-of-file is
+      // reached. didJustFinish is NOT emitted while looping (see
+      // expo-audio/ios/AudioPlayer.swift addPlaybackEndNotification), so JS
+      // is never woken and the audio session stays continuously active.
+      const useNativeLoop = count === null;
+      try { playerRef.current!.loop = useNativeLoop; } catch {}
+      // useNativeLoopRef is the chapter-mode flag; verse-loop has its own
+      // active-ref so we deliberately leave it alone.
+
+      // Re-assert lock-screen metadata for the verse — startPlayer set it to
+      // the surah-level title (no verse number); refresh to the verse-level
+      // form so the locked-screen card reads "Surah: N" matching what the
+      // user actually started looping. Artwork URI was already cached during
+      // the bismillah/normal flow earlier in the session.
+      const parsed = parseVerseKey(verseKey);
+      const reciterName = RECITERS.find((r) => r.id === reciterId)?.name ?? '';
+      if (parsed) {
+        try {
+          playerRef.current?.updateLockScreenMetadata({
+            title: `${parsed.surahName}: ${parsed.verseNum}`,
+            artist: reciterName,
+            albumTitle: LOCK_SCREEN_ALBUM,
+            artworkUrl: artworkUriRef.current ?? undefined,
+          });
+        } catch {}
+      }
+    },
+    [teardown, startPlayer, clearUserPageOverride],
+  );
+  const loadAndLoopVerseRef = useRef(loadAndLoopVerse);
+  loadAndLoopVerseRef.current = loadAndLoopVerse;
 
   useEffect(() => {
     audioCommandsRef.current = { loadAndPlay, loadAndPlayFromVerse, pause, resume, stop };
@@ -1497,6 +1999,14 @@ function QuranAudioPlayer() {
     const surahId = currentSurahIdRef.current;
     if (surahId === null) return; // nothing active — no restart needed
 
+    // If verse-loop is active, restart it with the new reciter — otherwise
+    // the user would lose their loop and drop into chapter playback.
+    const vl = verseLoopActiveRef.current;
+    if (vl !== null) {
+      loadAndLoopVerse(vl.surahId, vl.verseId, vl.count, vl.pageNumber);
+      return;
+    }
+
     // Resume from the active verse if one exists; otherwise restart surah from beginning.
     const verseKey = activeVerseKeyRef.current;
     if (verseKey) {
@@ -1504,7 +2014,7 @@ function QuranAudioPlayer() {
     } else {
       loadAndPlay(surahId);
     }
-  }, [settings.reciterId, loadAndPlay, loadAndPlayFromVerse]);
+  }, [settings.reciterId, loadAndPlay, loadAndPlayFromVerse, loadAndLoopVerse]);
 
   // ── Derived values ─────────────────────────────────────────────────────────
 
@@ -1578,6 +2088,69 @@ function QuranAudioPlayer() {
       verseRepeatSeekingRef.current = false;
     }
 
+    // ── Verse-loop transitions ────────────────────────────────────────────
+    // The chapter-file verse-repeat path (legacy seek+play in
+    // onPlaybackStatusUpdate) ran into iOS suspending the audio session
+    // after ~5 mid-track seeks on a locked screen. The new path swaps the
+    // player source to a single-verse audio file so iOS can loop it via
+    // AVPlayer.loop (infinite count) or via a clean end-of-file rewind
+    // (finite count) — both forms of which iOS treats as well-behaved
+    // background audio.
+    const verseLoopActive = verseLoopActiveRef.current !== null;
+    const activeSurahIdNow = currentSurahIdRef.current;
+    const activeVerse = activeVerseKeyRef.current;
+
+    // Enter verse-loop: toggle was off, is now on, and we have an active verse.
+    if (
+      !prev.repeatVerse &&
+      newSettings.repeatVerse &&
+      activeSurahIdNow !== null &&
+      activeVerse
+    ) {
+      let surahId: number;
+      let verseId: number;
+      if (activeVerse.startsWith('BSMLLH_')) {
+        surahId = parseInt(activeVerse.split('_')[1], 10);
+        verseId = 0; // sentinel for bismillah
+      } else {
+        const parts = activeVerse.split(':').map(Number);
+        surahId = parts[0];
+        verseId = parts[1];
+      }
+      // currentPage is captured via closure (deps include it). For a
+      // bismillah loop, the bismillah belongs to this surah's first page.
+      const firstPage = SURAH_INDEX.find((s) => s.id === surahId)?.firstPage ?? currentPage;
+      const targetPage = verseId === 0 ? firstPage : currentPage;
+      loadAndLoopVerseRef.current?.(surahId, verseId, newSettings.repeatVerseCount, targetPage);
+    }
+
+    // Exit verse-loop: toggle was on (and active), is now off — resume
+    // chapter playback at the same verse so the user can continue listening
+    // from where they were rather than starting over.
+    if (prev.repeatVerse && !newSettings.repeatVerse && verseLoopActive) {
+      const vl = verseLoopActiveRef.current!;
+      verseLoopActiveRef.current = null;
+      if (vl.verseId === 0) {
+        loadAndPlayRef.current?.(vl.surahId);
+      } else {
+        loadAndPlayFromVerseRef.current?.(vl.surahId, vl.verseKey, null);
+      }
+    }
+
+    // Count changed while already in verse-loop: re-enter so the new
+    // AVPlayer.loop flag is applied (toggling between native infinite loop
+    // and finite-count didJustFinish handling requires recreating the
+    // player with the new flag).
+    if (
+      prev.repeatVerse &&
+      newSettings.repeatVerse &&
+      verseLoopActive &&
+      prev.repeatVerseCount !== newSettings.repeatVerseCount
+    ) {
+      const vl = verseLoopActiveRef.current!;
+      loadAndLoopVerseRef.current?.(vl.surahId, vl.verseId, newSettings.repeatVerseCount, vl.pageNumber);
+    }
+
     // Cross-surah "Till" without interval repeat:
     // When the user picks a "Till" verse in a future surah and repeatInterval is
     // off, activate pendingStopVerseKeyRef so the existing "Spela till" mechanism
@@ -1623,7 +2196,7 @@ function QuranAudioPlayer() {
         loadAndPlayFromVerseRef.current?.(newSettings.fromSurahId, fromKey, null);
       }
     }
-  }, []);
+  }, [currentPage]);
 
   // ── Seek bar handlers ──────────────────────────────────────────────────────
 
@@ -1684,11 +2257,12 @@ function QuranAudioPlayer() {
     }
   }, [currentSurahId, currentPage, settings.reciterId, loadAndPlay, loadAndPlayFromVerse]);
 
-  // ── Off-screen: hide UI but keep audio engine running ────────────────────
+  // ── Off-screen / modal-covered: hide UI but keep audio engine running ───
   // The hooks above continue to execute (status listener, repeat logic, lock
-  // screen integration), so playback survives navigation away from /quran.
-  // When the user returns, the UI re-renders with current state.
-  if (!isOnQuranScreen) {
+  // screen integration), so playback survives navigation away from /quran or
+  // opening a Quran modal. When the user returns / closes the modal, the UI
+  // re-renders with current state.
+  if (!showPlayerUi) {
     return null;
   }
 

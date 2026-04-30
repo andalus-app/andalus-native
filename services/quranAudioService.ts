@@ -164,6 +164,71 @@ export async function deleteBismillahAudio(reciterId: number): Promise<void> {
 }
 
 /**
+ * Cache path for a per-verse audio file (single ayah recording).
+ * Used by the verse-repeat path: when the user enables "repeat this verse",
+ * the audio engine swaps the chapter source for this single-verse file and
+ * sets `player.loop = true`, so iOS loops the verse natively without ever
+ * waking the JS bridge — surviving locked-screen JS throttling indefinitely.
+ */
+function verseLocalPath(reciterId: number, surahId: number, verseId: number): string {
+  const s = String(surahId).padStart(3, '0');
+  const v = String(verseId).padStart(3, '0');
+  return `${AUDIO_DIR}r${reciterId}_v${s}${v}.mp3`;
+}
+
+/**
+ * Returns a local file:// URI for the single-verse audio of (surah, verse),
+ * downloading and caching it on first call. Returns `null` when QuranCDN's
+ * URL pattern doesn't match for this reciter — in that case the caller must
+ * fall back to the chapter-file + JS seek/loop path.
+ *
+ * Strategy:
+ *   1. Return the cached file immediately if it exists.
+ *   2. Resolve the chapter URL (we already cache reciter→chapter slug there)
+ *      and derive the per-verse URL via the existing `deriveVerseAudioUrl`.
+ *   3. Download to `r{reciterId}_v{NNN}{NNN}.mp3`.
+ *
+ * Files are small (most verses are 3–30 s of audio), so no eviction policy is
+ * applied here — the user clearing app storage / reinstalling is sufficient.
+ */
+export async function getVerseAudioUri(
+  reciterId: number,
+  surahId: number,
+  verseId: number,
+): Promise<string | null> {
+  await ensureAudioDir();
+  const local = verseLocalPath(reciterId, surahId, verseId);
+  const cached = await FileSystem.getInfoAsync(local);
+  if (cached.exists && (cached as FileSystem.FileInfo & { size?: number }).size) {
+    return local;
+  }
+
+  // Resolve the chapter URL (this gives us the reciter slug embedded in the path).
+  let chapterUrl: string;
+  try {
+    chapterUrl = await resolveRemoteUrl(reciterId, surahId);
+  } catch {
+    return null;
+  }
+
+  const verseUrl = deriveVerseAudioUrl(chapterUrl, surahId, verseId);
+  if (!verseUrl) return null; // CDN pattern mismatch — caller falls back to chapter mode
+
+  try {
+    const dl = FileSystem.createDownloadResumable(verseUrl, local);
+    const result = await dl.downloadAsync();
+    if (!result?.uri) {
+      await FileSystem.deleteAsync(local, { idempotent: true });
+      return null;
+    }
+    return local;
+  } catch {
+    await FileSystem.deleteAsync(local, { idempotent: true });
+    return null;
+  }
+}
+
+/**
  * Returns the best available URI for a surah:
  * 1. If already cached locally → returns file:// URI immediately
  * 2. Otherwise → resolves remote URL from API (stream; no download yet)
