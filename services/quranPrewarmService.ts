@@ -28,7 +28,7 @@
  *   - getCachedExactPage() lets app/quran.tsx skip its own API fetch on retap
  */
 
-import { InteractionManager } from 'react-native';
+import { AppState, InteractionManager } from 'react-native';
 import { loadQCFPageFont, loadBismillahFont } from './mushafFontManager';
 import { fetchComposedMushafPage } from './mushafApi';
 import { SURAH_INDEX } from '../data/surahIndex';
@@ -125,6 +125,16 @@ const TOTAL_PAGES = 604;
 const PREWARM_RADIUS = 2; // pre-warm target ±2 pages
 
 async function _doPrewarm(verseKey: string, approxPage: number): Promise<void> {
+  // Background guard: if the app entered background between scheduling and
+  // firing (InteractionManager defers work, so this can run after a quick
+  // lock-screen tap), bail without spawning network/font work. iOS counts
+  // background fetch+font registration as non-audio activity and that adds
+  // to the jetsam pressure signal during locked-screen audio playback.
+  if (AppState.currentState !== 'active') {
+    _warmedKeys.delete(makeKey(verseKey)); // allow retry once foregrounded
+    return;
+  }
+
   // Step 1: always pre-warm the approx page range immediately (fast, no network
   // if the font/data is already cached from a previous session).
   _prewarmPageRange(approxPage);

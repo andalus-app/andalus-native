@@ -3,7 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
 import * as NativeSplash from 'expo-splash-screen';
 import { useCallback, useEffect, useState } from 'react';
-import { Animated, View, StyleSheet, AppState } from 'react-native';
+import { Animated, View, StyleSheet, AppState, DeviceEventEmitter } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { setAudioModeAsync } from 'expo-audio';
 import { ThemeProvider, useTheme } from '../context/ThemeContext';
@@ -275,6 +275,28 @@ export default function RootLayout() {
       interruptionMode: 'duckOthers',
       allowsRecording: false,
     }).catch(() => undefined);
+  }, []);
+
+  // iOS memory-warning telemetry — production-safe diagnostic.
+  //
+  // Background context: TestFlight kills (jetsam, domain:1 code:100) leave no
+  // breadcrumbs in JS. We need to know when iOS warns us about memory before
+  // it kills us. React Native bridges UIApplication's
+  // applicationDidReceiveMemoryWarning to a 'memoryWarning' event on
+  // RCTDeviceEventEmitter. Listening here is free in normal operation and
+  // gives us a console signal in TestFlight (visible via Xcode → Window →
+  // Devices and Simulators → device's Console while attached, OR via
+  // Console.app filtering on the bundle id) that we can correlate with the
+  // jetsam kill timestamp.
+  //
+  // We do NOT take any action on the warning. iOS already does so (asks
+  // image caches to drop, etc.). The point is the diagnostic line itself.
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener('memoryWarning', () => {
+      // Single, low-noise log. Visible in iOS Console under "Hidayah".
+      console.warn('[Hidayah] iOS memoryWarning — heading toward jetsam');
+    });
+    return () => sub.remove();
   }, []);
 
   useEffect(() => {

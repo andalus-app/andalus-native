@@ -157,13 +157,23 @@ export function startGlobalCache(): void {
   // Start font download (delayed further so it doesn't compete with data queue)
   _scheduleFontDownload();
 
-  // AppState: flush manifest on background, resume on foreground
+  // AppState: flush manifest on background, resume on foreground.
+  //
+  // CRITICAL: must also toggle `_downloadsPaused` so the font pre-warm loop
+  // (preWarmPageFonts in mushafFontManager) suspends. Without this the loop
+  // keeps spinning every 100 ms while the screen is locked — every iteration
+  // does FileSystem.getInfoAsync + potentially FileSystem.downloadAsync, which
+  // counts as non-audio background work and contributes to iOS' jetsam pressure
+  // signal on a memory-constrained device. Pausing only the page-data queue
+  // (pauseQueue) is not enough; the font loop has its own pause flag.
   _appStateSub = AppState.addEventListener('change', (nextState) => {
     if (nextState === 'active') {
+      _downloadsPaused = false;
       resumeQueue();
       _scheduleFontDownload(); // Re-schedule if interrupted while backgrounded
     } else {
-      // 'background' or 'inactive'
+      // 'background' or 'inactive' — freeze ALL background download work.
+      _downloadsPaused = true;
       pauseQueue();
       flushManifest().catch(() => {}); // Persist debounced manifest writes
     }
