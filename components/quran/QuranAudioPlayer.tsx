@@ -701,9 +701,21 @@ function QuranAudioPlayer() {
   // Sync native AVPlayer loop flag whenever repeat settings or current surah
   // change mid-playback. Without this, toggling "repeat interval" during
   // playback wouldn't apply native looping until the next loadAndPlay.
+  //
+  // CRITICAL: this effect ONLY governs CHAPTER-MODE looping (full-surah
+  // infinite interval-repeat). When verse-loop is active
+  // (verseLoopActiveRef.current !== null) the loop flag is owned by
+  // loadAndLoopVerse / startPlayer's options.loop and must not be touched
+  // here — otherwise the first re-render after toggling repeatVerse runs
+  // canUseNativeLoop (which returns false for verse-loop conditions) and
+  // resets player.loop to false, disabling the native loop. Symptom: single
+  // verse plays once and stops, lock-screen card stays but no audio. The
+  // verse-loop owns the loop flag for the lifetime of the verse-loop
+  // session — chapter-mode's flag is held in useNativeLoopRef separately.
   useEffect(() => {
     const player = playerRef.current;
     if (!player) return;
+    if (verseLoopActiveRef.current !== null) return; // verse-loop owns the flag
     const surahId = currentSurahIdRef.current;
     const nativeLoop = canUseNativeLoop(repeatSettings, surahId);
     if (nativeLoop !== useNativeLoopRef.current) {
@@ -749,9 +761,40 @@ function QuranAudioPlayer() {
   // Mirror AppState into a ref so the playback status callback (deps=[]) can
   // read the latest value without going stale. Subscription is once per
   // mount; the callback is module-stable after creation.
+  //
+  // On background → active transitions we also push a one-shot resync of
+  // the seek bar + active verse, since onPlaybackStatusUpdate skips
+  // setPlayerState / setPlaybackVerse while backgrounded (this is what keeps
+  // the iOS audio session alive past 4–5 verses on a locked screen). Without
+  // the resync the UI would briefly show whatever state was last written
+  // before the lock event until the next 250 ms tick caught up — visible as
+  // a stale seek thumb / highlight on unlock.
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
+      const prev = appStateRef.current;
       appStateRef.current = state;
+      if (state === 'active' && prev !== 'active') {
+        const player = playerRef.current;
+        const surahId = currentSurahIdRef.current;
+        if (player && surahId !== null) {
+          const positionMs = (player.currentTime ?? 0) * 1000;
+          const durationMs = (player.duration ?? 0) * 1000;
+          const isNowPlaying = !player.paused;
+          setPlayerState({
+            mode: isNowPlaying ? 'playing' : 'paused',
+            surahId,
+            positionMs,
+            durationMs,
+          });
+          // Resync verse highlight from the ref the background tick kept fresh.
+          if (lastVerseKeyRef.current && verseTimingsRef.current) {
+            const t = verseTimingsRef.current.find(
+              (x) => x.verseKey === lastVerseKeyRef.current,
+            );
+            if (t) setPlaybackVerseRef.current(t.verseKey, t.pageNumber);
+          }
+        }
+      }
     });
     return () => sub.remove();
   }, []);
@@ -951,11 +994,19 @@ function QuranAudioPlayer() {
 
       // Normal finish: clear active verse, pause, and seek to 0 so the play
       // button works correctly on resume (player was at end-of-file, not start).
+      //
+      // Lock-screen controls are deliberately NOT cleared here — the surah
+      // ended naturally, but the user may still want the Now Playing card
+      // visible to tap play and restart. Apple Music / Spotify keep the card
+      // populated with the last track at the end of a playlist; they only
+      // clear it on explicit stop. clearLockScreenControls is the function
+      // that blanks the card (sets player.metadata = nil + activePlayer = nil
+      // in MediaController), so calling it on natural finish was producing
+      // the "card stays visible but track info goes blank" symptom.
       pendingPlayRef.current = false;
       stopAtTimestampRef.current = null;
       lastVerseKeyRef.current = null;
       setPlaybackVerseRef.current(null, null);
-      try { playerRef.current?.clearLockScreenControls(); } catch {}
       const durationMs = (playerRef.current?.duration ?? 0) * 1000;
       try { playerRef.current?.seekTo(0); } catch {}
       setPlayerState({ mode: 'paused', surahId, positionMs: 0, durationMs });
@@ -1194,49 +1245,52 @@ function QuranAudioPlayer() {
           }
 
           lastVerseKeyRef.current = verse.verseKey;
-          setPlaybackVerseRef.current(verse.verseKey, verse.pageNumber);
-          // Update lock screen title to show current verse.
-          // IMPORTANT: updateLockScreenMetadata replaces player.metadata entirely
-          // in Swift. Always include artworkUrl here — omitting it causes Swift to
-          // set artworkUrl=nil, which clears the artwork from the lock screen on
-          // every verse transition.
+
+          // Per-verse Now Playing retitling has been REMOVED.
           //
-          // Skipped while native AVPlayer-loop is active for the full surah
-          // (canUseNativeLoop). Reason: in that mode the chapter file is
-          // looping continuously in the background; a metadata swap on every
-          // verse boundary (4–286× per surah loop) thrashes
-          // MPNowPlayingInfoCenter, which iOS interprets as instability and
-          // suspends the audio session after a handful of cycles
-          // (the user-observed "stops after 5 repeats" symptom for full-surah
-          // interval-repeat). The lock-screen card stays on the surah-level
-          // title set in startPlayer — slightly less informative on the
-          // locked screen, but keeps the session alive indefinitely. The
-          // in-app verse highlight (setPlaybackVerseRef just above) still
-          // updates so the reader stays in sync when the user unlocks.
-          if (!useNativeLoopRef.current) {
-            const parsed = parseVerseKey(verse.verseKey);
-            if (parsed) {
-              const reciterName = RECITERS.find((r) => r.id === reciterIdRef.current)?.name ?? '';
-              try {
-                playerRef.current?.updateLockScreenMetadata({
-                  title: `${parsed.surahName}: ${parsed.verseNum}`,
-                  artist: reciterName,
-                  albumTitle: LOCK_SCREEN_ALBUM,
-                  artworkUrl: artworkUriRef.current ?? undefined,
-                });
-              } catch {}
-            }
+          // Apple Music / Spotify treat one playback "track" as one
+          // MPNowPlayingInfoCenter entry. They do NOT rewrite title/artist
+          // on every section. Doing so triggers a chain inside expo-audio:
+          //   updateLockScreenMetadata → MediaController.updateNowPlayingInfo
+          //   → loadArtworkFromURL (file:// disk read or URLSession task)
+          //   → MPNowPlayingInfoCenter.nowPlayingInfo = ... (a write)
+          // For an average surah (5–10 s verses), that's a
+          // file-read + bridge-call + Now-Playing-write every ~5 seconds.
+          // iOS' background-audio scheduler counts that as "non-audio
+          // background work" and suspends the audio session after ~4–5
+          // verses on a locked screen — the exact symptom the user reported.
+          //
+          // The lock-screen title set once in startPlayer (surah-level for
+          // chapter playback, "Surah: N" for verse-loop) stays in place for
+          // the entire session, exactly like a Spotify track.
+          //
+          // setPlaybackVerseRef (in-app highlight + page sync) is also
+          // skipped while backgrounded — the user can't see it, and the
+          // Context fan-out re-renders MushafRenderer which runs heavy
+          // synchronous SVG getBBox work that iOS classifies as non-audio
+          // background work. lastVerseKeyRef is updated above so the
+          // in-app state catches up the moment the user unlocks.
+          if (appStateRef.current === 'active') {
+            setPlaybackVerseRef.current(verse.verseKey, verse.pageNumber);
           }
         }
       }
     }
 
-    setPlayerState({
-      mode: isNowPlaying ? 'playing' : 'paused',
-      surahId,
-      positionMs,
-      durationMs,
-    });
+    // Per-tick UI seek-bar updates are pure waste while the app is in the
+    // background — the seek bar is hidden behind the lock screen, but every
+    // setPlayerState call still triggers React re-renders, which iOS counts
+    // as non-audio background work. Apple Music / Spotify do nothing per
+    // tick while locked. Skip the state push entirely; the next 'active'
+    // transition will resync via the AppState foreground re-sync effect.
+    if (appStateRef.current === 'active') {
+      setPlayerState({
+        mode: isNowPlaying ? 'playing' : 'paused',
+        surahId,
+        positionMs,
+        durationMs,
+      });
+    }
   }, []);
 
   // Keep the ref in sync so the stable wrapper in startPlayer always calls the
