@@ -486,6 +486,25 @@ function QuranAudioPlayer() {
   type BismillahPending = { uri: string; surahId: number; timings: VerseTimestamp[] | null };
   const bismillahPendingRef = useRef<BismillahPending | null>(null);
 
+  // Deferred bismillah → surah AVPlayerItem swap. Set by the bismillah
+  // didJustFinish / safety-timer transition handler ONLY when the app is
+  // backgrounded at the moment of swap.
+  //
+  // Rationale: AVPlayer.replaceCurrentItem during a locked playback session
+  // can be classified by iOS as a session interruption (the engine pauses
+  // briefly while swapping the audio item, and any background-audio app
+  // that produces such a gap is a candidate for session teardown). Holding
+  // the swap until foreground guarantees the swap happens with the app
+  // visible, where iOS does not penalise momentary audio gaps.
+  //
+  // Audio behaviour while pending:
+  //   • The bismillah audio has already ended (didJustFinish fired); the
+  //     player is paused at end-of-file. No audio plays until the user
+  //     unlocks. iOS may eventually deactivate the session due to silence
+  //     — that is acceptable per the user contract; the user just taps
+  //     play again to restart.
+  const pendingSurahReplaceRef = useRef<BismillahPending | null>(null);
+
   // Cancel hook for an in-progress download — set by downloadSurahAudio, cleared on finish/cancel.
   const downloadCancelRef = useRef<(() => void) | null>(null);
 
@@ -507,6 +526,33 @@ function QuranAudioPlayer() {
   // so they always include the artwork URL (prevents Swift from clearing it when
   // metadata is partially overwritten by updateLockScreenMetadata).
   const artworkUriRef = useRef<string | null>(null);
+
+  // Pending lock-screen registration — created by startPlayer, fired ONCE
+  // by onPlaybackStatusUpdate on the first 'playing' tick of the matching
+  // player generation.
+  //
+  // Why this ref exists:
+  //   Calling setActiveForLockScreen before AVPlayer is actually audible
+  //   makes iOS register the media session as DoesntActuallyPlayAudio=YES.
+  //   iOS later treats that as a flapping/silent session and tears it down
+  //   (observed in TestFlight cable log: "session lookup failed",
+  //   "No valid MXSession", "client stopping" — followed by lock-screen
+  //   card disappearing during background playback). Deferring registration
+  //   to the first audible status tick ensures iOS sees a stable, audible
+  //   session from the moment we register it.
+  //
+  // The bismillah pre-play uses the SAME AudioPlayer that subsequently
+  // plays the surah audio (via player.replace() in
+  // _transitionBismillahToSurahRef). One setActiveForLockScreen call covers
+  // both the bismillah and the surah; the Now Playing card stays unchanged
+  // through the native item swap, exactly like Apple Music between tracks.
+  const pendingLockScreenRef = useRef<{
+    generation: number;
+    title: string;
+    artist: string;
+    albumTitle: string;
+    artworkUrl: string | null;
+  } | null>(null);
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -536,6 +582,12 @@ function QuranAudioPlayer() {
       bismillahTimerRef.current = null;
     }
     bismillahPendingRef.current = null;
+    // Drop any unfired lock-screen registration so the next player doesn't
+    // adopt this teardown's pending data on its first audible tick.
+    pendingLockScreenRef.current = null;
+    // Drop any deferred bismillah → surah swap (e.g. user explicitly
+    // pressed stop or switched surah while a deferred swap was waiting).
+    pendingSurahReplaceRef.current = null;
     playerSubRef.current?.remove();
     playerSubRef.current = null;
     if (playerRef.current) {
@@ -580,20 +632,14 @@ function QuranAudioPlayer() {
       if (!mountedRef.current) return;
       setPlayerState({ mode: 'loading', surahId });
 
-      // Re-apply audio mode before every player start. expo-audio's native
-      // shouldPlayInBackground flag is a single global value, and other screens
-      // (or older sessions) may have left it in a state where iOS pauses all
-      // players when the screen locks. Re-asserting it here guarantees that
-      // every Quran playback session starts with the correct background config,
-      // regardless of what other audio surfaces (dhikr, asmaul, umrah, youtube)
-      // have done. Fire-and-forget — the AVAudioSession is reconfigured
-      // synchronously by the time the player begins buffering.
-      setAudioModeAsync({
-        allowsRecording: false,
-        playsInSilentMode: true,
-        shouldPlayInBackground: true,
-        interruptionMode: 'duckOthers',
-      }).catch(() => undefined);
+      // Audio mode (category MediaPlayback, shouldPlayInBackground) is set
+      // ONCE at component mount (see useEffect below). Re-asserting it on
+      // every player creation churns the AVAudioSession (set_property →
+      // batch_properties → activate) and is exactly the kind of repeated
+      // setCategory/setActive call iOS penalises during background audio.
+      // The mount-time configuration carries through every subsequent
+      // player; the global flag does not get clobbered by other expo-audio
+      // surfaces in this app because they all use the same configuration.
 
       // keepAudioSessionActive: true — prevents the iOS AVAudioSession from
       // being deactivated when this player is paused or destroyed. This is
@@ -661,38 +707,44 @@ function QuranAudioPlayer() {
       const lsTitle  = options?.lockScreenTitle  ?? surahName;
       const lsArtist = options?.lockScreenArtist ?? reciterName;
       const lsAlbum  = options?.lockScreenAlbum  ?? LOCK_SCREEN_ALBUM;
-      try {
-        // Register the lock screen player IMMEDIATELY — before any async work.
-        // Calling setActiveForLockScreen after an await (even a resolved Promise)
-        // creates an event-loop gap where the player may have been replaced or
-        // torn down, which would leave the lock screen never registered.
-        player.setActiveForLockScreen(
-          true,
-          {
-            title: lsTitle,
-            artist: lsArtist,
-            albumTitle: lsAlbum,
-            artworkUrl: artworkUriRef.current ?? undefined, // use cached URI if already resolved
-          },
-        );
-      } catch {}
 
-      // Resolve artwork URI and update lock screen metadata once available.
-      // This is a fire-and-forget update — lock screen is already registered above.
+      // Defer lock-screen registration to the first audible playback tick.
+      // Stash the registration data here; onPlaybackStatusUpdate consumes it
+      // exactly once, when the matching player generation reports
+      // timeControlStatus === 'playing' for the first time. This avoids the
+      // DoesntActuallyPlayAudio=YES window that iOS otherwise records, which
+      // (per the TestFlight cable log) leads to the media session being torn
+      // down later during background playback.
+      pendingLockScreenRef.current = {
+        generation: myGeneration,
+        title: lsTitle,
+        artist: lsArtist,
+        albumTitle: lsAlbum,
+        artworkUrl: artworkUriRef.current,
+      };
+
+      // Resolve artwork URI. If lock-screen registration is still pending
+      // for this generation, fold the artwork into the pending data so the
+      // first registration carries it. If registration has already fired,
+      // call updateLockScreenMetadata to fill in the artwork after the fact.
       resolveArtworkUri().then((iconUri) => {
         if (!mountedRef.current) return;
         if (playerRef.current !== player) return; // player was replaced — skip stale update
         artworkUriRef.current = iconUri;
-        if (iconUri) {
-          try {
-            player.updateLockScreenMetadata({
-              title: lsTitle,
-              artist: lsArtist,
-              albumTitle: lsAlbum,
-              artworkUrl: iconUri,
-            });
-          } catch {}
+        if (!iconUri) return;
+        const pending = pendingLockScreenRef.current;
+        if (pending && pending.generation === myGeneration) {
+          pending.artworkUrl = iconUri;
+          return;
         }
+        try {
+          player.updateLockScreenMetadata({
+            title: lsTitle,
+            artist: lsArtist,
+            albumTitle: lsAlbum,
+            artworkUrl: iconUri,
+          });
+        } catch {}
       }).catch(() => {});
     },
     [], // stable: uses onPlaybackStatusUpdateRef wrapper — no deps needed
@@ -773,27 +825,84 @@ function QuranAudioPlayer() {
     const sub = AppState.addEventListener('change', (state) => {
       const prev = appStateRef.current;
       appStateRef.current = state;
-      if (state === 'active' && prev !== 'active') {
-        const player = playerRef.current;
-        const surahId = currentSurahIdRef.current;
-        if (player && surahId !== null) {
-          const positionMs = (player.currentTime ?? 0) * 1000;
-          const durationMs = (player.duration ?? 0) * 1000;
-          const isNowPlaying = !player.paused;
-          setPlayerState({
-            mode: isNowPlaying ? 'playing' : 'paused',
-            surahId,
-            positionMs,
-            durationMs,
-          });
-          // Resync verse highlight from the ref the background tick kept fresh.
-          if (lastVerseKeyRef.current && verseTimingsRef.current) {
-            const t = verseTimingsRef.current.find(
-              (x) => x.verseKey === lastVerseKeyRef.current,
-            );
-            if (t) setPlaybackVerseRef.current(t.verseKey, t.pageNumber);
-          }
+
+      // ── Going to background ────────────────────────────────────────────
+      // Kill ALL JS-driven timers per the no-JS-in-background contract.
+      // Native AVPlayer continues playback uninterrupted; the timers'
+      // jobs (bismillah swap safety net, play() retry) are either covered
+      // by the AppState 'active' deferred-swap path on resume, or are
+      // moot because the app is no longer making playback decisions.
+      if (state !== 'active') {
+        if (bismillahTimerRef.current) {
+          clearTimeout(bismillahTimerRef.current);
+          bismillahTimerRef.current = null;
         }
+        if (startRetryTimerRef.current) {
+          clearTimeout(startRetryTimerRef.current);
+          startRetryTimerRef.current = null;
+        }
+        return;
+      }
+
+      // ── Coming back to foreground ──────────────────────────────────────
+      if (prev === 'active') return; // not a real transition
+
+      const player = playerRef.current;
+      const surahId = currentSurahIdRef.current;
+      if (!player || surahId === null) return;
+
+      // Step 1 — execute any deferred bismillah → surah swap. The swap
+      // was held back while backgrounded so iOS would not see the
+      // AVPlayerItem replacement during a locked session. Now that the
+      // app is visible the swap is safe and audio resumes with the
+      // surah audio.
+      const deferred = pendingSurahReplaceRef.current;
+      if (deferred) {
+        pendingSurahReplaceRef.current = null;
+        verseTimingsRef.current = deferred.timings;
+        const bsmllhEntry = deferred.timings?.find((t) => t.verseKey === `BSMLLH_${deferred.surahId}`);
+        bismillahLockUntilMsRef.current = bsmllhEntry
+          ? Math.max(bsmllhEntry.timestampTo, 3000)
+          : 3000;
+        const nativeLoop = canUseNativeLoop(repeatSettingsRef.current, deferred.surahId);
+        useNativeLoopRef.current = nativeLoop;
+        try { player.loop = nativeLoop; } catch {}
+        try { player.replace({ uri: deferred.uri }); } catch {}
+        pendingPlayRef.current = true;
+        try { player.play(); } catch {}
+        // Show loading immediately — first audible tick of the surah audio
+        // will flip state to 'playing' via onPlaybackStatusUpdate.
+        setPlayerState({ mode: 'loading', surahId: deferred.surahId });
+        return; // skip normal resync; deferred swap is the resync
+      }
+
+      // Step 2 — normal foreground resync. Recompute UI state from
+      // player.currentTime, the only fresh source after a background
+      // window where per-tick state pushes were skipped.
+      const positionMs = (player.currentTime ?? 0) * 1000;
+      const durationMs = (player.duration ?? 0) * 1000;
+      const isNowPlaying = !player.paused;
+      setPlayerState({
+        mode: isNowPlaying ? 'playing' : 'paused',
+        surahId,
+        positionMs,
+        durationMs,
+      });
+      if (verseTimingsRef.current) {
+        const verse = findCurrentVerse(verseTimingsRef.current, positionMs);
+        if (verse) {
+          lastVerseKeyRef.current = verse.verseKey;
+          setPlaybackVerseRef.current(verse.verseKey, verse.pageNumber);
+        }
+      } else if (lastVerseKeyRef.current) {
+        // verseTimingsRef is null in two cases: bismillah pre-play
+        // (transient ~5 s window) and verse-loop mode. Both have a fixed
+        // active verse — push it through the context once on resume.
+        const vl = verseLoopActiveRef.current;
+        const pageNumber = vl?.pageNumber
+          ?? SURAH_INDEX.find((s) => s.id === surahId)?.firstPage
+          ?? 1;
+        setPlaybackVerseRef.current(lastVerseKeyRef.current, pageNumber);
       }
     });
     return () => sub.remove();
@@ -842,32 +951,44 @@ function QuranAudioPlayer() {
         }
         vl.plays += 1;
         if (vl.plays <= vl.count) {
-          // End-of-file → seek-to-start + play. Cleaner state than mid-track
-          // seek (the previous chapter-mode approach iOS suspended after ~5
-          // cycles): the AVPlayerItem reaches its natural end, we rewind a
-          // file that just finished, no mid-stream interruption.
-          try { playerRef.current?.seekTo(0, 0, 0); } catch {}
-          playerRef.current?.play();
+          // End-of-file → seek-to-start + play, foreground only. While
+          // backgrounded the JS repeat fallback is disabled per the
+          // no-JS-in-background contract; audio stops at end-of-file and
+          // the user resumes manually on unlock. Infinite repeat is
+          // unaffected (native AVPlayer.loop = true; didJustFinish never
+          // fires for that case).
+          if (appStateRef.current === 'active') {
+            try { playerRef.current?.seekTo(0, 0, 0); } catch {}
+            playerRef.current?.play();
+          }
           return;
         }
-        // Count reached — match the legacy "each verse plays N times before
-        // the next" semantic by chaining the loop onto the next verse with
-        // the same count. For bismillah-loop (verseId=0) the next verse is
-        // verse 1 of the same surah; no bismillah pre-play, since the user
-        // already heard it `count` times.
+        // Count reached — chain the loop onto the next verse, foreground
+        // only. loadAndLoopVerseRef is a full teardown + new player + new
+        // lock-screen registration, which is exactly the kind of source
+        // change iOS penalises during a locked playback session. In
+        // background we end gracefully; the user resumes manually.
         const nextSurah = vl.surahId;
         const nextVerse = vl.verseId === 0 ? 1 : vl.verseId + 1;
         verseLoopActiveRef.current = null;
         const surahMeta = SURAH_INDEX.find((s) => s.id === nextSurah);
-        if (surahMeta && nextVerse <= surahMeta.versesCount) {
+        if (
+          appStateRef.current === 'active' &&
+          surahMeta &&
+          nextVerse <= surahMeta.versesCount
+        ) {
           // pageNumber is reused — verses that span a page boundary will
           // look slightly off in the reader for one verse until the user
           // swipes; not worth a per-verse timings fetch on every advance.
           loadAndLoopVerseRef.current?.(nextSurah, nextVerse, vl.count, vl.pageNumber);
         } else {
-          // End of surah and no next verse on this surah — stop.
+          // Either end-of-surah, or backgrounded — stop. Skip the React
+          // state push if backgrounded (the AppState foreground resync
+          // recomputes UI on return from lock).
           try { playerRef.current?.pause(); } catch {}
-          setPlayerState({ mode: 'paused', surahId: nextSurah, positionMs: 0, durationMs: 0 });
+          if (appStateRef.current === 'active') {
+            setPlayerState({ mode: 'paused', surahId: nextSurah, positionMs: 0, durationMs: 0 });
+          }
         }
         return;
       }
@@ -910,6 +1031,20 @@ function QuranAudioPlayer() {
         verseRepeatLoopRef.current = null;
         verseRepeatSeekingRef.current = false;
       }
+
+      // ── Foreground-only JS playback orchestration ──────────────────────
+      // All paths below this guard issue either a seekTo+play() on the
+      // current player or a loadAndPlay/loadAndPlayFromVerse (teardown +
+      // createAudioPlayer + new lock-screen registration). Per the
+      // no-JS-in-background contract, none of this runs while locked: in
+      // background the audio simply ends at end-of-file, the player stays
+      // paused at the end, and the user resumes manually on unlock.
+      //
+      // Infinite repeat (full surah, native loop) does NOT reach this
+      // branch because AVPlayer.loop = true is set in startPlayer / the
+      // bismillah → surah transition, so didJustFinish does not fire for
+      // that case at all.
+      if (appStateRef.current !== 'active') return;
 
       // Interval repeat: advance through the interval or loop back to start.
       // Skipped when native AVPlayer looping is active — the player handles the
@@ -1006,39 +1141,65 @@ function QuranAudioPlayer() {
       pendingPlayRef.current = false;
       stopAtTimestampRef.current = null;
       lastVerseKeyRef.current = null;
-      setPlaybackVerseRef.current(null, null);
       const durationMs = (playerRef.current?.duration ?? 0) * 1000;
       try { playerRef.current?.seekTo(0); } catch {}
-      setPlayerState({ mode: 'paused', surahId, positionMs: 0, durationMs });
+      // Push UI state only when foregrounded — the user can't see the
+      // pause/end-of-surah transition while locked, and any React update
+      // here triggers QuranContext / MushafRenderer re-renders that iOS
+      // counts toward background work suspension thresholds.
+      if (appStateRef.current === 'active') {
+        setPlaybackVerseRef.current(null, null);
+        setPlayerState({ mode: 'paused', surahId, positionMs: 0, durationMs });
+      }
       return;
     }
 
-    // ── Background-locked native-loop fast path ─────────────────────────
-    // When AVPlayer is doing a native loop (full-surah interval-repeat with
-    // canUseNativeLoop=true) AND the app is in the background, there is no
-    // useful JS work to do per status tick — audio plays continuously,
-    // verse-transition events would only fan out through React Context to
-    // re-render hidden views, and lock-screen metadata updates would thrash
-    // MPNowPlayingInfoCenter. iOS treats both as "this app is doing
-    // non-audio background work" and starts suspending the session after
-    // ~10 chapter loops (the user-observed residual cut). Skipping the rest
-    // of the callback keeps the JS thread quiet so iOS keeps treating us
-    // as a pure audio app. When the user foregrounds/unlocks, the next
-    // tick goes through the full path and re-syncs state.
-    //
-    // Single-ayah verse-loop hits this same fast path because didJustFinish
-    // is suppressed natively by AVPlayer.loop=true; the only reason that
-    // case already worked is verseTimingsRef.current is null there, which
-    // naturally short-circuits everything below — but skipping explicitly
-    // is cheaper than running through the entire callback to no-op.
-    const inBackgroundNativeLoop =
-      (useNativeLoopRef.current || verseLoopActiveRef.current !== null) &&
-      appStateRef.current !== 'active' &&
-      !status.didJustFinish;
-    if (inBackgroundNativeLoop) return;
-
     const isNowPlaying = status.timeControlStatus === 'playing';
     const isBuffering  = status.timeControlStatus === 'waitingToPlayAtSpecifiedRate';
+
+    // ── First-audible lock-screen registration ─────────────────────────────
+    // Fires regardless of app state — registering the Now Playing card while
+    // backgrounded is supported by iOS (and is what makes the lock-screen UI
+    // appear when the user covers the phone during loading). One-shot per
+    // player generation: the pending entry is cleared so subsequent ticks
+    // (rebuffer, seeks, mid-playback) do NOT re-register.
+    if (isNowPlaying) {
+      pendingPlayRef.current = false;
+      hasPlayedRef.current = true;
+      const pendingLs = pendingLockScreenRef.current;
+      if (
+        pendingLs &&
+        pendingLs.generation === playerGenerationRef.current &&
+        playerRef.current
+      ) {
+        try {
+          playerRef.current.setActiveForLockScreen(true, {
+            title: pendingLs.title,
+            artist: pendingLs.artist,
+            albumTitle: pendingLs.albumTitle,
+            artworkUrl: pendingLs.artworkUrl ?? undefined,
+          });
+        } catch {}
+        pendingLockScreenRef.current = null;
+      }
+    }
+
+    // ── Hard background gate ───────────────────────────────────────────────
+    // Below this line: per-tick UI updates only — buffering spinners,
+    // setPlayerState, setPlaybackVerse, verse highlight, page sync, repeat
+    // boundary checks, stop-at checks. None of these are visible while
+    // backgrounded, but each one fans React state through QuranContext to
+    // MushafRenderer and triggers SVG getBBox / re-renders that iOS counts
+    // as "non-audio background work". After enough such work iOS marks the
+    // app as misbehaving and suspends the AVAudioSession (Al-Baqarah dying
+    // ~1 minute, verse-repeat dying ~5 loops). Returning here keeps the JS
+    // thread idle so iOS treats us as a pure audio app — exactly how
+    // Spotify / Apple Music behave on a locked screen.
+    //
+    // Recovery: the AppState 'active' handler runs ONCE on background →
+    // foreground transition and recomputes UI state from player.currentTime,
+    // so when the user unlocks they see the correct seek bar / verse / page.
+    if (appStateRef.current !== 'active') return;
 
     // During bismillah pre-play, the player is running Al-Fatiha audio (not the
     // target surah). Suppress position/duration updates to avoid showing Al-Fatiha's
@@ -1070,14 +1231,11 @@ function QuranAudioPlayer() {
     }
 
     // During initial play request, ignore transient 'paused' status callbacks
-    // that arrive before expo-audio has finished its setup.
+    // that arrive before expo-audio has finished its setup. (isNowPlaying +
+    // first-audible lock-screen registration are handled above the hard
+    // background gate so they apply in both foreground and background.)
     if (pendingPlayRef.current && !isNowPlaying) {
       return;
-    }
-
-    if (isNowPlaying) {
-      pendingPlayRef.current = false;
-      hasPlayedRef.current = true;
     }
 
     const positionMs = (status.currentTime ?? 0) * 1000;
@@ -1306,27 +1464,58 @@ function QuranAudioPlayer() {
 
   // Stored in a ref so onPlaybackStatusUpdate (deps=[]) can call it without
   // capturing a stale closure. Updated every render to pick up the latest startPlayer.
-  const _transitionBismillahToSurahRef = useRef<((p: BismillahPending) => Promise<void>) | null>(null);
-  _transitionBismillahToSurahRef.current = async (pending: BismillahPending) => {
-    // Kill bismillah player — clear lock screen so the old session doesn't linger.
-    playerSubRef.current?.remove();
-    playerSubRef.current = null;
-    if (playerRef.current) {
-      try { playerRef.current.pause(); } catch {}
-      try { playerRef.current.clearLockScreenControls(); } catch {}
-      try { playerRef.current.remove(); } catch {}
-      playerRef.current = null;
+  const _transitionBismillahToSurahRef = useRef<((p: BismillahPending) => void) | null>(null);
+  _transitionBismillahToSurahRef.current = (pending: BismillahPending) => {
+    const player = playerRef.current;
+    if (!player) return;
+
+    // ── Background defer ───────────────────────────────────────────────
+    // AVPlayer.replaceCurrentItem during a locked playback session can be
+    // treated by iOS as a session interruption (the engine momentarily
+    // pauses while the audio item swaps; any background-audio app that
+    // produces such a gap risks session teardown). Hold the swap until
+    // the user returns to the foreground; the AppState 'active' listener
+    // executes pendingSurahReplaceRef.
+    //
+    // While pending, audio is paused at end-of-bismillah. iOS may
+    // eventually deactivate the session due to silence — accepted; the
+    // user simply taps play again on resume.
+    if (appStateRef.current !== 'active') {
+      pendingSurahReplaceRef.current = pending;
+      return;
     }
 
-    // Restore surah timings and set bismillah lock.
-    // The lock prevents findCurrentVerse returning verse 1 at positionMs=0 when
-    // both BSMLLH_ and verse 1 share timestampFrom=0 (common across reciters).
+    // ── Foreground: native item swap ───────────────────────────────────
+    // Single AVPlayer for both clips. expo-audio's player.replace() calls
+    // AVPlayer.replaceCurrentItem natively. Same AudioPlayer keeps:
+    //   • the same playbackStatusUpdate subscription
+    //   • the same lock-screen registration (Now Playing card stays put)
+    //   • the same AVAudioSession
+    //   • the same playerGenerationRef value
+    // exactly how Apple Music transitions between album tracks without
+    // re-registering the Now Playing card.
+
+    // Restore surah timings and set bismillah lock BEFORE the swap so the
+    // next status tick uses surah timings. The lock prevents findCurrentVerse
+    // from returning verse 1 at positionMs=0 when both BSMLLH_ and verse 1
+    // share timestampFrom=0 (common across reciters).
     verseTimingsRef.current = pending.timings;
     const bsmllhEntry = pending.timings?.find((t) => t.verseKey === `BSMLLH_${pending.surahId}`);
     bismillahLockUntilMsRef.current = bsmllhEntry
       ? Math.max(bsmllhEntry.timestampTo, 3000)
       : 3000;
-    await startPlayer(pending.uri, pending.surahId, 0);
+
+    // Apply native AVPlayer-level looping for the surah BEFORE the source
+    // swap. AVPlayer.loop is held on the AVPlayer instance (not the item),
+    // so the value persists across replaceCurrentItem and applies to the
+    // newly loaded surah audio.
+    const nativeLoop = canUseNativeLoop(repeatSettingsRef.current, pending.surahId);
+    useNativeLoopRef.current = nativeLoop;
+    try { player.loop = nativeLoop; } catch {}
+
+    try { player.replace({ uri: pending.uri }); } catch {}
+    pendingPlayRef.current = true;
+    try { player.play(); } catch {}
   };
 
   // ── Bismillah pre-play helper ───────────────────────────────────────────────
@@ -1392,7 +1581,14 @@ function QuranAudioPlayer() {
       // Store pending surah info — consumed by both the timer and didJustFinish.
       bismillahPendingRef.current = { uri: surahUri, surahId, timings: surahTimings };
 
-      // Start bismillah clip
+      // Start bismillah clip on a player that will later swap to the surah
+      // audio via player.replace() in _transitionBismillahToSurahRef. Same
+      // AVPlayer for both clips → ONE setActiveForLockScreen call, fired on
+      // the bismillah's first audible status tick with the SURAH's title
+      // (default in startPlayer when no override is passed). The card stays
+      // unchanged through the source swap, exactly like Apple Music between
+      // album tracks. No second registration on the surah audio, no
+      // DoesntActuallyPlayAudio=YES window.
       await startPlayer(bsmUri, surahId, 0);
 
       // Safety timer: fires after verse 1:1 duration in case didJustFinish doesn't
@@ -1829,26 +2025,26 @@ function QuranAudioPlayer() {
         bismillahLockUntilMsRef.current = 0;
 
         if (loadGenerationRef.current !== myGen) return;
-        await startPlayer(uri, surahId, startMs);
+
+        // Build verse-level lock-screen title up front so the FIRST
+        // setActiveForLockScreen call (fired on the first audible status
+        // tick) carries it. The previous flow registered a surah-level
+        // title and then immediately overwrote it via
+        // updateLockScreenMetadata — that second write happens before the
+        // player is audible, contributes to iOS' DoesntActuallyPlayAudio=YES
+        // bookkeeping, and is the kind of metadata churn that contributed
+        // to the session being torn down during background playback.
+        const parsedKey = parseVerseKey(startVerseKey);
+        const lockScreenTitle = parsedKey
+          ? `${parsedKey.surahName}: ${parsedKey.verseNum}`
+          : undefined;
+        await startPlayer(uri, surahId, startMs, { lockScreenTitle });
         if (!mountedRef.current || loadGenerationRef.current !== myGen) return;
 
         // Immediately set the start verse as active so the highlight appears
         if (startTiming) {
           lastVerseKeyRef.current = startVerseKey;
           setPlaybackVerseRef.current(startVerseKey, startTiming.pageNumber);
-          // Update lock screen with verse-level title
-          const parsed = parseVerseKey(startVerseKey);
-          if (parsed) {
-            const reciterName = RECITERS.find((r) => r.id === reciterIdRef.current)?.name ?? '';
-            try {
-              playerRef.current?.updateLockScreenMetadata({
-                title: `${parsed.surahName}: ${parsed.verseNum}`,
-                artist: reciterName,
-                albumTitle: LOCK_SCREEN_ALBUM,
-                artworkUrl: artworkUriRef.current ?? undefined,
-              });
-            } catch {}
-          }
         }
       } catch (e) {
         if (__DEV__) console.log('[LAFV] CAUGHT ERROR surah=' + surahId + ' mounted=' + mountedRef.current + ' currentSurah=' + currentSurahIdRef.current + ' err=' + String(e));
