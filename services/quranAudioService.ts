@@ -81,24 +81,32 @@ async function resolveRemoteUrl(reciterId: number, surahId: number): Promise<str
 /**
  * Derives the verse-level audio URL from the chapter audio URL.
  *
- * QuranCDN chapter URL pattern:
- *   https://audio.qurancdn.com/{slug}/{NNN}.mp3
+ * QuranCDN chapter URL pattern (any host):
+ *   {scheme}://{host}/{slug}/{NNN}.mp3
  *
- * Verse URL pattern (same CDN, same slug):
- *   https://audio.qurancdn.com/{slug}/mp3/{SSSSVVV}.mp3
- *   where SSSS = 3-digit surah, VVV = 3-digit verse
+ * Verse URL pattern (same host, same slug):
+ *   {scheme}://{host}/{slug}/mp3/{SSSVVV}.mp3
+ *   where SSS = 3-digit surah, VVV = 3-digit verse
  *
- * This avoids hardcoding a reciter-ID → slug mapping table — the slug is
- * already embedded in the chapter URL that the QDC API returns.
+ * The slug is already embedded in the chapter URL the QDC API returns, so we
+ * never need a hardcoded reciter-ID → slug table. The host is also derived
+ * from the chapter URL — historically the regex only matched
+ * `audio.qurancdn.com`, but several QDC reciters serve from alternative
+ * QuranCDN buckets (e.g. `verses.quran.com`). Matching by structure rather
+ * than hostname keeps verse-loop available for every reciter QDC returns.
  *
- * Returns null when the URL does not match the expected QuranCDN pattern,
- * indicating we should fall back to the chapter audio + timer approach.
+ * Returns null only when the chapter URL doesn't end in a {slug}/{NNN}.mp3
+ * pattern at all — in that case the caller must surface a clean error
+ * instead of silently falling back to the unstable mid-track-seek path.
  */
 function deriveVerseAudioUrl(chapterAudioUrl: string, surahId: number, verseId: number): string | null {
-  // Match "https://audio.qurancdn.com/{slug}/" at the start of the URL.
-  const match = chapterAudioUrl.match(/^(https?:\/\/audio\.qurancdn\.com\/[^/]+)\//);
-  if (!match) return null;
-  const base = match[1]; // e.g., "https://audio.qurancdn.com/Alafasy_128kbps"
+  // Strip any query / fragment before structural match.
+  const clean = chapterAudioUrl.split(/[?#]/)[0];
+  // Capture "{scheme}://{host}/{slug}" with at least one path segment of the
+  // form {NNN}.mp3 (chapter file).
+  const m = clean.match(/^(https?:\/\/[^/]+\/[^/]+)\/[^/]+\.(?:mp3|ogg|m4a)$/i);
+  if (!m) return null;
+  const base = m[1];
   const s = String(surahId).padStart(3, '0');
   const v = String(verseId).padStart(3, '0');
   return `${base}/mp3/${s}${v}.mp3`;
@@ -212,12 +220,24 @@ export async function getVerseAudioUri(
   }
 
   const verseUrl = deriveVerseAudioUrl(chapterUrl, surahId, verseId);
-  if (!verseUrl) return null; // CDN pattern mismatch — caller falls back to chapter mode
+  if (!verseUrl) return null; // chapter URL didn't match {slug}/{NNN}.mp3 pattern at all
 
+  // Try the derived per-verse URL. If the bucket doesn't expose /mp3/{SSSVVV}.mp3
+  // (e.g. a few legacy reciters host only chapter files), the download throws or
+  // returns no body — surface that as null to the caller. We deliberately do not
+  // try a different alternate CDN here: the caller hard-disables verse-repeat on
+  // null so the user sees a clear error rather than a flaky JS seek-loop fallback.
   try {
     const dl = FileSystem.createDownloadResumable(verseUrl, local);
     const result = await dl.downloadAsync();
     if (!result?.uri) {
+      await FileSystem.deleteAsync(local, { idempotent: true });
+      return null;
+    }
+    // Sanity-check size — some buckets return a 200 with an HTML error body.
+    // A real per-verse mp3 is at minimum a few KB; anything under 1 KB is junk.
+    const info = await FileSystem.getInfoAsync(local) as FileSystem.FileInfo & { size?: number };
+    if (!info.exists || !info.size || info.size < 1024) {
       await FileSystem.deleteAsync(local, { idempotent: true });
       return null;
     }
