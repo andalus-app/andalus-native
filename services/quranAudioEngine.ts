@@ -425,7 +425,7 @@ function resolvePendingStopAfterTimings(): void {
     _stopAtTimestampMs = stop.timestampTo;
     _pendingStopVerseKey = null;
     if (needsProgressEvents()) setProgressEventsEnabled(true);
-    console.warn(`[QuranEngine] stopAt resolved → ${stop.timestampTo}ms`);
+    if (__DEV__) console.warn(`[QuranEngine] stopAt resolved → ${stop.timestampTo}ms`);
   }
 }
 
@@ -490,7 +490,7 @@ async function preloadNextSurah(surahId: number): Promise<void> {
 
   // If continuous mode was disabled or surah changed during await, abort.
   if (!_continuousMode || _preloadedNextSurahId !== surahId) {
-    console.warn(`[QuranEngine] preload surah ${surahId} aborted (state changed)`);
+    if (__DEV__) console.warn(`[QuranEngine] preload surah ${surahId} aborted (state changed)`);
     return;
   }
 
@@ -525,11 +525,11 @@ async function preloadNextSurah(surahId: number): Promise<void> {
   }
 
   await TrackPlayer.add(tracks);
-  console.error(`[QuranEngine] preloaded surah ${surahId} (${tracks.length} tracks appended)`);
+  if (__DEV__) console.error(`[QuranEngine] preloaded surah ${surahId} (${tracks.length} tracks appended)`);
 }
 
 function handleAppStateChange(state: AppStateStatus): void {
-  console.warn(`[QuranEngine] AppState → ${state}`);
+  if (__DEV__) console.warn(`[QuranEngine] AppState → ${state}`);
   if (state === 'active') {
     startPolling();
     // Re-sync the snapshot from the native player (which kept playing while
@@ -590,7 +590,7 @@ export const QuranAudioEngine = {
     if (_initialized) return;
     if (_initializing) return _initializing;
     _initializing = (async () => {
-      console.error('[QuranEngine] init() starting');
+      if (__DEV__) console.error('[QuranEngine] init() starting');
       try {
         await TrackPlayer.setupPlayer({
           // .playback = audio plays even with the silent switch on, and audio
@@ -644,7 +644,7 @@ export const QuranAudioEngine = {
 
       await TrackPlayer.setRepeatMode(RepeatMode.Off);
 
-      console.error('[QuranEngine] init() completed — capabilities registered');
+      if (__DEV__) console.error('[QuranEngine] init() completed — capabilities registered');
 
       // Native event wiring. Each handler is intentionally minimal — we want
       // the smallest possible JS footprint per event so iOS doesn't bill us
@@ -656,7 +656,7 @@ export const QuranAudioEngine = {
       // — see mapTpStateToEngine). Rare events, safe to handle in background.
       TrackPlayer.addEventListener(Event.PlaybackState, (event) => {
         const next = mapTpStateToEngine(event.state);
-        console.warn(`[QuranEngine] PlaybackState ${event.state} → ${next ?? 'ignored'}`);
+        if (__DEV__) console.warn(`[QuranEngine] PlaybackState ${event.state} → ${next ?? 'ignored'}`);
         if (next) setSnapshot({ state: next });
       });
 
@@ -670,9 +670,7 @@ export const QuranAudioEngine = {
       });
 
       TrackPlayer.addEventListener(Event.PlaybackQueueEnded, () => {
-        // Diagnostic: console.error so it reaches release-mode logs (RCTLog
-        // suppresses Info/Warning levels in release; Error passes through).
-        console.error(`[QuranEngine] PlaybackQueueEnded — surah=${_currentSurahId} continuous=${_continuousMode} verseLoop=${_verseLoopActive ? `${_verseLoopActive.plays}/${_verseLoopActive.count ?? '∞'}` : 'null'}`);
+        if (__DEV__) console.error(`[QuranEngine] PlaybackQueueEnded — surah=${_currentSurahId} continuous=${_continuousMode} verseLoop=${_verseLoopActive ? `${_verseLoopActive.plays}/${_verseLoopActive.count ?? '∞'}` : 'null'}`);
 
         // Step 4: finite verse-loop count handling. plays counts COMPLETED
         // end-to-end plays. After each QueueEnded we increment, and if we
@@ -683,7 +681,7 @@ export const QuranAudioEngine = {
         if (_verseLoopActive && _verseLoopActive.count !== null) {
           _verseLoopActive.plays += 1;
           if (_verseLoopActive.plays < _verseLoopActive.count) {
-            console.warn(
+            if (__DEV__) console.warn(
               `[QuranEngine] verse-loop replay ${_verseLoopActive.plays + 1}/${_verseLoopActive.count}`,
             );
             TrackPlayer.seekTo(0)
@@ -691,7 +689,7 @@ export const QuranAudioEngine = {
               .catch(() => undefined);
             return;
           }
-          console.warn(
+          if (__DEV__) console.warn(
             `[QuranEngine] verse-loop finished after ${_verseLoopActive.count} plays`,
           );
         }
@@ -703,14 +701,14 @@ export const QuranAudioEngine = {
         if (_continuousMode && finishedSurahId !== null) {
           const next = finishedSurahId + 1;
           if (next <= 114) {
-            console.error(`[QuranEngine] continuous → surah ${next}`);
+            if (__DEV__) console.error(`[QuranEngine] continuous → surah ${next}`);
             // Carry over continuous flag through the new load.
             const carryStop = _pendingStopVerseKey;
             const carryContinuous = _continuousMode;
             (async () => {
               try {
                 await QuranAudioEngine.loadAndPlay(next);
-                console.error(`[QuranEngine] continuous loadAndPlay(${next}) resolved`);
+                if (__DEV__) console.error(`[QuranEngine] continuous loadAndPlay(${next}) resolved`);
               } catch (e) {
                 const msg = e instanceof Error ? e.message : String(e);
                 console.error(`[QuranEngine] continuous loadAndPlay(${next}) THREW: ${msg}`);
@@ -776,7 +774,7 @@ export const QuranAudioEngine = {
           const next = _currentSurahId + 1;
           if (next <= 114) {
             _preloadedNextSurahId = next;
-            console.error(`[QuranEngine] preloading next surah ${next} (current at ${positionMs}/${durationMs}ms)`);
+            if (__DEV__) console.error(`[QuranEngine] preloading next surah ${next} (current at ${positionMs}/${durationMs}ms)`);
             void preloadNextSurah(next).catch(() => {
               // Reset so we can retry on the next progress tick.
               if (_preloadedNextSurahId === next) _preloadedNextSurahId = null;
@@ -804,7 +802,7 @@ export const QuranAudioEngine = {
           positionMs >= durationMs - 200
         ) {
           _proactiveSkipInitiated = true;
-          console.error(`[QuranEngine] proactive skipToNext at ${positionMs}/${durationMs}`);
+          if (__DEV__) console.error(`[QuranEngine] proactive skipToNext at ${positionMs}/${durationMs}`);
           TrackPlayer.skipToNext().catch((e) => {
             const msg = e instanceof Error ? e.message : String(e);
             console.error(`[QuranEngine] proactive skipToNext failed: ${msg}`);
@@ -832,7 +830,7 @@ export const QuranAudioEngine = {
             const moreLoops = !isInfinite && _intervalLoop.plays < _intervalLoop.count!;
             if (isInfinite || moreLoops) {
               _intervalLoop.seeking = true;
-              console.warn(`[QuranEngine] interval-loop ${_intervalLoop.plays + 1}/${_intervalLoop.count ?? '∞'}`);
+              if (__DEV__) console.warn(`[QuranEngine] interval-loop ${_intervalLoop.plays + 1}/${_intervalLoop.count ?? '∞'}`);
               TrackPlayer.seekTo(fromMs / 1000)
                 .then(() => TrackPlayer.play())
                 .finally(() => {
@@ -840,7 +838,7 @@ export const QuranAudioEngine = {
                 });
             } else {
               // Finite count reached → stop at toKey end.
-              console.warn(`[QuranEngine] interval-loop finished after ${_intervalLoop.count} plays`);
+              if (__DEV__) console.warn(`[QuranEngine] interval-loop finished after ${_intervalLoop.count} plays`);
               _intervalLoop = null;
               TrackPlayer.pause().catch(() => undefined);
               setProgressEventsEnabled(false);
@@ -861,7 +859,7 @@ export const QuranAudioEngine = {
         // Pause (or advance to next surah for cross-surah ranges) when the
         // monitored position is reached.
         if (_stopAtTimestampMs !== null && positionMs >= _stopAtTimestampMs) {
-          console.warn('[QuranEngine] stopAt boundary reached');
+          if (__DEV__) console.warn('[QuranEngine] stopAt boundary reached');
           _stopAtTimestampMs = null;
           // If a cross-surah pending stop is set, the next-surah branch in
           // PlaybackQueueEnded handles advancement. Here we just pause for
@@ -881,7 +879,7 @@ export const QuranAudioEngine = {
       // event.track is the new active track object (with our string `id` field).
       TrackPlayer.addEventListener(Event.PlaybackActiveTrackChanged, (event) => {
         const newId = event?.track?.id != null ? String(event.track.id) : null;
-        console.error(`[QuranEngine] ActiveTrackChanged → ${newId ?? 'null'}`);
+        if (__DEV__) console.error(`[QuranEngine] ActiveTrackChanged → ${newId ?? 'null'}`);
         _activeTrackId = newId;
 
         // Detect continuous-mode surah advance: track id matches surah-N or
@@ -896,7 +894,7 @@ export const QuranAudioEngine = {
             const trackSurahId = parseInt(m[1], 10);
             const isAdvance = trackSurahId !== _currentSurahId;
             if (isAdvance) {
-              console.error(`[QuranEngine] queue advanced surah ${_currentSurahId} → ${trackSurahId}`);
+              if (__DEV__) console.error(`[QuranEngine] queue advanced surah ${_currentSurahId} → ${trackSurahId}`);
               _currentSurahId = trackSurahId;
               _currentTimings = null;
               _preloadedNextSurahId = null; // ready to pre-queue surah after this one
@@ -943,7 +941,7 @@ export const QuranAudioEngine = {
               const reciterName = reciterId !== null
                 ? (RECITERS.find((r) => r.id === reciterId)?.name ?? '')
                 : '';
-              console.error(`[QuranEngine] updateNowPlayingMetadata + play() for ${newId}`);
+              if (__DEV__) console.error(`[QuranEngine] updateNowPlayingMetadata + play() for ${newId}`);
               TrackPlayer.updateNowPlayingMetadata({
                 title: surahName,
                 artist: reciterName,
@@ -1039,7 +1037,7 @@ export const QuranAudioEngine = {
    * earlier loads cleanly without leaving orphan tracks in the queue.
    */
   async loadAndPlay(surahId: number): Promise<void> {
-    console.error(`[QuranEngine] loadAndPlay(${surahId})`);
+    if (__DEV__) console.error(`[QuranEngine] loadAndPlay(${surahId})`);
     await this.init();
 
     const reciterId = _currentReciterId;
@@ -1248,7 +1246,7 @@ export const QuranAudioEngine = {
     stopAtVerseKey: string | null,
     continuous?: boolean,
   ): Promise<void> {
-    console.error(`[QuranEngine] loadAndPlayFromVerse(${surahId}, start=${startVerseKey}, stop=${stopAtVerseKey ?? 'null'}, continuous=${!!continuous})`);
+    if (__DEV__) console.error(`[QuranEngine] loadAndPlayFromVerse(${surahId}, start=${startVerseKey}, stop=${stopAtVerseKey ?? 'null'}, continuous=${!!continuous})`);
     await this.init();
 
     // BSMLLH_X start key → use the standard surah load (which queues
@@ -1448,7 +1446,7 @@ export const QuranAudioEngine = {
     verseId: number,
     count: number | null,
   ): Promise<void> {
-    console.error(`[QuranEngine] loadAndLoopVerse(${surahId}, ${verseId}, count=${count ?? '∞'})`);
+    if (__DEV__) console.error(`[QuranEngine] loadAndLoopVerse(${surahId}, ${verseId}, count=${count ?? '∞'})`);
     await this.init();
 
     const reciterId = _currentReciterId;

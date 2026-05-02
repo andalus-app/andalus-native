@@ -30,17 +30,17 @@ import { QuranAudioEngine } from './quranAudioEngine';
 
 export async function PlaybackService(): Promise<void> {
   TrackPlayer.addEventListener(Event.RemotePlay, async () => {
-    console.error('[QuranEngine] remote: play');
+    if (__DEV__) console.error('[QuranEngine] remote: play');
     await TrackPlayer.play();
   });
 
   TrackPlayer.addEventListener(Event.RemotePause, async () => {
-    console.error('[QuranEngine] remote: pause');
+    if (__DEV__) console.error('[QuranEngine] remote: pause');
     await TrackPlayer.pause();
   });
 
   TrackPlayer.addEventListener(Event.RemoteStop, async () => {
-    console.error('[QuranEngine] remote: stop');
+    if (__DEV__) console.error('[QuranEngine] remote: stop');
     await QuranAudioEngine.stop();
   });
 
@@ -48,14 +48,14 @@ export async function PlaybackService(): Promise<void> {
   // Engine.skipVerse(1) seeks the chapter audio to the next verse's
   // timestamp; for verse-loop mode it jumps to looping the next verse.
   TrackPlayer.addEventListener(Event.RemoteNext, async () => {
-    console.error('[QuranEngine] remote: next verse');
+    if (__DEV__) console.error('[QuranEngine] remote: next verse');
     try {
       await QuranAudioEngine.skipVerse(1);
     } catch {}
   });
 
   TrackPlayer.addEventListener(Event.RemotePrevious, async () => {
-    console.error('[QuranEngine] remote: previous verse');
+    if (__DEV__) console.error('[QuranEngine] remote: previous verse');
     try {
       await QuranAudioEngine.skipVerse(-1);
     } catch {}
@@ -63,7 +63,7 @@ export async function PlaybackService(): Promise<void> {
 
   // Lock-screen scrub bar drag.
   TrackPlayer.addEventListener(Event.RemoteSeek, async (event) => {
-    console.error(`[QuranEngine] remote: seek to ${event?.position}s`);
+    if (__DEV__) console.error(`[QuranEngine] remote: seek to ${event?.position}s`);
     if (typeof event?.position === 'number') {
       await TrackPlayer.seekTo(event.position);
     }
@@ -74,14 +74,14 @@ export async function PlaybackService(): Promise<void> {
   // accessories. Wire to skipVerse so behavior is consistent regardless of
   // which physical button the user uses.
   TrackPlayer.addEventListener(Event.RemoteJumpForward, async () => {
-    console.error('[QuranEngine] remote: jump fwd → next verse');
+    if (__DEV__) console.error('[QuranEngine] remote: jump fwd → next verse');
     try {
       await QuranAudioEngine.skipVerse(1);
     } catch {}
   });
 
   TrackPlayer.addEventListener(Event.RemoteJumpBackward, async () => {
-    console.error('[QuranEngine] remote: jump back → previous verse');
+    if (__DEV__) console.error('[QuranEngine] remote: jump back → previous verse');
     try {
       await QuranAudioEngine.skipVerse(-1);
     } catch {}
