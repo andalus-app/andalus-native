@@ -21,7 +21,7 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing, AppState, type AppStateStatus } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -161,13 +161,42 @@ export default function NextPrayerCard() {
 
   const [info, setInfo] = useState<PrayerInfo | null>(() => computeState());
 
-  // 1-second interval — ensures prayer transitions happen at the exact second
-  // and the seconds countdown (< 60 s) is always accurate.
+  // ── Background CPU fix (cpulimit isolation, 2026-05-02) ────────────────────
+  //
+  // This card is mounted on the home tab and STAYS MOUNTED in the navigation
+  // stack background when the user is on /quran. Without an AppState gate,
+  // the 1-second tick + the per-tick `Animated.timing` with
+  // `useNativeDriver: false` drove the SVG `<Circle>`'s `strokeDashoffset` at
+  // 60 fps in the background — every frame cloned the RNSVGCircle shadow node,
+  // triggered a Yoga layout cascade, and committed a new Fabric mount.
+  //
+  // Time Profiler trace 2026-05-02 confirmed this was the cpulimit cause for
+  // Quran background audio (kill at ~1 min). Gate both the timer AND the
+  // animation on AppState === 'active'. When backgrounded:
+  //   • clearInterval stops the per-second tick
+  //   • Animated.stopAnimation() halts the in-flight 950ms / 2500ms tween
+  // On foreground return: the tick restarts and the next animation snaps the
+  // ring to the current target with the regular 950ms tween.
+  //
+  // This card is purely a visual countdown — pausing it while the screen is
+  // locked has zero functional cost. The user wakes up, the ring updates.
+  const [appActive, setAppActive] = useState(AppState.currentState === 'active');
   useEffect(() => {
+    const sub = AppState.addEventListener('change', (state: AppStateStatus) => {
+      setAppActive(state === 'active');
+    });
+    return () => sub.remove();
+  }, []);
+
+  // 1-second interval — ensures prayer transitions happen at the exact second
+  // and the seconds countdown (< 60 s) is always accurate. Paused when
+  // backgrounded so we don't burn the audio-background CPU budget.
+  useEffect(() => {
+    if (!appActive) return;
     setInfo(computeState());
     const id = setInterval(() => setInfo(computeState()), 1_000);
     return () => clearInterval(id);
-  }, [computeState]);
+  }, [computeState, appActive]);
 
   // Animated dashOffset — smoothly interpolates the ring between 1-second ticks
   // so it moves continuously instead of jumping once per second (ticking effect).
@@ -178,6 +207,13 @@ export default function NextPrayerCard() {
   const prevPrayerKey = useRef<string | null>(null);
 
   useEffect(() => {
+    // Background guard: stop any in-flight tween and skip starting a new one.
+    // The animation will resume naturally on the next foreground tick.
+    if (!appActive) {
+      dashOffsetAnim.stopAnimation();
+      return;
+    }
+
     const target = info ? CIRCUMFERENCE * (1 - info.progress) : 0;
 
     if (!dashOffsetInitialized.current) {
@@ -209,7 +245,7 @@ export default function NextPrayerCard() {
         easing: Easing.linear,
       }).start();
     }
-  }, [info]);
+  }, [info, appActive, dashOffsetAnim]);
 
   // ── Derived display values ─────────────────────────────────────────────────
 

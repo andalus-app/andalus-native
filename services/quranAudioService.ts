@@ -56,8 +56,14 @@ function localAudioPath(reciterId: number, surahId: number): string {
  * Separate from the full surah-1 cache so it can be downloaded independently
  * as a short (~5 s) file without pulling the entire Al-Fatiha chapter.
  */
+// Cache filename bumped to v2 (2026-05-02) — older `r{id}_bsml.mp3` files for
+// reciters with the legacy CDN regex bug stored the FULL Al-Fatiha chapter as
+// the bismillah file (because deriveVerseAudioUrl returned null and the code
+// fell back to chapterUrl). Symptom: picking any non-Al-Fatiha surah played
+// all of Al-Fatiha first, then the chosen surah. Bumping the path forces a
+// re-download via the new API-based resolver below.
 function bismillahLocalPath(reciterId: number): string {
-  return `${AUDIO_DIR}r${reciterId}_bsml.mp3`;
+  return `${AUDIO_DIR}r${reciterId}_bsml_v2.mp3`;
 }
 
 // ── API ──────────────────────────────────────────────────────────────────────
@@ -126,19 +132,19 @@ export async function ensureAudioDir(): Promise<void> {
  * Returns the local URI for the bismillah audio clip (Al-Fatiha verse 1:1),
  * downloading and caching it first if needed.
  *
- * Strategy:
+ * Strategy (matches getVerseAudioUri):
  *   1. Return the cached file immediately if it already exists.
- *   2. Ask the QDC API for the Al-Fatiha chapter URL to extract the reciter
- *      slug, then derive the verse-level URL:
- *        https://audio.qurancdn.com/{slug}/mp3/001001.mp3  (~5 s clip)
- *   3. If the URL cannot be derived (different CDN pattern), fall back to
- *      downloading the full Al-Fatiha chapter file instead. In this case
- *      `isBismillahShortClip()` returns false so the caller can still use
- *      the timer-based approach.
+ *   2. Resolve the canonical per-verse URL via the Quran.com API
+ *      (`/api/v4/recitations/{id}/by_ayah/1:1` → `verses.quran.com/...`).
+ *   3. If the API returns nothing usable, fall back to the legacy chapter-URL
+ *      regex derivation.
+ *   4. LAST RESORT: download the full Al-Fatiha chapter file. The bismillah
+ *      pre-play UX will be wrong (~60 s of Al-Fatiha instead of a 5 s clip),
+ *      but at least there's audio. This branch should be unreachable for the
+ *      reciters in our RECITERS list — kept as a defensive safety net.
  *
- * The file is cached at `r{reciterId}_bsml.mp3` — separate from the full
- * surah-1 download so users who never play surah 1 in full still get a
- * dedicated short clip.
+ * The file is cached at `r{reciterId}_bsml_v2.mp3` — bumped from `_bsml.mp3`
+ * to invalidate caches that stored the broken full-Al-Fatiha fallback.
  */
 export async function getBismillahAudioUri(reciterId: number): Promise<string> {
   await ensureAudioDir();
@@ -146,16 +152,39 @@ export async function getBismillahAudioUri(reciterId: number): Promise<string> {
   const cached = await FileSystem.getInfoAsync(local);
   if (cached.exists && (cached as FileSystem.FileInfo & { size?: number }).size) return local;
 
-  // Resolve chapter URL to derive the verse-level URL.
-  const chapterUrl = await resolveRemoteUrl(reciterId, 1); // Al-Fatiha chapter
-  const verseUrl = deriveVerseAudioUrl(chapterUrl, 1, 1);
-  const downloadUrl = verseUrl ?? chapterUrl; // fallback to chapter if pattern mismatch
+  // Primary: canonical Quran.com API for verse 1:1 of Al-Fatiha (the bismillah).
+  let downloadUrl: string | null = await resolveVerseAudioUrlViaApi(reciterId, 1, 1);
+
+  // Fallback 1: legacy chapter-URL regex derivation.
+  if (!downloadUrl) {
+    try {
+      const chapterUrl = await resolveRemoteUrl(reciterId, 1);
+      downloadUrl = deriveVerseAudioUrl(chapterUrl, 1, 1);
+    } catch {
+      // Chapter URL fetch failed → drop to last-resort fallback.
+    }
+  }
+
+  // Fallback 2 (last resort): full Al-Fatiha chapter. Wrong UX but at least audio.
+  if (!downloadUrl) {
+    try {
+      downloadUrl = await resolveRemoteUrl(reciterId, 1);
+    } catch (err) {
+      throw new Error('Bismillah audio URL resolution failed');
+    }
+  }
 
   const dl = FileSystem.createDownloadResumable(downloadUrl, local);
   const result = await dl.downloadAsync();
   if (!result?.uri) {
     await FileSystem.deleteAsync(local, { idempotent: true });
     throw new Error('Bismillah audio download failed');
+  }
+  // Sanity-check size (HTML 404 bodies are < 1 KB).
+  const info = await FileSystem.getInfoAsync(local) as FileSystem.FileInfo & { size?: number };
+  if (!info.exists || !info.size || info.size < 1024) {
+    await FileSystem.deleteAsync(local, { idempotent: true });
+    throw new Error('Bismillah audio download invalid');
   }
   return local;
 }
@@ -185,16 +214,64 @@ function verseLocalPath(reciterId: number, surahId: number, verseId: number): st
 }
 
 /**
+ * Resolves the canonical per-verse audio URL via the Quran.com API.
+ *   GET https://api.quran.com/api/v4/recitations/{recitationId}/by_ayah/{verseKey}
+ *   → { audio_files: [{ url: "Alafasy/mp3/002001.mp3" }] }
+ *
+ * The API returns a path relative to https://verses.quran.com/, which is the
+ * canonical CDN host for per-verse audio. The slug used here ("Alafasy") is
+ * NOT the same as the chapter-URL slug ("mishari_al_afasy" inside the qdc
+ * bucket) — that's why the legacy `deriveVerseAudioUrl` regex approach is
+ * fundamentally fragile. Always prefer the API.
+ *
+ * Returns null on network error / missing entry. Caller falls back to the
+ * legacy regex-based derivation as a best-effort secondary path.
+ */
+async function resolveVerseAudioUrlViaApi(
+  reciterId: number,
+  surahId: number,
+  verseId: number,
+): Promise<string | null> {
+  const verseKey = `${surahId}:${verseId}`;
+  const apiUrl = `https://api.quran.com/api/v4/recitations/${reciterId}/by_ayah/${verseKey}`;
+  try {
+    const resp = await fetch(apiUrl);
+    if (!resp.ok) return null;
+    const json = (await resp.json()) as { audio_files?: Array<{ url?: string }> };
+    const relative = json.audio_files?.[0]?.url;
+    if (!relative || typeof relative !== 'string') return null;
+    const trimmed = relative.trim();
+    if (!trimmed) return null;
+    // The Quran.com API returns three URL shapes depending on the reciter:
+    //   1. `Alafasy/mp3/001007.mp3` (most reciters) → prefix verses.quran.com
+    //   2. `//mirrors.quranicaudio.com/everyayah/...` (Husary id=6, 12)
+    //      → protocol-relative; prefix `https:` (NOT verses.quran.com — the
+    //      host is in the URL itself)
+    //   3. `https://...` (rare, defensive) → use as-is
+    if (/^https?:\/\//i.test(trimmed)) return trimmed;
+    if (trimmed.startsWith('//')) return `https:${trimmed}`;
+    return `https://verses.quran.com/${trimmed}`;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Returns a local file:// URI for the single-verse audio of (surah, verse),
- * downloading and caching it on first call. Returns `null` when QuranCDN's
- * URL pattern doesn't match for this reciter — in that case the caller must
- * fall back to the chapter-file + JS seek/loop path.
+ * downloading and caching it on first call. Returns `null` only when both the
+ * canonical Quran.com API AND the legacy chapter-URL derivation fail to
+ * produce a working per-verse URL — the caller (engine) then surfaces the
+ * "Vers-upprepning ej tillgänglig" notification and falls back to chapter
+ * playback.
  *
  * Strategy:
  *   1. Return the cached file immediately if it exists.
- *   2. Resolve the chapter URL (we already cache reciter→chapter slug there)
- *      and derive the per-verse URL via the existing `deriveVerseAudioUrl`.
- *   3. Download to `r{reciterId}_v{NNN}{NNN}.mp3`.
+ *   2. Resolve the canonical per-verse URL via the Quran.com API
+ *      (`/api/v4/recitations/{id}/by_ayah/{verseKey}` → `verses.quran.com/...`).
+ *   3. If the API returns nothing usable, fall back to the legacy
+ *      `deriveVerseAudioUrl` regex on the chapter URL — works for older
+ *      reciters whose chapter URLs still match `{host}/{slug}/{NNN}.mp3`.
+ *   4. Download to `r{reciterId}_v{NNN}{NNN}.mp3`.
  *
  * Files are small (most verses are 3–30 s of audio), so no eviction policy is
  * applied here — the user clearing app storage / reinstalling is sufficient.
@@ -211,22 +288,29 @@ export async function getVerseAudioUri(
     return local;
   }
 
-  // Resolve the chapter URL (this gives us the reciter slug embedded in the path).
-  let chapterUrl: string;
-  try {
-    chapterUrl = await resolveRemoteUrl(reciterId, surahId);
-  } catch {
-    return null;
+  // Primary: the canonical Quran.com API. Works for every reciter exposed by
+  // Quran.com (which is the same set RECITERS is curated from).
+  let verseUrl: string | null = await resolveVerseAudioUrlViaApi(reciterId, surahId, verseId);
+
+  // Fallback: derive from the chapter URL via the legacy regex. Only catches
+  // a small subset of reciters today — the chapter URL format moved away from
+  // `{host}/{slug}/{NNN}.mp3` for most reciters. Kept as a safety net for any
+  // remaining legacy CDN paths.
+  if (!verseUrl) {
+    let chapterUrl: string;
+    try {
+      chapterUrl = await resolveRemoteUrl(reciterId, surahId);
+    } catch {
+      return null;
+    }
+    verseUrl = deriveVerseAudioUrl(chapterUrl, surahId, verseId);
   }
 
-  const verseUrl = deriveVerseAudioUrl(chapterUrl, surahId, verseId);
-  if (!verseUrl) return null; // chapter URL didn't match {slug}/{NNN}.mp3 pattern at all
+  if (!verseUrl) return null;
 
-  // Try the derived per-verse URL. If the bucket doesn't expose /mp3/{SSSVVV}.mp3
-  // (e.g. a few legacy reciters host only chapter files), the download throws or
-  // returns no body — surface that as null to the caller. We deliberately do not
-  // try a different alternate CDN here: the caller hard-disables verse-repeat on
-  // null so the user sees a clear error rather than a flaky JS seek-loop fallback.
+  // Download. If the bucket returns 404 or an HTML error body, treat as
+  // unavailable — caller hard-disables verse-repeat for this reciter so the
+  // user sees a clear error rather than a flaky seek-loop fallback.
   try {
     const dl = FileSystem.createDownloadResumable(verseUrl, local);
     const result = await dl.downloadAsync();

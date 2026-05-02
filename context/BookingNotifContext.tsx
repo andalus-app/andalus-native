@@ -264,29 +264,59 @@ export function BookingNotifProvider({ children }: { children: React.ReactNode }
 
   useEffect(() => { refresh(); }, [refresh]);
 
+  // Foreground-only lifecycle: realtime channel + 30 s fallback poll only run
+  // when the app is in the 'active' state. Both pause when backgrounded and
+  // resume + immediately refresh when the user returns.
+  //
+  // Why: iOS bills every JS callback (timer fires, websocket message handlers,
+  // promise continuations) against the audio-background CPU budget for an
+  // app with UIBackgroundModes:audio. The 30 s interval + Supabase realtime
+  // websocket heartbeats together consumed enough background CPU to hit
+  // `memorystatus: cpulimit violation` after ~2 min of locked Quran playback
+  // — confirmed in TestFlight iPhone log. The home-screen booking banner
+  // doesn't need to refresh while the screen is locked, so we pause both.
   useEffect(() => {
-    const channel = supabase
-      .channel('booking_notif_v3')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, debouncedRefresh)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'booking_exceptions' }, debouncedRefresh)
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [debouncedRefresh]);
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let pollTimer: ReturnType<typeof setInterval> | null = null;
 
-  useEffect(() => {
-    const sub = AppState.addEventListener('change', state => {
-      if (state === 'active') debouncedRefresh();
+    const subscribe = () => {
+      if (channel) return;
+      channel = supabase
+        .channel('booking_notif_v3')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, debouncedRefresh)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'booking_exceptions' }, debouncedRefresh)
+        .subscribe();
+      pollTimer = setInterval(() => refresh(), 30_000);
+    };
+
+    const unsubscribe = () => {
+      if (channel) {
+        supabase.removeChannel(channel);
+        channel = null;
+      }
+      if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+      }
+    };
+
+    if (AppState.currentState === 'active') subscribe();
+
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        subscribe();
+        // Catch up on anything that changed while we were paused.
+        debouncedRefresh();
+      } else {
+        unsubscribe();
+      }
     });
-    return () => sub.remove();
-  }, [debouncedRefresh]);
 
-  // Background poll every 30 s — always-on fallback for when realtime WebSocket stalls.
-  // Runs at the app root level (not tied to any tab), so the home screen banner
-  // updates even when the user is on a different tab.
-  useEffect(() => {
-    const interval = setInterval(() => refresh(), 30_000);
-    return () => clearInterval(interval);
-  }, [refresh]);
+    return () => {
+      sub.remove();
+      unsubscribe();
+    };
+  }, [debouncedRefresh, refresh]);
 
   // Register this device's Expo push token in Supabase.
   // Admins receive new-booking push notifications (booking-notification function).

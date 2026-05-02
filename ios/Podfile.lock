@@ -1548,6 +1548,9 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
+  - react-native-track-player (4.1.2):
+    - React-Core
+    - SwiftAudioEx (= 1.1.0)
   - react-native-webview (13.15.0):
     - hermes-engine
     - RCTRequired
@@ -2212,6 +2215,7 @@ PODS:
   - SDWebImageWebPCoder (0.14.6):
     - libwebp (~> 1.0)
     - SDWebImage/Core (~> 5.17)
+  - SwiftAudioEx (1.1.0)
   - UMAppLoader (6.0.8)
   - WidgetData (1.0.0):
     - ExpoModulesCore
@@ -2288,6 +2292,7 @@ DEPENDENCIES:
   - react-native-blob-util (from `../node_modules/react-native-blob-util`)
   - react-native-pdf (from `../node_modules/react-native-pdf`)
   - react-native-safe-area-context (from `../node_modules/react-native-safe-area-context`)
+  - react-native-track-player (from `../node_modules/react-native-track-player`)
   - react-native-webview (from `../node_modules/react-native-webview`)
   - React-NativeModulesApple (from `../node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios`)
   - React-oscompat (from `../node_modules/react-native/ReactCommon/oscompat`)
@@ -2339,6 +2344,7 @@ SPEC REPOS:
     - SDWebImageAVIFCoder
     - SDWebImageSVGCoder
     - SDWebImageWebPCoder
+    - SwiftAudioEx
 
 EXTERNAL SOURCES:
   AirplayRoutePicker:
@@ -2480,6 +2486,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native-pdf"
   react-native-safe-area-context:
     :path: "../node_modules/react-native-safe-area-context"
+  react-native-track-player:
+    :path: "../node_modules/react-native-track-player"
   react-native-webview:
     :path: "../node_modules/react-native-webview"
   React-NativeModulesApple:
@@ -2636,6 +2644,7 @@ SPEC CHECKSUMS:
   react-native-blob-util: 5926090844c5d8081f065066cdb262854351777d
   react-native-pdf: dac049a15aec41db452e372f85184d3f15741b12
   react-native-safe-area-context: 37e680fc4cace3c0030ee46e8987d24f5d3bdab2
+  react-native-track-player: dd56f9948e03756a217c75e0a61aa04aab65b5a1
   react-native-webview: b29007f4723bca10872028067b07abacfa1cb35a
   React-NativeModulesApple: 8969913947d5b576de4ed371a939455a8daf28aa
   React-oscompat: ce47230ed20185e91de62d8c6d139ae61763d09c
@@ -2678,6 +2687,7 @@ SPEC CHECKSUMS:
   SDWebImageAVIFCoder: afe194a084e851f70228e4be35ef651df0fc5c57
   SDWebImageSVGCoder: 15a300a97ec1c8ac958f009c02220ac0402e936c
   SDWebImageWebPCoder: e38c0a70396191361d60c092933e22c20d5b1380
+  SwiftAudioEx: f6aa653770f3a0d3851edaf8d834a30aee4a7646
   UMAppLoader: 145337733539f9af9b3dd97eeaa7f3bd97cacb23
   WidgetData: 9d01425a26d66fc8b3d35ccaec86badb7a70654a
   Yoga: 5934998fbeaef7845dbf698f698518695ab4cd1a

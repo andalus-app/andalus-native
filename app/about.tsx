@@ -98,7 +98,7 @@ export default function AboutScreen() {
             resizeMode="contain"
           />
           <Text style={[styles.heroTitle, { color: T.text }]}>Hidayah</Text>
-          <Text style={[styles.heroVersion, { color: T.textMuted }]}>Version 1.3.4</Text>
+          <Text style={[styles.heroVersion, { color: T.textMuted }]}>Version 1.3.5</Text>
         </View>
 
         {/* Sections */}
