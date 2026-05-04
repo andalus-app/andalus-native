@@ -275,7 +275,16 @@ export function BookingNotifProvider({ children }: { children: React.ReactNode }
   // `memorystatus: cpulimit violation` after ~2 min of locked Quran playback
   // — confirmed in TestFlight iPhone log. The home-screen booking banner
   // doesn't need to refresh while the screen is locked, so we pause both.
+  //
+  // Auth gate: polling and realtime subscription only run when the user has
+  // authenticated with their PIN. Unauthenticated users produce zero network
+  // traffic from this context — no websocket connection, no interval.
+  // isLoggedIn is set by refresh() which runs on mount (reading Storage) and
+  // after every successful PIN login, so the effect re-runs automatically on
+  // login (starts polling) and on logout (tears everything down).
   useEffect(() => {
+    if (!isLoggedIn) return;
+
     let channel: ReturnType<typeof supabase.channel> | null = null;
     let pollTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -316,7 +325,7 @@ export function BookingNotifProvider({ children }: { children: React.ReactNode }
       sub.remove();
       unsubscribe();
     };
-  }, [debouncedRefresh, refresh]);
+  }, [isLoggedIn, debouncedRefresh, refresh]);
 
   // Register this device's Expo push token in Supabase.
   // Admins receive new-booking push notifications (booking-notification function).

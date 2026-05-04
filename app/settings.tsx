@@ -2,6 +2,7 @@ import {
   View, Text, ScrollView, TouchableOpacity, Switch,
   Modal, Alert, ActivityIndicator, Platform, TextInput, Animated, Easing,
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { useState, useCallback, useRef, type ReactNode } from 'react';
 import type { Theme } from '../theme/colors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -23,6 +24,10 @@ import {
   enableAllahNamesReminder,
   disableAllahNamesReminder,
   LIVE_NOTIF_ENABLED_KEY,
+  cancelPrePrayerReminders,
+  refreshPrePrayerReminderNotifications,
+  PRE_PRAYER_REMINDER_STORAGE_KEY,
+  type PrayerReminderOffset,
 } from '../services/notifications';
 import {
   loadZakatReminderSettings,
@@ -30,6 +35,7 @@ import {
   enableZakatReminder,
   disableZakatReminder,
   syncZakatReminders,
+  ADVANCE_OPTIONS,
 } from '../services/zakatReminderService';
 import HijriDatePickerModal from '../components/HijriDatePickerModal';
 import { supabase } from '../lib/supabase';
@@ -141,9 +147,17 @@ export default function SettingsScreen() {
   const [zakatSavedDate,         setZakatSavedDate]         = useState<string | null>(null);
   const [zakatPickerVisible,     setZakatPickerVisible]     = useState(false);
   const [zakatPickerDefaults,    setZakatPickerDefaults]    = useState({ day: 1, month: 1, hour: 10, minute: 0 });
+  const [zakatAdvanceDays,       setZakatAdvanceDays]       = useState(7);
   const zakatSettingsRef = useRef<Awaited<ReturnType<typeof loadZakatReminderSettings>>>(null);
   const [allahNamesEnabled,      setAllahNamesEnabled]      = useState(true);
-  const [liveNotifEnabled, setLiveNotifEnabled] = useState(false);
+  const [liveNotifEnabled,       setLiveNotifEnabled]       = useState(false);
+  const [prayerReminderOffset,        setPrayerReminderOffset]        = useState<PrayerReminderOffset>('off');
+  const [pendingPrayerReminderOffset, setPendingPrayerReminderOffset] = useState<PrayerReminderOffset>('off');
+  const [prayerReminderModal,         setPrayerReminderModal]         = useState(false);
+  const [prayerReminderSaved,         setPrayerReminderSaved]         = useState(false);
+  const prCheckScale   = useRef(new Animated.Value(0)).current;
+  const prCheckOpacity = useRef(new Animated.Value(0)).current;
+  const prTextOpacity  = useRef(new Animated.Value(0)).current;
   const [preferredName,    setPreferredName]    = useState<string | null>(null);
   const [nameModalVisible, setNameModalVisible] = useState(false);
   const nameSlideAnim = useRef(new Animated.Value(-400)).current;
@@ -170,9 +184,14 @@ export default function SettingsScreen() {
       setAllahNamesEnabled(allahNames !== 'false'); // null (never set) = default on
       const liveNotif = await AsyncStorage.getItem(LIVE_NOTIF_ENABLED_KEY);
       setLiveNotifEnabled(liveNotif === 'true'); // null (never set) = default off
+      const prRaw = await AsyncStorage.getItem(PRE_PRAYER_REMINDER_STORAGE_KEY);
+      const prNum = prRaw ? parseInt(prRaw, 10) : NaN;
+      const VALID_OFFSETS = [15, 30, 45, 60] as const;
+      setPrayerReminderOffset((VALID_OFFSETS as readonly number[]).includes(prNum) ? prNum as PrayerReminderOffset : 'off');
       const zakat = await loadZakatReminderSettings();
       zakatSettingsRef.current = zakat;
       setZakatEnabled(zakat?.enabled ?? false);
+      setZakatAdvanceDays(zakat?.advanceDays ?? 7);
       if (zakat?.hijriDay && zakat?.hijriMonthName) {
         const h = String(zakat.reminderTimeHour ?? 8).padStart(2, '0');
         const m = String(zakat.reminderTimeMinute ?? 0).padStart(2, '0');
@@ -196,6 +215,7 @@ export default function SettingsScreen() {
   // ── Zakat picker confirm (first-time setup from Settings) ────────────────
   const handleZakatPickerConfirm = useCallback(async (
     day: number, month: number, monthName: string, hour: number, minute: number,
+    meta?: { inputMode?: 'hijri' | 'gregorian'; originalGregorianMonth?: number; originalGregorianDay?: number },
   ) => {
     const now = new Date().toISOString();
     const existing = zakatSettingsRef.current;
@@ -210,6 +230,9 @@ export default function SettingsScreen() {
       source: (existing?.source ?? 'aladhan') as 'aladhan',
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
+      ...(meta?.inputMode !== undefined && { inputMode: meta.inputMode }),
+      ...(meta?.originalGregorianMonth !== undefined && { originalGregorianMonth: meta.originalGregorianMonth }),
+      ...(meta?.originalGregorianDay !== undefined && { originalGregorianDay: meta.originalGregorianDay }),
     };
     await saveZakatReminderSettings(newSettings);
     await syncZakatReminders();
@@ -218,6 +241,16 @@ export default function SettingsScreen() {
     const h = String(hour).padStart(2, '0');
     const m = String(minute).padStart(2, '0');
     setZakatSavedDate(`${day} ${monthName} · ${h}:${m}`);
+  }, []);
+
+  const handleZakatAdvanceDaysChange = useCallback(async (days: number) => {
+    setZakatAdvanceDays(days);
+    const existing = zakatSettingsRef.current;
+    if (!existing) return;
+    const updated = { ...existing, advanceDays: days };
+    zakatSettingsRef.current = updated;
+    await saveZakatReminderSettings(updated);
+    if (updated.enabled) await syncZakatReminders();
   }, []);
 
   async function handleSaveName() {
@@ -237,6 +270,23 @@ export default function SettingsScreen() {
 
   function closeNameModal() {
     Animated.timing(nameSlideAnim, { toValue: -400, duration: 220, easing: Easing.in(Easing.quad), useNativeDriver: true }).start(() => setNameModalVisible(false));
+  }
+
+  function animatePrayerReminderAndClose() {
+    prCheckScale.setValue(0);
+    prCheckOpacity.setValue(0);
+    prTextOpacity.setValue(0);
+    setPrayerReminderSaved(true);
+    Animated.parallel([
+      Animated.timing(prCheckOpacity, { toValue: 1, duration: 180, useNativeDriver: true }),
+      Animated.spring(prCheckScale,   { toValue: 1, bounciness: 10, useNativeDriver: true }),
+    ]).start(() => {
+      Animated.timing(prTextOpacity, { toValue: 1, duration: 220, useNativeDriver: true }).start();
+    });
+    setTimeout(() => {
+      setPrayerReminderModal(false);
+      setPrayerReminderSaved(false);
+    }, 1600);
   }
 
   async function detectLocation() {
@@ -345,6 +395,34 @@ export default function SettingsScreen() {
             }}
             trackColor={{false:T.border,true:T.accent}} thumbColor="#fff" ios_backgroundColor={T.border}/>}/>
 
+        <Row T={T} iconName="bell" label="Påminnelse före bön"
+          value={prayerReminderOffset === 'off'
+            ? 'Av'
+            : `${prayerReminderOffset} minuter före bönetiden`}
+          onPress={prayerReminderOffset !== 'off'
+            ? () => { setPendingPrayerReminderOffset(prayerReminderOffset); setPrayerReminderModal(true); }
+            : undefined}
+          right={
+            <Switch
+              value={prayerReminderOffset !== 'off' || prayerReminderModal}
+              onValueChange={async (v) => {
+                if (v) {
+                  setPendingPrayerReminderOffset(prayerReminderOffset === 'off' ? 15 : prayerReminderOffset);
+                  setPrayerReminderModal(true);
+                } else {
+                  setPrayerReminderOffset('off');
+                  await AsyncStorage.setItem(PRE_PRAYER_REMINDER_STORAGE_KEY, 'off');
+                  cancelPrePrayerReminders().catch(() => {});
+                  if (prayerReminderModal) setPrayerReminderModal(false);
+                }
+              }}
+              trackColor={{ false: T.border, true: T.accent }}
+              thumbColor="#fff"
+              ios_backgroundColor={T.border}
+            />
+          }
+        />
+
         <Row T={T} iconName="bell" label="Surah Al-Kahf påminnelse" value="Få en påminnelse varje fredag kl. 13:00"
           right={<Switch value={kahfEnabled}
             onValueChange={async (v) => {
@@ -439,47 +517,13 @@ export default function SettingsScreen() {
               }
               await AsyncStorage.setItem(LIVE_NOTIF_ENABLED_KEY, v ? 'true' : 'false');
               setLiveNotifEnabled(v);
-            }}
-            trackColor={{false:T.border,true:T.accent}} thumbColor="#fff" ios_backgroundColor={T.border}/>}/>
-
-        <Row T={T} iconName="bell" label="Zakat-påminnelse" value={zakatSavedDate ? `Årlig Hijri-baserad påminnelse\n${zakatSavedDate}` : 'Årlig Hijri-baserad påminnelse'}
-          onPress={zakatSavedDate ? () => {
-            const z = zakatSettingsRef.current;
-            setZakatPickerDefaults({
-              day: z?.hijriDay ?? 1,
-              month: z?.hijriMonth ?? 1,
-              hour: z?.reminderTimeHour ?? 10,
-              minute: z?.reminderTimeMinute ?? 0,
-            });
-            setZakatPickerVisible(true);
-          } : undefined}
-          right={<Switch value={zakatEnabled}
-            onValueChange={async (v) => {
-              if (v) {
-                const granted = await requestNotificationPermission();
-                if (!granted) {
-                  Alert.alert(
-                    'Notiser nekade',
-                    'Aktivera notiser för Hidayah i iOS-inställningar.',
-                    [{ text: 'OK' }],
-                  );
-                  return;
-                }
-                // Check if a Hijri date config already exists
-                const existing = await loadZakatReminderSettings();
-                if (existing?.hijriDay && existing?.hijriMonth) {
-                  // Re-enable existing config directly
-                  await enableZakatReminder({ ...existing, enabled: true });
-                  setZakatEnabled(true);
-                } else {
-                  // No config yet — show the date picker directly
-                  setZakatPickerDefaults({ day: 1, month: 1, hour: 10, minute: 0 });
-                  setZakatPickerVisible(true);
-                  // Don't set enabled=true yet; picker confirm handler does that
-                }
-              } else {
-                await disableZakatReminder();
-                setZakatEnabled(false);
+              // Sync preference to push_tokens so the Edge Function respects this choice
+              const liveUserId = Storage.getItem('islamnu_user_id') ?? Storage.getItem('islamnu_device_id');
+              if (liveUserId) {
+                supabase.from('push_tokens')
+                  .update({ live_notif: v })
+                  .eq('user_id', liveUserId)
+                  .then(() => {});
               }
             }}
             trackColor={{false:T.border,true:T.accent}} thumbColor="#fff" ios_backgroundColor={T.border}/>}/>
@@ -499,8 +543,10 @@ export default function SettingsScreen() {
                 }
               }
               saveSettings({ announcementNotifications: v });
-              // Sync preference to push_tokens so the server respects this choice
-              const userId = Storage.getItem('islamnu_user_id');
+              // Sync preference to push_tokens so the server respects this choice.
+              // Fall back to device ID for anonymous users whose token was registered
+              // before they logged in — without this they always receive announcements.
+              const userId = Storage.getItem('islamnu_user_id') ?? Storage.getItem('islamnu_device_id');
               if (userId) {
                 supabase.from('push_tokens')
                   .update({ announcement_notif: v })
@@ -510,11 +556,105 @@ export default function SettingsScreen() {
             }}
             trackColor={{false:T.border,true:T.accent}} thumbColor="#fff" ios_backgroundColor={T.border}/>}/>
 
+        {/* Zakat reminder */}
+        <View style={{ backgroundColor: T.card, borderRadius: 14, borderWidth: 0.5, borderColor: T.border, padding: 14, marginBottom: 8 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: T.accentGlow, alignItems: 'center', justifyContent: 'center' }}>
+              <SvgIcon name="bell" size={18} color={T.accent} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 15, fontWeight: '600', color: T.text }}>Zakat-påminnelse</Text>
+              <Text style={{ fontSize: 12, color: T.textMuted, marginTop: 1 }}>Årlig Hijri-baserad påminnelse</Text>
+            </View>
+            <Switch
+              value={zakatEnabled}
+              onValueChange={async (v) => {
+                if (v) {
+                  const granted = await requestNotificationPermission();
+                  if (!granted) {
+                    Alert.alert('Notiser nekade', 'Aktivera notiser för Hidayah i iOS-inställningar.', [{ text: 'OK' }]);
+                    return;
+                  }
+                  const existing = await loadZakatReminderSettings();
+                  if (existing?.hijriDay && existing?.hijriMonth) {
+                    await enableZakatReminder({ ...existing, enabled: true });
+                    setZakatEnabled(true);
+                  } else {
+                    setZakatPickerDefaults({ day: 1, month: 1, hour: 10, minute: 0 });
+                    setZakatPickerVisible(true);
+                  }
+                } else {
+                  await disableZakatReminder();
+                  setZakatEnabled(false);
+                }
+              }}
+              trackColor={{ false: T.border, true: T.accent }}
+              thumbColor="#fff"
+              ios_backgroundColor={T.border}
+            />
+          </View>
+
+          {zakatEnabled && zakatSavedDate && (
+            <>
+              <View style={{ height: 0.5, backgroundColor: T.border, marginVertical: 12 }} />
+              <TouchableOpacity
+                onPress={() => {
+                  const z = zakatSettingsRef.current;
+                  setZakatPickerDefaults({
+                    day: z?.hijriDay ?? 1,
+                    month: z?.hijriMonth ?? 1,
+                    hour: z?.reminderTimeHour ?? 10,
+                    minute: z?.reminderTimeMinute ?? 0,
+                  });
+                  setZakatPickerVisible(true);
+                }}
+                activeOpacity={0.7}
+                style={{
+                  flexDirection: 'row', alignItems: 'center',
+                  backgroundColor: T.bg, borderRadius: 10,
+                  borderWidth: 0.5, borderColor: T.border,
+                  paddingVertical: 10, paddingHorizontal: 14,
+                  marginBottom: 14,
+                }}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 12, color: T.textMuted, marginBottom: 2 }}>Datum &amp; tid</Text>
+                  <Text style={{ fontSize: 15, fontWeight: '600', color: T.text }}>{zakatSavedDate}</Text>
+                </View>
+                <Text style={{ fontSize: 18, color: T.textMuted }}>›</Text>
+              </TouchableOpacity>
+              <Text style={{ fontSize: 13, color: T.textMuted, fontWeight: '500', marginBottom: 10 }}>Påminn mig</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 7 }}>
+                {ADVANCE_OPTIONS.map(opt => {
+                  const active = zakatAdvanceDays === opt.days;
+                  return (
+                    <TouchableOpacity
+                      key={opt.days}
+                      onPress={() => handleZakatAdvanceDaysChange(opt.days)}
+                      activeOpacity={0.7}
+                      style={{
+                        paddingHorizontal: 11, paddingVertical: 7,
+                        borderRadius: 9, borderWidth: 0.5,
+                        borderColor: active ? T.accent : T.border,
+                        backgroundColor: active ? T.accentGlow : 'transparent',
+                      }}
+                    >
+                      <Text style={{ fontSize: 12, fontWeight: active ? '700' : '500', color: active ? T.accent : T.textMuted }}>
+                        {opt.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </>
+          )}
+        </View>
+
         <SectionLabel label="Om appen" T={T}/>
         <View style={{backgroundColor:T.card,borderRadius:14,borderWidth:0.5,borderColor:T.border,padding:16}}>
           <Text style={{fontSize:15,fontWeight:'700',color:T.text}}>Hidayah</Text>
           <Text style={{fontSize:13,color:T.textMuted,marginTop:2}}>Bönetider och Qibla-kompass</Text>
-          <Text style={{fontSize:12,color:T.textMuted,marginTop:6,opacity:0.7}}>Version 1.3.6</Text>
+          <Text style={{fontSize:12,color:T.textMuted,marginTop:6,opacity:0.7}}>Version 1.3.7</Text>
           <Text style={{fontSize:11,color:T.textMuted,marginTop:2,opacity:0.55}}>
             © {new Date().getFullYear()} Fatih Köker. Alla rättigheter förbehållna.
           </Text>
@@ -639,6 +779,112 @@ export default function SettingsScreen() {
             </View>
           </Animated.View>
           <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={closeNameModal} />
+        </View>
+      </Modal>
+
+      {/* ── Pre-prayer reminder picker ── */}
+      <Modal visible={prayerReminderModal} transparent animationType="slide" onRequestClose={() => { if (!prayerReminderSaved) setPrayerReminderModal(false); }}>
+        <TouchableOpacity style={{ flex: 1, backgroundColor: 'transparent' }} activeOpacity={1} onPress={() => { if (!prayerReminderSaved) setPrayerReminderModal(false); }} />
+        <View style={{ backgroundColor: T.card, borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingBottom: Platform.OS === 'ios' ? 34 : 20, borderWidth: 0.5, borderBottomWidth: 0, borderColor: T.border }}>
+          <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: T.border, alignSelf: 'center', marginTop: 10, marginBottom: 14 }} />
+          <View style={{ paddingHorizontal: 20, marginBottom: 4, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: T.text }}>Påminnelse före bön</Text>
+              <Text style={{ fontSize: 12, color: T.textMuted, marginTop: 3 }}>Få en påminnelse innan bönetiden så du hinner förbereda dig</Text>
+            </View>
+            {!prayerReminderSaved && (
+              <TouchableOpacity onPress={() => setPrayerReminderModal(false)} style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: T.accentGlow, alignItems: 'center', justifyContent: 'center', marginLeft: 12 }}>
+                <Text style={{ fontSize: 16, color: T.textMuted, lineHeight: 20, marginTop: -1 }}>×</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          <View style={{ height: 0.5, backgroundColor: T.border, marginTop: 10, marginBottom: 4 }} />
+
+          {prayerReminderSaved ? (
+            <Animated.View style={{ opacity: prCheckOpacity, alignItems: 'center', justifyContent: 'center', paddingVertical: 52 }}>
+              <Animated.View style={{
+                transform: [{ scale: prCheckScale }],
+                width: 72, height: 72, borderRadius: 36,
+                backgroundColor: T.accent,
+                alignItems: 'center', justifyContent: 'center',
+                marginBottom: 16,
+                shadowColor: T.accent,
+                shadowOffset: { width: 0, height: 6 },
+                shadowOpacity: 0.4,
+                shadowRadius: 14,
+              }}>
+                <Text style={{ fontSize: 34, color: '#fff', lineHeight: 40, marginTop: 2 }}>✓</Text>
+              </Animated.View>
+              <Animated.Text style={{ opacity: prTextOpacity, fontSize: 16, fontWeight: '600', color: T.text }}>
+                Påminnelse aktiverad
+              </Animated.Text>
+            </Animated.View>
+          ) : (
+            <View style={{ padding: 20 }}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                {(['off', 15, 30, 45, 60] as PrayerReminderOffset[]).map(opt => {
+                  const isActive = pendingPrayerReminderOffset === opt;
+                  const label    = opt === 'off' ? 'Av' : `${opt} min`;
+                  return (
+                    <TouchableOpacity
+                      key={String(opt)}
+                      activeOpacity={0.7}
+                      onPress={() => {
+                        Haptics.selectionAsync().catch(() => {});
+                        setPendingPrayerReminderOffset(opt);
+                      }}
+                      style={{
+                        paddingHorizontal: 18,
+                        paddingVertical: 10,
+                        borderRadius: 20,
+                        backgroundColor: isActive ? T.accent : 'transparent',
+                        borderWidth: 1,
+                        borderColor: isActive ? T.accent : T.border,
+                      }}
+                    >
+                      <Text style={{ fontSize: 14, fontWeight: '600', color: isActive ? '#fff' : T.text }}>
+                        {label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {pendingPrayerReminderOffset !== prayerReminderOffset && (
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={async () => {
+                    const opt = pendingPrayerReminderOffset;
+                    setPrayerReminderOffset(opt);
+                    await AsyncStorage.setItem(PRE_PRAYER_REMINDER_STORAGE_KEY, opt === 'off' ? 'off' : String(opt));
+                    if (opt === 'off') {
+                      cancelPrePrayerReminders().catch(() => {});
+                      setPrayerReminderModal(false);
+                      return;
+                    }
+                    const granted = await requestNotificationPermission();
+                    if (!granted) {
+                      Alert.alert('Notiser nekade', 'Aktivera notiser för Hidayah i iOS-inställningar.', [{ text: 'OK' }]);
+                      setPrayerReminderModal(false);
+                      return;
+                    }
+                    refreshPrePrayerReminderNotifications().catch(() => {});
+                    animatePrayerReminderAndClose();
+                  }}
+                  style={{
+                    marginTop: 16,
+                    backgroundColor: T.accent,
+                    borderRadius: 12,
+                    paddingVertical: 14,
+                    alignItems: 'center',
+                  }}
+                >
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: '#fff' }}>Spara</Text>
+                </TouchableOpacity>
+              )}
+              <View style={{ height: 8 }} />
+            </View>
+          )}
         </View>
       </Modal>
 

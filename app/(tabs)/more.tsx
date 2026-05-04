@@ -28,6 +28,7 @@ const SECTIONS: Section[] = [
     data: [
       { key: 'asmaul',  title: 'Allahs namn',      icon: 'allahs-namn', route: '/asmaul'  },
       { key: 'umrah',   title: 'Umrah Guide',       icon: 'umrah',       route: '/umrah'   },
+      { key: 'hajj',    title: 'Hajj Guide',        icon: 'hajj',        route: '/hajj'    },
       { key: 'ruqyah',  title: 'Ruqyah',           icon: 'ruqyah',      route: '/ruqyah'  },
     ],
   },
@@ -192,32 +193,6 @@ export default function MoreScreen() {
     }, 1500);
   }, [router]);
 
-  // Secret Hajj entry: tap the invisible area left of the settings gear 4+ times within 2 s
-  const hajjTapCount = useRef(0);
-  const hajjTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const handleHajjSecretTap = useCallback(() => {
-    hajjTapCount.current += 1;
-
-    // Start the 2-second window on the FIRST tap only.
-    // All 4 taps must land within that single window.
-    if (hajjTapCount.current === 1) {
-      hajjTapTimer.current = setTimeout(() => {
-        hajjTapCount.current = 0;
-      }, 2000);
-    }
-
-    if (hajjTapCount.current >= 4) {
-      if (hajjTapTimer.current) clearTimeout(hajjTapTimer.current);
-      hajjTapCount.current = 0;
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.push('/hajj' as any);
-      return;
-    }
-
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, [router]);
-
   const handlePress = useCallback((route: string) => {
     router.push(route as any);
   }, [router]);
@@ -229,13 +204,6 @@ export default function MoreScreen() {
         <TouchableOpacity onPress={handleSecretTap} activeOpacity={1} style={{ flex: 1 }}>
           <Text style={[styles.headerTitle, { color: T.text }]}>Mer</Text>
         </TouchableOpacity>
-
-        {/* Invisible secret tap area — left of settings gear, 4 taps = Hajj Guide */}
-        <TouchableOpacity
-          onPress={handleHajjSecretTap}
-          activeOpacity={1}
-          style={styles.hajjSecretZone}
-        />
 
         <TouchableOpacity
           onPress={() => router.push('/settings' as any)}
@@ -296,10 +264,6 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontWeight: '700',
     letterSpacing: -0.5,
-  },
-  hajjSecretZone: {
-    width: 44,
-    height: 44,
   },
   settingsBtn: {
     width: 36,

@@ -72,6 +72,29 @@ export class VerseUrlUnavailableError extends Error {
 // All other surahs (2–8, 10–114) get a [bismillah, surah] two-track queue and
 // rely on TrackPlayer's native queue advance to switch — no JS swap.
 const NO_STANDALONE_BISMILLAH = new Set<number>([1, 9]);
+
+// Reciters whose chapter audio files already contain the bismillah at the start
+// of each surah. Queuing the standalone bismillah pre-track for these reciters
+// would play it twice: once from the clip, then again from the chapter file.
+const RECITERS_WITH_EMBEDDED_BISMILLAH = new Set<number>([
+  159, // Maher Al Muaiqly — chapter files begin with his own bismillah recitation
+]);
+
+// Duration (ms) of the embedded bismillah for each reciter in
+// RECITERS_WITH_EMBEDDED_BISMILLAH. Used to:
+//   1. Show the BSMLLH_ highlight while positionMs < offset (the bismillah window).
+//   2. Shift positions left before QDC timestamp lookup — QDC data for these
+//      reciters starts verse 1 at 0ms (bismillah-free reference), but the actual
+//      audio has bismillah before verse 1.
+//   3. Compute a correct speed-scale factor: effectiveDuration = durationMs - bsmMs,
+//      then ratio = qdcLastTimestamp / effectiveDuration (pure content speed, no bias
+//      from the bismillah offset).
+//
+// Derived from QDC timing data for surah 1 verse 1:1 (the Basmala phrase).
+// Reciter 159 (Maher Al Muaiqly): verse 1:1 spans 0→5003ms in QDC surah-1 data.
+const EMBEDDED_BISMILLAH_DURATION_MS: Partial<Record<number, number>> = {
+  159: 5003, // Maher Al Muaiqly
+};
 import { fetchVerseTimings, findCurrentVerse, type VerseTimestamp } from './mushafTimingService';
 import { SURAH_INDEX } from '../data/surahIndex';
 
@@ -158,6 +181,30 @@ let _repeatSettings: RepeatSettings | null = null;
 // Currently-loaded surah + its verse timings. Both reset by stop() / loadAndPlay.
 let _currentSurahId: number | null = null;
 let _currentTimings: VerseTimestamp[] | null = null;
+
+// Proportional scale factor to correct for QDC timing data that was generated
+// for a different recording than the audio file currently hosted at the URL.
+// Example: Maher Al Muaiqly (reciter 159) audio files are 96 kbps ~134 min
+// for Al-Baqarah, but QDC timing data was generated for an older ~108 min
+// recording — making marks advance ~25% too fast.
+//
+// _timingScaleFactor = qdcLastTimestamp / actualAudioDurationMs
+//   • 1.0  → no correction (timings match audio — all other reciters)
+//   • <1.0 → audio is longer than timing data expects (Maher Al Muaiqly)
+//   • >1.0 → audio is shorter than timing data expects (rare)
+//
+// Computed once per surah load from the first poll tick where durationMs>0,
+// then cached until the next load. Reset alongside _currentTimings.
+let _timingScaleFactor: number = 1.0;
+let _timingScaleComputed: boolean = false;
+
+// Fixed bismillah offset (ms) for RECITERS_WITH_EMBEDDED_BISMILLAH.
+// Non-zero only for surahs 2–8 and 10–114 of reciters whose chapter files embed
+// the bismillah at the start. toTimingMs subtracts this before applying
+// _timingScaleFactor so QDC timestamp lookups are correct; recomputeFromPosition
+// forces BSMLLH_ while positionMs < _bismillahOffset.
+// Reset alongside _timingScaleFactor.
+let _bismillahOffset: number = 0;
 
 // ID of the currently active TrackPlayer queue item. Set by the
 // PlaybackActiveTrackChanged listener and used by recomputeFromPosition to
@@ -258,6 +305,12 @@ let _appStateSub: { remove: () => void } | null = null;
 // invoked by stop() / new loadAndPlay to abort the network fetch.
 const _downloadCancelRef: { current: (() => void) | null } = { current: null };
 
+// Callback invoked the moment an interval-repeat loop-back seek starts.
+// Registered by QuranAudioPlayer so it can call clearUserPageOverride() before
+// the recomputeFromPosition with the from-verse fires — guaranteeing the
+// audio-driven page revert is never blocked by a stale userPageOverride.
+let _intervalLoopBackCallback: (() => void) | null = null;
+
 // Cached app icon URI (lock-screen artwork). Resolved once via expo-asset.
 let _artworkUri: string | null = null;
 let _artworkResolving: Promise<string | null> | null = null;
@@ -332,6 +385,24 @@ function setSnapshot(patch: Partial<EngineSnapshot>): void {
   emit();
 }
 
+// ── Timing scale helpers ─────────────────────────────────────────────────────
+
+// Map actual playback position → QDC timing space for verse lookup / boundary
+// checks. Subtracts _bismillahOffset first (zero for most reciters), then scales.
+// The offset must be subtracted before scaling because QDC timestamps start at
+// 0ms (verse 1) while the actual audio starts with a bismillah prefix.
+function toTimingMs(actualMs: number): number {
+  const adjusted = _bismillahOffset > 0 ? Math.max(0, actualMs - _bismillahOffset) : actualMs;
+  return _timingScaleFactor === 1.0 ? adjusted : Math.round(adjusted * _timingScaleFactor);
+}
+
+// Convert a QDC timing timestamp (ms) → actual audio seconds for seekTo().
+// Inverse of toTimingMs: divide by scale factor then add bismillah offset.
+function toAudioSec(qdcMs: number): number {
+  const contentMs = _timingScaleFactor === 1.0 ? qdcMs : Math.round(qdcMs / _timingScaleFactor);
+  return (contentMs + _bismillahOffset) / 1000;
+}
+
 // ── Position → verse + page ──────────────────────────────────────────────────
 
 function recomputeFromPosition(positionMs: number, durationMs: number): void {
@@ -341,7 +412,9 @@ function recomputeFromPosition(positionMs: number, durationMs: number): void {
   // Route the active-verse calculation. Priority order:
   //   1. Verse-loop active → forced highlight on the looped verse
   //   2. Bismillah pre-play track active → BSMLLH_N on surah's first page
-  //   3. Normal surah playback → findCurrentVerse(timings, positionMs)
+  //   3. Embedded bismillah window → BSMLLH_N (reciter whose chapter file starts
+  //      with bismillah; positionMs is still inside that prefix before verse 1)
+  //   4. Normal surah playback → findCurrentVerse(timings, toTimingMs(positionMs))
   if (_verseLoopActive) {
     activeVerseKey = _verseLoopActive.verseKey;
     pageNumber = _verseLoopActive.pageNumber;
@@ -352,10 +425,13 @@ function recomputeFromPosition(positionMs: number, durationMs: number): void {
       activeVerseKey = `BSMLLH_${bsmSurahId}`;
       pageNumber = SURAH_INDEX.find((s) => s.id === bsmSurahId)?.firstPage ?? pageNumber;
     }
+  } else if (_bismillahOffset > 0 && positionMs < _bismillahOffset && _currentSurahId !== null) {
+    activeVerseKey = `BSMLLH_${_currentSurahId}`;
+    pageNumber = SURAH_INDEX.find((s) => s.id === _currentSurahId)?.firstPage ?? pageNumber;
   } else {
     const timings = _currentTimings;
     if (timings && timings.length > 0) {
-      const v = findCurrentVerse(timings, positionMs);
+      const v = findCurrentVerse(timings, toTimingMs(positionMs));
       if (v) {
         activeVerseKey = v.verseKey;
         pageNumber = v.pageNumber > 0 ? v.pageNumber : pageNumber;
@@ -376,10 +452,104 @@ function startPolling(): void {
   _pollTimer = setInterval(async () => {
     try {
       const progress = await TrackPlayer.getProgress();
-      recomputeFromPosition(
-        Math.round(progress.position * 1000),
-        Math.round(progress.duration * 1000),
-      );
+      const positionMs = Math.round(progress.position * 1000);
+      const durationMs = Math.round(progress.duration * 1000);
+
+      // Compute timing scale factor once per surah load. Corrects for reciters
+      // (e.g. Maher Al Muaiqly, ID 159) where QDC timing data was generated
+      // for a different recording than the audio currently hosted at the URL.
+      // Guard: only run when the SURAH track is active. The bismillah pre-play
+      // clip is a short standalone file (~5s) — its duration has nothing to do
+      // with the surah's QDC timing data, and dividing lastTimestamp / 5000
+      // would produce a ratio in the hundreds that completely breaks verse tracking.
+      if (!_timingScaleComputed && _currentTimings && durationMs > 0 && _activeTrackId?.startsWith('surah-')) {
+        _timingScaleComputed = true;
+        const last = _currentTimings[_currentTimings.length - 1];
+        if (last && last.timestampTo > 0) {
+          // For reciters with embedded bismillah: the chapter audio starts with a
+          // bismillah prefix not present in the QDC timing data (verse 1 at 0ms).
+          // Subtract the known bismillah duration before computing the speed scale
+          // so the ratio reflects the pure recitation speed difference, not the
+          // bismillah offset. toTimingMs/toAudioSec also subtract this offset.
+          const reciterId = _currentReciterId;
+          const surahId = _currentSurahId;
+          const bsmMs = (
+            reciterId !== null &&
+            RECITERS_WITH_EMBEDDED_BISMILLAH.has(reciterId) &&
+            surahId !== null &&
+            !NO_STANDALONE_BISMILLAH.has(surahId)
+          ) ? (EMBEDDED_BISMILLAH_DURATION_MS[reciterId] ?? 0) : 0;
+
+          _bismillahOffset = bsmMs;
+
+          const effectiveDuration = durationMs - bsmMs;
+          const ratio = effectiveDuration > 0 ? last.timestampTo / effectiveDuration : 1.0;
+          // Tighter threshold for bismillah-offset reciters (offset already
+          // accounts for most of the apparent duration difference). Use 5% for
+          // all others to guard against bitrate-estimation drift.
+          const threshold = bsmMs > 0 ? 0.005 : 0.05;
+          if (Math.abs(ratio - 1) > threshold) {
+            _timingScaleFactor = ratio;
+          }
+          if (__DEV__) console.warn(
+            `[QuranEngine] timing bsmOffset=${bsmMs}ms scale=${ratio.toFixed(3)} ` +
+            `(qdcDuration=${last.timestampTo}ms actualDuration=${durationMs}ms)`,
+          );
+        }
+      }
+
+      // Interval-repeat boundary check at 250 ms resolution in foreground.
+      // The PlaybackProgressUpdated handler fires at only 1 Hz, meaning the
+      // loop-back seek can fire up to ~1 s late. Checking here cuts that
+      // latency to ~250 ms and is the primary fix for verse 6 audio bleeding
+      // through before the seek-back fires.
+      if (_intervalLoop && _currentTimings && !_intervalLoop.seeking) {
+        const toTiming = _currentTimings.find(t => t.verseKey === _intervalLoop!.toKey);
+        if (toTiming && toTimingMs(positionMs) >= toTiming.timestampTo) {
+          const fromTiming = _currentTimings.find(t => t.verseKey === _intervalLoop!.fromKey);
+          const fromMs = fromTiming?.timestampFrom ?? 0;
+          _intervalLoop.plays += 1;
+          const isInfinite = _intervalLoop.count === null;
+          const moreLoops = !isInfinite && _intervalLoop.plays < _intervalLoop.count!;
+          if (isInfinite || moreLoops) {
+            _intervalLoop.seeking = true;
+            if (__DEV__) console.warn(`[QuranEngine] interval-loop (poll) ${_intervalLoop.plays}/${_intervalLoop.count ?? '∞'}`);
+            // Notify component to clear userPageOverride so the audio-driven
+            // page revert can proceed without being blocked.
+            _intervalLoopBackCallback?.();
+            TrackPlayer.seekTo(toAudioSec(fromMs))
+              .then(() => TrackPlayer.play())
+              .finally(() => { if (_intervalLoop) _intervalLoop.seeking = false; });
+          } else {
+            if (__DEV__) console.warn(`[QuranEngine] interval-loop finished (poll) after ${_intervalLoop.count} plays`);
+            _intervalLoop = null;
+            TrackPlayer.pause().catch(() => undefined);
+            setProgressEventsEnabled(false);
+          }
+          return; // skip recomputeFromPosition this tick
+        }
+      }
+
+      // Suppress verse/page UI updates while a seek-back is in-flight.
+      // Without this, the polling calls recomputeFromPosition with the
+      // pre-seek position (still past the "to" boundary), temporarily
+      // advancing the page to the "to+1" verse's page. That page advance
+      // may not cleanly revert after the seek lands, leaving the reader
+      // stuck on the wrong page even though audio is at verse 1.
+      if (_intervalLoop?.seeking && _currentTimings) {
+        const toTiming = _currentTimings.find(t => t.verseKey === _intervalLoop!.toKey);
+        if (toTiming) {
+          if (toTimingMs(positionMs) >= toTiming.timestampTo) {
+            return; // seek pending, position still past boundary — skip UI update
+          }
+          // Position dropped back below boundary: seek has landed. Clear the
+          // flag here so the next 1-Hz PlaybackProgressUpdated doesn't skip
+          // its reset check, and fall through to recomputeFromPosition.
+          _intervalLoop.seeking = false;
+        }
+      }
+
+      recomputeFromPosition(positionMs, durationMs);
     } catch {
       // Ignore — TrackPlayer may not be ready or queue empty.
     }
@@ -477,7 +647,7 @@ async function preloadNextSurah(surahId: number): Promise<void> {
   }
 
   let bismillahUri: string | null = null;
-  const needsBismillah = !NO_STANDALONE_BISMILLAH.has(surahId);
+  const needsBismillah = !NO_STANDALONE_BISMILLAH.has(surahId) && !RECITERS_WITH_EMBEDDED_BISMILLAH.has(reciterId);
   if (needsBismillah) {
     try {
       bismillahUri = await getBismillahAudioUri(reciterId);
@@ -657,7 +827,14 @@ export const QuranAudioEngine = {
       TrackPlayer.addEventListener(Event.PlaybackState, (event) => {
         const next = mapTpStateToEngine(event.state);
         if (__DEV__) console.warn(`[QuranEngine] PlaybackState ${event.state} → ${next ?? 'ignored'}`);
-        if (next) setSnapshot({ state: next });
+        if (!next) return;
+        // Guard: after PlaybackQueueEnded or stop(), the engine is idle.
+        // RNTP emits PlaybackState(Paused) as the native AVPlayer's rate drops
+        // to 0 — without this guard that stale event would un-idle the engine
+        // and show the active card with a non-functional play button (resume()
+        // on an empty queue does nothing).
+        if (_snapshot.state === 'idle' && next === 'paused') return;
+        setSnapshot({ state: next });
       });
 
       TrackPlayer.addEventListener(Event.PlaybackError, (event) => {
@@ -671,6 +848,19 @@ export const QuranAudioEngine = {
 
       TrackPlayer.addEventListener(Event.PlaybackQueueEnded, () => {
         if (__DEV__) console.error(`[QuranEngine] PlaybackQueueEnded — surah=${_currentSurahId} continuous=${_continuousMode} verseLoop=${_verseLoopActive ? `${_verseLoopActive.plays}/${_verseLoopActive.count ?? '∞'}` : 'null'}`);
+
+        // Guard: when loadAndPlay / loadAndPlayFromVerse calls TrackPlayer.reset()
+        // to clear the old queue before loading a new surah, RNTP fires a stale
+        // PlaybackQueueEnded for the queue that was just wiped. By the time
+        // reset() is called the snapshot state is already 'loading' (or
+        // 'downloading'). Treating a stale queue-end as a real end would set the
+        // engine to idle, clear _currentTimings, null _intervalLoop, and disable
+        // progress events — destroying interval-repeat state that loadAndPlayFromVerse
+        // had just set up (or is about to set up after timings resolve).
+        if (_snapshot.state === 'loading' || _snapshot.state === 'downloading') {
+          if (__DEV__) console.warn('[QuranEngine] PlaybackQueueEnded ignored — load in progress');
+          return;
+        }
 
         // Step 4: finite verse-loop count handling. plays counts COMPLETED
         // end-to-end plays. After each QueueEnded we increment, and if we
@@ -738,6 +928,9 @@ export const QuranAudioEngine = {
         });
         _currentSurahId = null;
         _currentTimings = null;
+        _timingScaleFactor = 1.0;
+        _timingScaleComputed = false;
+        _bismillahOffset = 0;
         _activeTrackId = null;
         _verseLoopActive = null;
         _stopAtTimestampMs = null;
@@ -821,7 +1014,7 @@ export const QuranAudioEngine = {
           !_intervalLoop.seeking
         ) {
           const toTiming = _currentTimings.find((t) => t.verseKey === _intervalLoop!.toKey);
-          if (toTiming && positionMs >= toTiming.timestampTo) {
+          if (toTiming && toTimingMs(positionMs) >= toTiming.timestampTo) {
             const fromTiming = _currentTimings.find((t) => t.verseKey === _intervalLoop!.fromKey);
             const fromMs = fromTiming?.timestampFrom ?? 0;
             _intervalLoop.plays += 1;
@@ -831,7 +1024,8 @@ export const QuranAudioEngine = {
             if (isInfinite || moreLoops) {
               _intervalLoop.seeking = true;
               if (__DEV__) console.warn(`[QuranEngine] interval-loop ${_intervalLoop.plays + 1}/${_intervalLoop.count ?? '∞'}`);
-              TrackPlayer.seekTo(fromMs / 1000)
+              _intervalLoopBackCallback?.();
+              TrackPlayer.seekTo(toAudioSec(fromMs))
                 .then(() => TrackPlayer.play())
                 .finally(() => {
                   if (_intervalLoop) _intervalLoop.seeking = false;
@@ -849,7 +1043,7 @@ export const QuranAudioEngine = {
           if (
             _intervalLoop.seeking &&
             toTiming &&
-            positionMs < toTiming.timestampTo - 500
+            toTimingMs(positionMs) < toTiming.timestampTo - 500
           ) {
             _intervalLoop.seeking = false;
           }
@@ -858,7 +1052,7 @@ export const QuranAudioEngine = {
         // ── stopAtTimestamp ("Spela till") ────────────────────────────────
         // Pause (or advance to next surah for cross-surah ranges) when the
         // monitored position is reached.
-        if (_stopAtTimestampMs !== null && positionMs >= _stopAtTimestampMs) {
+        if (_stopAtTimestampMs !== null && toTimingMs(positionMs) >= _stopAtTimestampMs) {
           if (__DEV__) console.warn('[QuranEngine] stopAt boundary reached');
           _stopAtTimestampMs = null;
           // If a cross-surah pending stop is set, the next-surah branch in
@@ -897,6 +1091,9 @@ export const QuranAudioEngine = {
               if (__DEV__) console.error(`[QuranEngine] queue advanced surah ${_currentSurahId} → ${trackSurahId}`);
               _currentSurahId = trackSurahId;
               _currentTimings = null;
+              _timingScaleFactor = 1.0;
+              _timingScaleComputed = false;
+              _bismillahOffset = 0;
               _preloadedNextSurahId = null; // ready to pre-queue surah after this one
               _proactiveSkipInitiated = false; // ready to skip the surah after this one
               setSnapshot({ surahId: trackSurahId, state: 'playing' });
@@ -1027,6 +1224,17 @@ export const QuranAudioEngine = {
   },
 
   /**
+   * Register a callback that fires the moment an interval-repeat loop-back
+   * seek begins (before the seek resolves). QuranAudioPlayer uses this to
+   * call clearUserPageOverride() so the audio-driven page revert to the
+   * from-verse page is never blocked by a stale userPageOverride flag.
+   * Pass null to deregister.
+   */
+  setIntervalLoopBackCallback(cb: (() => void) | null): void {
+    _intervalLoopBackCallback = cb;
+  },
+
+  /**
    * Step 2: load a surah and play it from start. No bismillah pre-play, no
    * repeat handling — Steps 3–5 layer those on top. If the audio file is not
    * already cached locally, this downloads it (with progress reported via
@@ -1070,6 +1278,9 @@ export const QuranAudioEngine = {
 
     _currentSurahId = surahId;
     _currentTimings = null;
+    _timingScaleFactor = 1.0;
+    _timingScaleComputed = false;
+    _bismillahOffset = 0;
     _activeTrackId = null;
     _verseLoopActive = null;
     _stopAtTimestampMs = null;
@@ -1090,7 +1301,8 @@ export const QuranAudioEngine = {
     // Resolve the bismillah clip URI in parallel with the surah download.
     // First call may take ~1-2s to download the small (~5s) clip; subsequent
     // loads are instant from cache. Surahs 1 and 9 skip this entirely.
-    const needsBismillah = !NO_STANDALONE_BISMILLAH.has(surahId);
+    // Reciters whose chapter files already contain bismillah also skip it.
+    const needsBismillah = !NO_STANDALONE_BISMILLAH.has(surahId) && !RECITERS_WITH_EMBEDDED_BISMILLAH.has(reciterId);
     const bismillahPromise: Promise<string | null> = needsBismillah
       ? getBismillahAudioUri(reciterId).catch((err: unknown) => {
           // Best-effort: if bismillah download fails (network, CDN), skip the
@@ -1111,6 +1323,38 @@ export const QuranAudioEngine = {
         // If a cross-surah "Spela till" or continuous-mode advance is waiting
         // for this surah's timings to materialise its stop point, do it now.
         resolvePendingStopAfterTimings();
+        // Set up JS-driven interval-repeat loop if needed. loadAndPlay is the
+        // landing path in two cases that miss the _intervalLoop setup that
+        // loadAndPlayFromVerse handles normally:
+        //   1. BSMLLH_ redirect: loadAndPlayFromVerse(surahId, 'BSMLLH_X', …)
+        //      short-circuits to this.loadAndPlay before reaching the interval
+        //      setup block — happens when the reciter changes during the ~3–5 s
+        //      bismillah pre-play window.
+        //   2. Null activeVerseKey: when the reciter changes while the snapshot
+        //      still shows activeVerseKey=null (loading/downloading state), the
+        //      reciter-change handler calls loadAndPlay() directly.
+        // Guard: only same-surah partial-range intervals (cross-surah intervals
+        // use continuous+pendingStopVerseKey instead). Skip if _intervalLoop is
+        // already set (shouldn't be, but defensive). Native-loop case (full-surah
+        // infinite) is not handled here — RepeatMode was set to Off earlier in
+        // loadAndPlay and switching it mid-bismillah would restart the track.
+        const rs = _repeatSettings;
+        if (
+          rs?.repeatInterval &&
+          !canUseNativeLoop(rs, surahId) &&
+          !_intervalLoop &&
+          rs.fromSurahId === surahId &&
+          rs.toSurahId === surahId
+        ) {
+          _intervalLoop = {
+            fromKey: `${rs.fromSurahId}:${rs.fromVerse}`,
+            toKey:   `${rs.toSurahId}:${rs.toVerse}`,
+            count:   rs.repeatCount,
+            plays:   0,
+            seeking: false,
+          };
+          if (needsProgressEvents()) setProgressEventsEnabled(true).catch(() => undefined);
+        }
         // Also recompute immediately in case position has already advanced.
         TrackPlayer.getProgress().then((p) => {
           if (generation !== _loadGeneration) return;
@@ -1290,6 +1534,9 @@ export const QuranAudioEngine = {
 
     _currentSurahId = surahId;
     _currentTimings = null;
+    _timingScaleFactor = 1.0;
+    _timingScaleComputed = false;
+    _bismillahOffset = 0;
     _activeTrackId = null;
     _verseLoopActive = null;
     _intervalLoop = null;
@@ -1411,9 +1658,11 @@ export const QuranAudioEngine = {
     }
 
     // Seek to the start position BEFORE play() so the user doesn't briefly
-    // hear the chapter intro.
+    // hear the chapter intro. toAudioSec() converts the QDC timing-space
+    // timestamp to the actual audio position, correcting for reciters whose
+    // timing data doesn't match the hosted audio file.
     if (startMs > 0) {
-      try { await TrackPlayer.seekTo(startMs / 1000); } catch {}
+      try { await TrackPlayer.seekTo(toAudioSec(startMs)); } catch {}
     }
     if (generation !== _loadGeneration) return;
 
@@ -1479,6 +1728,9 @@ export const QuranAudioEngine = {
 
     _currentSurahId = surahId;
     _currentTimings = null;
+    _timingScaleFactor = 1.0;
+    _timingScaleComputed = false;
+    _bismillahOffset = 0;
     _activeTrackId = null;
     _verseLoopActive = null;
 
@@ -1609,6 +1861,9 @@ export const QuranAudioEngine = {
     }
     _currentSurahId = null;
     _currentTimings = null;
+    _timingScaleFactor = 1.0;
+    _timingScaleComputed = false;
+    _bismillahOffset = 0;
     _activeTrackId = null;
     _verseLoopActive = null;
     _stopAtTimestampMs = null;
@@ -1634,6 +1889,19 @@ export const QuranAudioEngine = {
       errorMessage: undefined,
       downloadProgress: undefined,
     });
+  },
+
+  /**
+   * Cancel an active interval-repeat session without stopping playback.
+   * Clears the JS loop state and turns off RepeatMode.Track so the current
+   * surah continues to its natural end instead of looping.
+   * Call this when the user disables interval-repeat mid-playback.
+   */
+  async cancelIntervalRepeat(): Promise<void> {
+    _intervalLoop = null;
+    if (_initialized) {
+      try { await TrackPlayer.setRepeatMode(RepeatMode.Off); } catch {}
+    }
   },
 
   async seekTo(ms: number): Promise<void> {
@@ -1740,7 +2008,7 @@ export const QuranAudioEngine = {
     if (direction < 0 && !currentVerse.verseKey.startsWith('BSMLLH_')) {
       const intoVerseMs = livePositionMs - currentVerse.timestampFrom;
       if (intoVerseMs > 3000) {
-        try { await TrackPlayer.seekTo(currentVerse.timestampFrom / 1000); } catch {}
+        try { await TrackPlayer.seekTo(toAudioSec(currentVerse.timestampFrom)); } catch {}
         return;
       }
     }
@@ -1768,6 +2036,6 @@ export const QuranAudioEngine = {
       return;
     }
 
-    try { await TrackPlayer.seekTo(target.timestampFrom / 1000); } catch {}
+    try { await TrackPlayer.seekTo(toAudioSec(target.timestampFrom)); } catch {}
   },
 };

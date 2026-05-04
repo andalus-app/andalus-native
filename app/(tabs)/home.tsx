@@ -62,29 +62,34 @@ function YoutubeCard({ stream, isLive, isUpcoming, flash = false, onFlashEnd }: 
     });
   }, [stream, play, setInlineFrame]);
 
-  // When the user switches tabs: move the WebView off-screen (background audio mode).
-  // Audio continues — the single WebView stays alive off-screen.
-  useFocusEffect(useCallback(() => {
-    return () => {
-      if (isThisActive && inlineFrame !== null) {
-        setInlineFrame(null);
-      }
-    };
-  }, [isThisActive, inlineFrame, setInlineFrame]));
+  // Pulsing animation — runs whenever there is an active live stream.
+  // Stops automatically when isLive becomes false (stream ended). No tab-focus dependency.
+  const pulseAnim    = useRef(new Animated.Value(0)).current;
+  const pulseLoopRef = useRef<Animated.CompositeAnimation | null>(null);
 
-  // Pulsing animation — only runs when live
-  const pulseAnim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    if (!isLive) { pulseAnim.setValue(0); return; }
+    if (!isLive || !stream) {
+      if (pulseLoopRef.current) { pulseLoopRef.current.stop(); pulseLoopRef.current = null; }
+      pulseAnim.setValue(0);
+      return;
+    }
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
         Animated.timing(pulseAnim, { toValue: 0, duration: 800, useNativeDriver: true }),
       ])
     );
+    pulseLoopRef.current = loop;
     loop.start();
-    return () => { loop.stop(); pulseAnim.setValue(0); };
-  }, [isLive]);
+    return () => { loop.stop(); pulseLoopRef.current = null; pulseAnim.setValue(0); };
+  }, [isLive, stream]);
+
+  // Move WebView off-screen when user switches tabs (audio continues in background).
+  useFocusEffect(useCallback(() => {
+    return () => {
+      if (isThisActive && inlineFrame !== null) setInlineFrame(null);
+    };
+  }, [isThisActive, inlineFrame, setInlineFrame]));
 
   const ringScale   = useMemo(() => pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 2.6] }), [pulseAnim]);
   const ringOpacity = useMemo(() => pulseAnim.interpolate({ inputRange: [0, 0.4, 1], outputRange: [0.75, 0.2, 0] }), [pulseAnim]);
@@ -575,6 +580,7 @@ export default function HomeScreen() {
   const greetingX     = useRef(new Animated.Value(0)).current;
   const bannerX       = useRef(new Animated.Value(400)).current;
   const homeTopTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const restartBannerTimerRef = useRef<(() => void) | null>(null);
 
   // ── Preferred name (greeting) ─────────────────────────────────────────────
   const [preferredName,    setPreferredName]    = useState<string | null>(null);
@@ -869,12 +875,29 @@ export default function HomeScreen() {
     greetingX.setValue(0);
     bannerX.setValue(400);
     homeTopPhase.current = 0;
+    restartBannerTimerRef.current = scheduleNext;
     scheduleNext();
 
     return () => {
       if (homeTopTimer.current) clearTimeout(homeTopTimer.current);
     };
   }, [homeTopBanner?.text]); // re-run when the active banner changes
+
+  // Pause banner crossfade when leaving home tab; resume on return.
+  useFocusEffect(useCallback(() => {
+    if (homeTopBanner && homeTopTimer.current === null && restartBannerTimerRef.current) {
+      greetingX.setValue(0);
+      bannerX.setValue(400);
+      homeTopPhase.current = 0;
+      restartBannerTimerRef.current();
+    }
+    return () => {
+      if (homeTopTimer.current) {
+        clearTimeout(homeTopTimer.current);
+        homeTopTimer.current = null;
+      }
+    };
+  }, [homeTopBanner]));
 
   // ── Real-time: instant update when admin creates/activates an announcement ─
   useEffect(() => {

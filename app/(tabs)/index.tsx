@@ -197,10 +197,12 @@ export default function PrayerTimesScreen() {
     return () => { sub.remove(); clearInterval(intervalRef.current); };
   }, []);
 
-  // Re-fetch when navigating back from settings
+  // Re-fetch when navigating back from settings; pause/resume countdown on tab focus change.
   useFocusEffect(
     useCallback(() => {
       loadPrayerTimes();
+      if (timingsRef.current) startCountdownInterval();
+      return () => { clearInterval(intervalRef.current); };
     }, [])
   );
 

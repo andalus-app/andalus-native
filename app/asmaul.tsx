@@ -16,6 +16,7 @@ import { pauseYoutubePlayer } from '../context/YoutubePlayerContext';
 import { SURAH_INDEX } from '../data/surahIndex';
 import asmaulData from './asmaul_husna.json';
 import AUDIO_MAP from '../assets/audio/audioMap';
+import AsmaulShareCard, { type AsmaulShareCardRef } from '../components/AsmaulShareCard';
 
 /* ─────────────────────────────────────────────────────────────
    DATA TYPES & SEARCH INDEX
@@ -137,6 +138,17 @@ function PauseIcon({ color, size = 20 }: { color: string; size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
       <Path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+    </Svg>
+  );
+}
+
+function ShareIcon({ color, size = 20 }: { color: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+      <Path d="M16 6l-4-4-4 4" />
+      <Line x1={12} y1={2} x2={12} y2={15} />
     </Svg>
   );
 }
@@ -375,6 +387,26 @@ function DetailScreen({ name, onBack, isFav, onToggleFav, T }: { name: Name; onB
   const SCREEN_W = Dimensions.get('window').width;
   const [verseLoading, setVerseLoading] = useState(false);
   const [tooltipVisible, setTooltipVisible] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const shareCardRef = useRef<AsmaulShareCardRef>(null);
+
+  const handleShare = useCallback(async () => {
+    if (sharing) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    setSharing(true);
+    try {
+      await shareCardRef.current?.capture({
+        nr:              name.nr,
+        arabic:          name.arabic,
+        transliteration: name.transliteration,
+        swedish:         name.swedish,
+        forklaring:      name.forklaring,
+        isDark:          T.isDark,
+      });
+    } finally {
+      setSharing(false);
+    }
+  }, [sharing, name, T.isDark]);
 
   // Font size state
   const [arabicIdx,     setArabicIdx]     = useState(3); // default 58px
@@ -504,6 +536,8 @@ function DetailScreen({ name, onBack, isFav, onToggleFav, T }: { name: Name; onB
         }} />
         {/* Edge swipe-zon */}
         <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 30, zIndex: 20 }} {...edgePan.panHandlers} />
+        {/* Hidden share card renderer */}
+        <AsmaulShareCard ref={shareCardRef} />
       {/* Floating back */}
       <TouchableOpacity
         onPress={onBack}
@@ -516,6 +550,24 @@ function DetailScreen({ name, onBack, isFav, onToggleFav, T }: { name: Name; onB
         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       >
         <Text style={{ fontSize: 18, color: T.text, marginTop: -2 }}>‹</Text>
+      </TouchableOpacity>
+
+      {/* Floating share */}
+      <TouchableOpacity
+        onPress={handleShare}
+        disabled={sharing}
+        style={[styles.floatingBtn, {
+          top: insets.top + 12, right: 98,
+          backgroundColor: T.isDark ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.75)',
+          borderColor: T.border,
+          opacity: sharing ? 0.5 : 1,
+        }]}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+      >
+        {sharing
+          ? <ActivityIndicator size="small" color={T.textMuted} />
+          : <ShareIcon color={T.textMuted} size={18} />
+        }
       </TouchableOpacity>
 
       {/* Floating gear — font size toggle */}

@@ -46,7 +46,7 @@ export type UseZakatReminderReturn = {
   /** Update the advance-days offset and reschedule. */
   updateAdvanceDays: (days: number) => Promise<void>;
   /** Update the Hijri day + month and reschedule. */
-  updateHijriDate: (day: number, month: number, monthName: string) => Promise<void>;
+  updateHijriDate: (day: number, month: number, monthName: string, meta?: { inputMode?: 'hijri' | 'gregorian'; originalGregorianMonth?: number; originalGregorianDay?: number }) => Promise<void>;
   /** Update the time of day for both notifications and reschedule. */
   updateReminderTime: (hour: number, minute: number) => Promise<void>;
 };
@@ -135,15 +135,23 @@ export function useZakatReminder(): UseZakatReminderReturn {
     day: number,
     month: number,
     monthName: string,
+    meta?: { inputMode?: 'hijri' | 'gregorian'; originalGregorianMonth?: number; originalGregorianDay?: number },
   ) => {
-    // Optimistically update UI
     setSettings(prev => {
       if (!prev) return prev;
       return { ...prev, hijriDay: day, hijriMonth: month, hijriMonthName: monthName };
     });
     const current = await loadZakatReminderSettings();
     if (!current) return;
-    const updated = { ...current, hijriDay: day, hijriMonth: month, hijriMonthName: monthName };
+    const updated = {
+      ...current,
+      hijriDay: day,
+      hijriMonth: month,
+      hijriMonthName: monthName,
+      ...(meta?.inputMode !== undefined && { inputMode: meta.inputMode }),
+      ...(meta?.originalGregorianMonth !== undefined && { originalGregorianMonth: meta.originalGregorianMonth }),
+      ...(meta?.originalGregorianDay !== undefined && { originalGregorianDay: meta.originalGregorianDay }),
+    };
     await saveZakatReminderSettings(updated);
     await syncZakatReminders();
   }, []);

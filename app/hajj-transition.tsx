@@ -16,15 +16,17 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 
-import { umrahLight } from '@/components/umrah/umrahTheme';
+import { umrahLight, umrahDark } from '@/components/umrah/umrahTheme';
 import SvgIcon from '@/components/SvgIcon';
+import { useTheme } from '@/context/ThemeContext';
 
 export default function HajjTransitionScreen() {
   const router      = useRouter();
   const insets      = useSafeAreaInsets();
   const { targetStep } = useLocalSearchParams<{ targetStep?: string }>();
 
-  const T           = umrahLight;
+  const { isDark }  = useTheme();
+  const T           = isDark ? umrahDark : umrahLight;
   const destination = targetStep ?? 'day8_mina';
 
   const handleContinue = () => {

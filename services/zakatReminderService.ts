@@ -62,6 +62,13 @@ export type ZakatReminderSettings = {
    */
   lastScheduledForGregorianYear?: number;
 
+  /** How the date was originally selected by the user. */
+  inputMode?: 'hijri' | 'gregorian';
+  /** Original Gregorian month if inputMode === 'gregorian' (1–12). */
+  originalGregorianMonth?: number;
+  /** Original Gregorian day if inputMode === 'gregorian' (1–31). */
+  originalGregorianDay?: number;
+
   createdAt: string; // ISO
   updatedAt: string; // ISO
 };

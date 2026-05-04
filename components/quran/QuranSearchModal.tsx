@@ -220,15 +220,17 @@ function QuranSearchModal() {
         // goToSurah sets pendingSurahScroll so verse-by-verse mode scrolls to
         // the surah header, matching the hamburger menu behaviour.
         goToSurah(item.surah.id);
+      } else if (item.kind === 'verse') {
+        const page = resolvedVersePage !== null ? resolvedVersePage : pageForResult(item);
+        // goToVerse sets pendingVerseHighlight so verse-by-verse mode scrolls to
+        // the correct verse within the page, not just to the top of the page.
+        goToVerse(`${item.surahId}:${item.verseNumber}`, page);
       } else {
-        const page = item.kind === 'verse' && resolvedVersePage !== null
-          ? resolvedVersePage
-          : pageForResult(item);
-        goToPage(page);
+        goToPage(pageForResult(item));
       }
       closeSearch();
     },
-    [goToPage, goToSurah, closeSearch, saveRecentSearch, query, resolvedVersePage],
+    [goToPage, goToSurah, goToVerse, closeSearch, saveRecentSearch, query, resolvedVersePage],
   );
 
   return (

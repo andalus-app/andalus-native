@@ -223,6 +223,7 @@
     const { data: rows, error } = await sb
       .from("push_tokens")
       .select("token")
+      .eq("live_notif", true)
       .not("token", "is", null);
 
     if (error || !rows || rows.length === 0) {

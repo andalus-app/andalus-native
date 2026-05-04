@@ -4,8 +4,8 @@
   "namespace": "hajjGuide",
   "lastUpdated": "2026-04-23",
   "source": {
-    "title": "Hadjboken",
-    "notes": "Innehållet i denna guide är verifierat mot PDF-källan Hadjboken och följer Hajj at-Tamattu'."
+    "title": "Hajjboken",
+    "notes": "Innehållet i denna guide är verifierat mot PDF-källan Hajjboken och följer Hajj at-Tamattu'."
   },
   "mediaUploadOrder": {
     "instruction": "Ladda upp dessa bildfiler med exakt samma filnamn innan eller tillsammans med innehållet.",
@@ -52,7 +52,7 @@
     "requiredLabel": "Obligatoriskt",
     "importantLabel": "Viktigt",
     "warningLabel": "Undvik detta",
-    "completedHajj": "Min Hadj är klar",
+    "completedHajj": "Min Hajj är klar",
     "restartGuide": "Läs guiden igen",
     "saveFavorite": "Spara som favorit",
     "shareGuide": "Dela guide"
@@ -73,7 +73,7 @@
   "steps": [
     {
       "id": "welcome",
-      "title": "En guide till hur man utför Hadj",
+      "title": "En guide till hur man utför Hajj",
       "subtitle": "Förord",
       "heroImageKey": "welcome",
       "stepNumber": 1,
@@ -83,7 +83,7 @@
         {
           "type": "summary",
           "title": "Förord",
-          "body": "Den islamiska pilgrimsfärden, Hadj, är en av islams fem pelare vilket tyder på hur viktig den är och vilken hög status den har i vår religion. En accepterad korrekt Hadj leder till att man blir förlåten för alla sina tidigare synder och det är därför enormt viktigt att man utför den på ett korrekt sätt."
+          "body": "Den islamiska pilgrimsfärden, Hajj, är en av islams fem pelare vilket tyder på hur viktig den är och vilken hög status den har i vår religion. En accepterad korrekt Hajj leder till att man blir förlåten för alla sina tidigare synder och det är därför enormt viktigt att man utför den på ett korrekt sätt."
         },
         {
           "type": "list",
@@ -95,17 +95,17 @@
         },
         {
           "type": "hadith",
-          "body": "Profeten Muhammad ﷺ har uppmanat oss specifikt vad gäller Hadj, att vi ska göra Hadj på det sättet han gjorde då han sade: \"Ta era Hadj-riter från mig.\""
+          "body": "Profeten Muhammad ﷺ har uppmanat oss specifikt vad gäller Hajj, att vi ska göra Hajj på det sättet han gjorde då han sade: \"Ta era Hajj-riter från mig.\""
         },
         {
           "type": "summary",
           "title": "Om denna guide",
-          "body": "Denna bok är en enkel guide för dig som vill utföra Hadj på ett korrekt sätt i enlighet med Koranen och sunnahn. Boken avser inte att gå in i djupa detaljer, utan att på ett pedagogiskt sätt förklara hur man kan göra Hadj på ett korrekt sätt. I vissa frågor har de lärda skiljt sig åt om vad som är rätt och det skulle vara komplicerat om vi skulle gå in i alla dessa detaljer."
+          "body": "Denna bok är en enkel guide för dig som vill utföra Hajj på ett korrekt sätt i enlighet med Koranen och sunnahn. Boken avser inte att gå in i djupa detaljer, utan att på ett pedagogiskt sätt förklara hur man kan göra Hajj på ett korrekt sätt. I vissa frågor har de lärda skiljt sig åt om vad som är rätt och det skulle vara komplicerat om vi skulle gå in i alla dessa detaljer."
         },
         {
           "type": "summary",
-          "title": "De olika sätten att utföra Hadj",
-          "body": "Hadj kan utföras på tre olika sätt som i stort sätt liknar varandra, men skiljer sig i vissa detaljer. De olika sätten heter: Ifrad, Qiran och Tamattu'. Denna bok är baserad på det tredje sättet som kallas för Tamattu'. Det var detta sätt som profeten Muhammad ﷺ uppmanade sina följeslagare att göra Hadj på under sin sista pilgrimsfärd. Vid detta tillvägagångssätt gör man både Umrah och Hadj i en och samma resa. Först fullbordar man sin Umrah och därefter påbörjar man sin Hadj från Mecka."
+          "title": "De olika sätten att utföra Hajj",
+          "body": "Hajj kan utföras på tre olika sätt som i stort sätt liknar varandra, men skiljer sig i vissa detaljer. De olika sätten heter: Ifrad, Qiran och Tamattu'. Denna bok är baserad på det tredje sättet som kallas för Tamattu'. Det var detta sätt som profeten Muhammad ﷺ uppmanade sina följeslagare att göra Hajj på under sin sista pilgrimsfärd. Vid detta tillvägagångssätt gör man både Umrah och Hajj i en och samma resa. Först fullbordar man sin Umrah och därefter påbörjar man sin Hajj från Mecka."
         }
       ],
       "primaryAction": {
@@ -116,8 +116,8 @@
     },
     {
       "id": "virtues",
-      "title": "Dygderna i att utföra Hadj",
-      "subtitle": "Dygderna i att utföra Hadj",
+      "title": "Dygderna i att utföra Hajj",
+      "subtitle": "Dygderna i att utföra Hajj",
       "heroImageKey": "virtues",
       "stepNumber": 2,
       "totalSteps": 10,
@@ -125,25 +125,25 @@
       "sections": [
         {
           "type": "summary",
-          "title": "Dygderna i att utföra Hadj",
-          "body": "Hadj utförs i den tolfte månaden i den islamiska kalendern som heter Dhul-Hidjah. Hadj börjar den åttonde dagen i månaden Dhul-Hidjah. Att utföra Hadj är bland de allra bästa handlingar en muslim kan utföra. Det är samtidigt fysiskt och materiellt krävande att bege sig ut på denna resa."
+          "title": "Dygderna i att utföra Hajj",
+          "body": "Hajj utförs i den tolfte månaden i den islamiska kalendern som heter Dhul-Hidjah. Hajj börjar den åttonde dagen i månaden Dhul-Hidjah. Att utföra Hajj är bland de allra bästa handlingar en muslim kan utföra. Det är samtidigt fysiskt och materiellt krävande att bege sig ut på denna resa."
         },
         {
           "type": "hadith",
-          "body": "Profeten ﷺ frågades vilken handling som är bäst? Han svarade då: \"Tron på Allah.\" Det sades; och sen då? Han svarade då: \"Att kämpa för Allahs skull.\" Det sades; och sen då? Han svarade: \"En accepterad Hadj.\""
+          "body": "Profeten ﷺ frågades vilken handling som är bäst? Han svarade då: \"Tron på Allah.\" Det sades; och sen då? Han svarade då: \"Att kämpa för Allahs skull.\" Det sades; och sen då? Han svarade: \"En accepterad Hajj.\""
         },
         {
           "type": "hadith",
-          "body": "Profeten ﷺ sade: \"En accepterad Hadj har ingen annan belöning än paradiset.\""
+          "body": "Profeten ﷺ sade: \"En accepterad Hajj har ingen annan belöning än paradiset.\""
         },
         {
           "type": "hadith",
-          "body": "Profeten ﷺ sade även: \"Den som gör Hadj, utan dåligt tal eller att hamna i synder kommer att komma tillbaka likt den dagen hans moder födde honom [för att han blev av med alla sina synder].\""
+          "body": "Profeten ﷺ sade även: \"Den som gör Hajj, utan dåligt tal eller att hamna i synder kommer att komma tillbaka likt den dagen hans moder födde honom [för att han blev av med alla sina synder].\""
         },
         {
           "type": "summary",
           "title": "Påminnelse",
-          "body": "I dessa tre hadither finner vi att Hadj är bland de bästa handlingarna en muslim kan utföra och att det leder till att man blir förlåten för sina synder och kommer till paradiset. När man läser detta och reflekterar över dess sanna innebörd, så förstår man att det är värt all den utmattning man kan känna av och varje krona som man spenderar. Må Allah acceptera från oss alla."
+          "body": "I dessa tre hadither finner vi att Hajj är bland de bästa handlingarna en muslim kan utföra och att det leder till att man blir förlåten för sina synder och kommer till paradiset. När man läser detta och reflekterar över dess sanna innebörd, så förstår man att det är värt all den utmattning man kan känna av och varje krona som man spenderar. Må Allah acceptera från oss alla."
         }
       ],
       "primaryAction": {
@@ -154,8 +154,8 @@
     },
     {
       "id": "foundations",
-      "title": "Villkoren, pelarna, de obligatoriska och de rekommenderade handlingarna för Hadj",
-      "subtitle": "Hadjs grunder",
+      "title": "Villkoren, pelarna, de obligatoriska och de rekommenderade handlingarna för Hajj",
+      "subtitle": "Hajjs grunder",
       "heroImageKey": "foundations",
       "stepNumber": 3,
       "totalSteps": 10,
@@ -175,12 +175,12 @@
         },
         {
           "type": "summary",
-          "title": "Villkoren, pelarna, de obligatoriska och de rekommenderade handlingarna för Hadj",
-          "body": "Hadj bygger på villkor, pelare, obligatoriska och rekommenderade handlingar. Det är viktigt att du som skall göra Hadj bekantar dig med dessa och lär dig vad de innebär så att du kan utföra en korrekt Hadj. De är som följer:"
+          "title": "Villkoren, pelarna, de obligatoriska och de rekommenderade handlingarna för Hajj",
+          "body": "Hajj bygger på villkor, pelare, obligatoriska och rekommenderade handlingar. Det är viktigt att du som skall göra Hajj bekantar dig med dessa och lär dig vad de innebär så att du kan utföra en korrekt Hajj. De är som följer:"
         },
         {
           "type": "list",
-          "title": "Hadjs villkor",
+          "title": "Hajjs villkor",
           "items": [
             "Att man är muslim.",
             "Att man har nått puberteten.",
@@ -190,7 +190,7 @@
         },
         {
           "type": "list",
-          "title": "Hadjs pelare",
+          "title": "Hajjs pelare",
           "items": [
             "Al-ihram - vilket är avsikten att påbörja riterna.",
             "Att stå på 'Arafah-platån.",
@@ -200,7 +200,7 @@
         },
         {
           "type": "list",
-          "title": "Hadjs obligatoriska handlingar",
+          "title": "Hajjs obligatoriska handlingar",
           "items": [
             "Att man går in i al-ihram, dvs avser att börja sina riter från al-Miqat. Al-Miqat är de bestämda platser som man inte får passera utan att ha gått in i al-ihram.",
             "Att man är kvar på 'Arafah tills solen har gått ned. Detta gäller för den som är på plats där på dagen.",
@@ -215,15 +215,15 @@
           "type": "important",
           "title": "Viktigt",
           "items": [
-            "Det är inte tillåtet att avsiktligt lämna någon av dessa obligatoriska handlingar, och den som skulle göra det måste slakta ett offerdjur. Hans Hadj blir då korrekt.",
-            "Utöver det är det obligatoriskt för den som gör Hadj al-Qiran och Hadj at-Tamattu' att slakta ett offerdjur.",
+            "Det är inte tillåtet att avsiktligt lämna någon av dessa obligatoriska handlingar, och den som skulle göra det måste slakta ett offerdjur. Hans Hajj blir då korrekt.",
+            "Utöver det är det obligatoriskt för den som gör Hajj al-Qiran och Hajj at-Tamattu' att slakta ett offerdjur.",
             "Nuförtiden är det i princip omöjligt att slakta ett offerdjur själv, men det finns organisationer i Mecka som man betalar och som då utför det åt en.",
             "'Arafah är en stor och vid platå som man står på. Det som avses här är inte berget som finns på platån som ibland kallas 'Arafah-berget, utan hela platån."
           ]
         },
         {
           "type": "summary",
-          "title": "Hadjs rekommenderade handlingar",
+          "title": "Hajjs rekommenderade handlingar",
           "body": "Alla de saker som har bekräftats från profeten Muhammad ﷺ som inte tidigare nämnts är rekommenderade handlingar. Det är bäst att göra dem, men om man inte skulle göra dem så är ingen skada skedd."
         }
       ],
@@ -235,7 +235,7 @@
     },
     {
       "id": "umrah_transition",
-      "title": "Umrah före Hadj",
+      "title": "Umrah före Hajj",
       "subtitle": "Tamattu'",
       "heroImageKey": "transition_umrah",
       "stepNumber": 4,
@@ -245,7 +245,7 @@
         {
           "type": "summary",
           "title": "Tamattu'",
-          "body": "Denna bok är baserad på det tredje sättet som kallas för Tamattu'. Det var detta sätt som profeten Muhammad ﷺ uppmanade sina följeslagare att göra Hadj på under sin sista pilgrimsfärd. Vid detta tillvägagångssätt gör man både Umrah och Hadj i en och samma resa. Först fullbordar man sin Umrah och därefter påbörjar man sin Hadj från Mecka."
+          "body": "Denna bok är baserad på det tredje sättet som kallas för Tamattu'. Det var detta sätt som profeten Muhammad ﷺ uppmanade sina följeslagare att göra Hajj på under sin sista pilgrimsfärd. Vid detta tillvägagångssätt gör man både Umrah och Hajj i en och samma resa. Först fullbordar man sin Umrah och därefter påbörjar man sin Hajj från Mecka."
         }
       ],
       "primaryAction": {
@@ -274,7 +274,7 @@
             "Utför ghusl.",
             "Sätter på sig parfym.",
             "Tar på sig sin ihram-klädsel.",
-            "Därefter avser du med ditt hjärta att utföra Hadj och säger talbiyah.",
+            "Därefter avser du med ditt hjärta att utföra Hajj och säger talbiyah.",
             "Du skall säga detta flera gånger om.",
             "Därefter ger du dig av till Mina."
           ]
@@ -424,7 +424,7 @@
         {
           "type": "summary",
           "title": "Tashriq-dagarna",
-          "body": "Tashriq-dagarna är den 11:e, den 12:e och även den 13:e dagen för den som fortsätter med Hadj till den sista dagen. Under dessa dagar skall du kasta småsten på de avsedda pelarna som finns där och man måste befinna sig i Mina under natten."
+          "body": "Tashriq-dagarna är den 11:e, den 12:e och även den 13:e dagen för den som fortsätter med Hajj till den sista dagen. Under dessa dagar skall du kasta småsten på de avsedda pelarna som finns där och man måste befinna sig i Mina under natten."
         },
         {
           "type": "note",
@@ -450,7 +450,7 @@
     },
     {
       "id": "daily_schedule",
-      "title": "Ett dagligt schema för personen som gör Tamattu' Hadj",
+      "title": "Ett dagligt schema för personen som gör Tamattu' Hajj",
       "subtitle": "Komprimerad översikt dag för dag",
       "heroImageKey": "daily_schedule",
       "stepNumber": 9,
@@ -472,7 +472,7 @@
           "type": "summary",
           "title": "Den 8:e dagen (tarwiyah-dagen)",
           "items": [
-            "I Mecka: Att gå in i ihram och avse att göra Hadj och bege sig till Mina.",
+            "I Mecka: Att gå in i ihram och avse att göra Hajj och bege sig till Mina.",
             "I Mina: Man skall be förkortade böner utan att slå ihop dem."
           ]
         },
@@ -493,7 +493,7 @@
             "I Mina: Att raka eller klippa håret.",
             "I Mina: Att göra den första tahallul - då allt som varit förbjudet under tiden för ihram blir tillåtet förutom samlag och dess förspel.",
             "I Mecka: Att göra tawaf ul-ifadah.",
-            "I Mecka: Att göra den sa'y man gör för Hadj.",
+            "I Mecka: Att göra den sa'y man gör för Hajj.",
             "I Mecka: Att göra den andra tahallul - då det även blir tillåtet att ha samlag.",
             "I Mina: Befinna sig i Mina under natten."
           ]
@@ -521,7 +521,7 @@
           "items": [
             "För den som stannar kvar denna dag gäller följande.",
             "I Mina: Att slänga småsten på de tre pelarna efter att solen nått sin högsta punkt på himlen.",
-            "Att du gör avskedstawaf då du vill bege dig av från Mecka. I och med det har du avklarat alla Hadjs riter."
+            "Att du gör avskedstawaf då du vill bege dig av från Mecka. I och med det har du avklarat alla Hajjs riter."
           ]
         },
         {
@@ -529,7 +529,7 @@
           "title": "Efter den 13:e dagen",
           "items": [
             "För den som vill stanna kvar gäller följande:",
-            "Att du gör avskedstawaf då du vill bege dig av från Mecka. I och med det har du avklarat alla Hadjs riter.",
+            "Att du gör avskedstawaf då du vill bege dig av från Mecka. I och med det har du avklarat alla Hajjs riter.",
             "Observera att avskedstawaf ska vara det sista man gör innan man beger sig av från Mecka."
           ]
         }
@@ -537,8 +537,8 @@
     },
     {
       "id": "common_mistakes",
-      "title": "Vanliga misstag under Hadj",
-      "subtitle": "Vanliga misstag under Hadj",
+      "title": "Vanliga misstag under Hajj",
+      "subtitle": "Vanliga misstag under Hajj",
       "heroImageKey": "common_mistakes",
       "stepNumber": 10,
       "totalSteps": 10,

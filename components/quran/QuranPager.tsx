@@ -162,6 +162,13 @@ function QuranPager() {
   // animation don't trigger goToPage and cause a visible page-number jump.
   const isProgrammaticScrollRef = useRef(false);
 
+  // True only while the user's finger is actively dragging/flinging the FlatList.
+  // Set by onScrollBeginDrag, cleared by onMomentumScrollEnd.
+  // goToPage is called from onViewableItemsChanged ONLY when this is true — this
+  // ensures audio-driven viewability events (which have isUserDragRef=false) can
+  // never set userPageOverrideRef=true and block subsequent audio page advances.
+  const isUserDragRef = useRef(false);
+
   const isMushafMode = settings.readingMode !== 'verse';
 
   // ── Font and data pre-loading ─────────────────────────────────────────────
@@ -233,8 +240,13 @@ function QuranPager() {
     // with the navigation animation and causing the "app feels sluggish" issue.
     pauseDownloads();
     listRef.current?.scrollToIndex({ index, animated: true });
-    // Clear programmatic flag after animation window (≤ 400 ms).
-    const programmaticTimer = setTimeout(() => { isProgrammaticScrollRef.current = false; }, 500);
+    // Clear programmatic flag after animation window. In verse-by-verse mode
+    // QuranVerseView is heavier to render than MushafRenderer, so the scroll
+    // animation can take longer than in reading mode. onMomentumScrollEnd also
+    // clears this flag the moment the animation truly ends — the timer here is
+    // a safety-net fallback in case onMomentumScrollEnd fires late or not at all.
+    // 1500 ms gives verse-by-verse mode ample time to finish the animated scroll.
+    const programmaticTimer = setTimeout(() => { isProgrammaticScrollRef.current = false; }, 1500);
     // Resume background downloads 200 ms after animation ends — gives the
     // target-page font loading (triggered by QuranVerseView) time to start and
     // register with Core Text before the background queue resumes.
@@ -315,22 +327,26 @@ function QuranPager() {
       if (isProgrammaticScrollRef.current) return;
       if (viewableItems.length > 0) {
         const page = viewableItems[0].item as number;
-        const prevPage = visiblePageRef.current;
-        // Update visiblePageRef BEFORE calling goToPage so the effect
-        // sees visiblePageRef.current === currentPage and skips the scroll.
-        visiblePageRef.current = page;
-        // Boost download priority for the newly visible page and its neighbours.
-        // prioritizeOffline is a module function — safe to call from a stable ref.
+        // Boost download priority regardless of drag state.
         prioritizeOffline(page);
-        // Only clear the explicit surah override when the user manually
-        // swiped to a DIFFERENT page. When the page hasn't changed (e.g.
-        // viewability fires after a programmatic scroll settles on the same
-        // page), keep the override so multi-surah pages (like 604 with
-        // surahs 112-114) remember the intended surah for audio playback.
-        if (page !== prevPage) {
-          clearExplicitSurah();
+        if (isUserDragRef.current) {
+          // User-initiated swipe: update visiblePageRef and call goToPage if
+          // the page changed. goToPage sets userPageOverrideRef=true, which
+          // pauses audio-driven paging while the user browses freely.
+          const prevPage = visiblePageRef.current;
+          visiblePageRef.current = page;
+          if (page !== prevPage) {
+            clearExplicitSurah();
+            goToPage(page);
+          }
         }
-        goToPage(page);
+        // Non-drag events (audio-driven scroll confirmations, stale post-cancel
+        // events): do NOT update visiblePageRef or call goToPage.
+        // visiblePageRef is kept authoritative by the currentPage effect, which
+        // sets it to currentPage before every programmatic scrollToIndex call.
+        // Letting non-drag events overwrite it would corrupt the "expected page"
+        // guard in the effect and cause spurious goToPage calls that set
+        // userPageOverrideRef=true, permanently blocking audio-driven advances.
       }
     },
   ).current;
@@ -349,8 +365,19 @@ function QuranPager() {
   // is fully available for the swipe gesture and page transition.
   // Resume only when momentum fully ends (page has settled) — not on drag end,
   // because momentum still uses the JS thread after the finger lifts.
-  const onScrollBeginDrag   = useCallback(() => { pauseDownloads(); },  []);
-  const onMomentumScrollEnd = useCallback(() => { resumeDownloads(); }, []);
+  const onScrollBeginDrag = useCallback(() => {
+    pauseDownloads();
+    isUserDragRef.current = true;
+  }, []);
+  // onMomentumScrollEnd fires when the scroll animation truly settles (both user
+  // swipes and programmatic scrollToIndex). Clearing isProgrammaticScrollRef here
+  // ensures onViewableItemsChanged is unblocked at the correct time rather than
+  // relying solely on the 1500 ms fallback timer above.
+  const onMomentumScrollEnd = useCallback(() => {
+    resumeDownloads();
+    isProgrammaticScrollRef.current = false;
+    isUserDragRef.current = false;
+  }, []);
 
   // ── Item renderer ────────────────────────────────────────────────────────
   // STABLE across orientation changes — no width/height/pageWidth/pageHeight

@@ -4,7 +4,7 @@ import * as Location from 'expo-location';
 import { Platform } from 'react-native';
 import { fetchPrayerTimes, fetchTomorrowPrayerTimes, calcMidnight, reverseGeocode } from '../services/prayerApi';
 import { buildYearlyCache } from '../services/monthlyCache';
-import { schedulePrayerNotifications, cancelPrayerNotifications, scheduleDhikrReminder, cancelDhikrReminder, scheduleFridayDuaReminder, cancelFridayDuaReminder } from '../services/notifications';
+import { schedulePrayerNotifications, cancelPrayerNotifications, scheduleDhikrReminder, cancelDhikrReminder, scheduleFridayDuaReminder, cancelFridayDuaReminder, refreshPrePrayerReminderNotifications } from '../services/notifications';
 import { updateWidgetData } from '../modules/WidgetData';
 
 // ── Samma CALC_METHODS som PWA (method=3 = Muslim World League) ──
@@ -355,6 +355,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         state.tomorrowTimes?.Maghrib ?? null,
       ).catch(() => {});
     }
+    // Pre-prayer reminders: refresh rolling 5-day schedule whenever prayer times reload
+    refreshPrePrayerReminderNotifications().catch(() => {});
   }, [state.prayerTimes, state.tomorrowTimes, state.settings.notifications, state.settings.dhikrReminder, state.settings.fridayDuaReminder, state.location?.city]); // eslint-disable-line
 
   const value = useMemo(() => ({ ...state, dispatch, refreshPrayers, refreshLocation }), [state]); // eslint-disable-line

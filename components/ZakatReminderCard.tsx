@@ -17,7 +17,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useZakatReminder } from '../hooks/useZakatReminder';
 import { ADVANCE_OPTIONS } from '../services/zakatReminderService';
 import { requestNotificationPermission } from '../services/notifications';
-import HijriDatePickerModal from './HijriDatePickerModal';
+import HijriDatePickerModal, { type ConfirmMeta } from './HijriDatePickerModal';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -64,8 +64,9 @@ export default function ZakatReminderCard() {
   // loadZakatReminderSettings() concurrently and overwrite each other's saves.
   const handlePickerConfirm = useCallback(async (
     day: number, month: number, monthName: string, hour: number, minute: number,
+    meta?: ConfirmMeta,
   ) => {
-    await updateHijriDate(day, month, monthName);
+    await updateHijriDate(day, month, monthName, meta);
     await updateReminderTime(hour, minute);
   }, [updateHijriDate, updateReminderTime]);
 

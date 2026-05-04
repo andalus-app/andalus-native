@@ -166,12 +166,18 @@ export function QuranProvider({ children }: Props) {
   // Always-current ref so setPlaybackVerse can compare without becoming unstable.
   // Pattern from CLAUDE.md: refs for values needed inside stable callbacks.
   const currentPageRef = useRef(currentPage);
+  // Mirror readingMode so setPlaybackVerse (stable, [] deps) can branch on it
+  // without becoming unstable. State setters (setPendingVerseHighlight) are
+  // already stable, so no closure issue there.
+  // Initialized with the default ('page'); synced to settings.readingMode after
+  // useQuranSettings() is called below.
+  const readingModeRef = useRef<ReadingMode>('page');
   const [contentsMenuOpen, setContentsMenuOpen] = useState(false);
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [reciterSelectorOpen, setReciterSelectorOpen] = useState(false);
 
-  // Keep currentPageRef in sync every render
+  // Keep refs in sync every render
   useEffect(() => { currentPageRef.current = currentPage; }, [currentPage]);
 
   // Once-only sync: the lazy-init useState read getCachedLastPage() may have
@@ -211,6 +217,8 @@ export function QuranProvider({ children }: Props) {
   }, []);
 
   const { settings, updateSettings, setReadingModeSession } = useQuranSettings();
+  // Sync readingModeRef every render now that settings is available.
+  readingModeRef.current = settings.readingMode;
   const { bookmarks, addBookmark, removeBookmark, updateNote, isBookmarked } =
     useQuranBookmarks();
 
@@ -292,6 +300,15 @@ export function QuranProvider({ children }: Props) {
         !userPageOverrideRef.current
       ) {
         setCurrentPage(pageNumber);
+        // In verse-by-verse mode, also set a pending highlight so QuranVerseView
+        // scrolls to the verse once the new page's layout is ready. The existing
+        // activeVerseKey useEffect in QuranVerseView only scrolls when verseYMap
+        // already contains the key — on a page transition the map is empty for
+        // the new page and the scroll silently fails. pendingVerseHighlight uses
+        // a retry loop (80ms × 37 = 3s) that fires once the VerseCard mounts.
+        if (verseKey && readingModeRef.current === 'verse') {
+          setPendingVerseHighlight({ verseKey, pageNumber });
+        }
       }
     },
     [],

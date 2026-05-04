@@ -192,6 +192,15 @@ function QuranPagePicker() {
   // triggers onMomentumScrollEnd again on iOS. Block re-entry for FINALISE_LOCK_MS.
   const finalisingRef = useRef(false);
 
+  // True only when the scroll that led to finalise() was user-initiated (drag).
+  // When finalise() is triggered by the follow-effect (programmatic scrollToOffset
+  // that tracks an audio-driven currentPage change), this stays false so that
+  // goToPage() — which sets userPageOverrideRef=true in QuranContext — is NOT called.
+  // Calling goToPage() for every audio-driven page advance would alternate the
+  // override flag, causing every other interval-repeat verse-6 page advance to be
+  // silently blocked (odd loops fail, even loops pass).
+  const wasUserScrollRef = useRef(false);
+
   // Guards setDisplayPage — only call when the rounded page actually changes,
   // not on every 16 ms scroll event.
   const displayPageRef = useRef(currentPage);
@@ -251,6 +260,7 @@ function QuranPagePicker() {
     finalisingRef.current = false;
     // Extend the suppress window from the moment the user touches the strip.
     suppressExternalScrollUntil.current = Date.now() + USER_SUPPRESS_MS;
+    wasUserScrollRef.current = true;
     setIsActivelyScrolling(true);
   }, []);
 
@@ -314,10 +324,17 @@ function QuranPagePicker() {
       displayPageRef.current = page;
       setDisplayPage(page);
 
-      // Suppress external page changes for USER_SUPPRESS_MS so that audio
-      // (verse-by-verse mode) cannot override what the user just selected.
-      suppressExternalScrollUntil.current = Date.now() + USER_SUPPRESS_MS;
-      goToPage(page);
+      // Only call goToPage (which sets userPageOverrideRef=true in QuranContext) and
+      // extend the suppress window when this finalise() was triggered by a USER drag.
+      // When triggered by the follow-effect (programmatic scrollToOffset after an
+      // audio-driven currentPage change), goToPage must NOT be called — doing so
+      // alternates userPageOverrideRef between true/false and blocks every other
+      // audio-driven page advance during interval repeat (odd loops fail, even pass).
+      if (wasUserScrollRef.current) {
+        wasUserScrollRef.current = false;
+        suppressExternalScrollUntil.current = Date.now() + USER_SUPPRESS_MS;
+        goToPage(page);
+      }
     },
     [goToPage],
   );

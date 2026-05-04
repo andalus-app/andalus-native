@@ -21,8 +21,17 @@
  * also returns accurate word-level page_number values that reflect the physical
  * Mushaf page layout used by the renderer.
  *
- * Cache key: andalus_mushaf_timing_v3_{recitationId}_{surahId}
- * (v3 distinguishes from v2 caches that used the inaccurate verse-level page_number field)
+ * Page number resolution (v4): uses the LAST word's page_number rather than the first.
+ * Some verses span a page boundary — e.g. Al-Baqarah 2:6 starts with one or two words
+ * at the bottom of page 2 but the bulk of the verse (and the verse-number ornament) is
+ * on page 3. The first-word approach (v3) assigned page 2 to 2:6, so the auto
+ * page-advance in verse-by-verse mode never fired when verse 6 began playing. Using
+ * the last word matches what the user sees: the verse's canonical location in the
+ * Mushaf is the page where it ENDS (where the verse ornament appears), which is also
+ * where the verse list item for that page is rendered.
+ *
+ * Cache key: andalus_mushaf_timing_v4_{recitationId}_{surahId}
+ * (v4 distinguishes from v3 caches that used the first word's page_number)
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -31,7 +40,7 @@ const QDC_API  = 'https://api.qurancdn.com/api/qdc';
 const QURAN_API = 'https://api.quran.com/api/v4';
 
 const cacheKey = (recitationId: number, surahId: number) =>
-  `andalus_mushaf_timing_v3_${recitationId}_${surahId}`;
+  `andalus_mushaf_timing_v4_${recitationId}_${surahId}`;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -163,11 +172,8 @@ export async function fetchVerseTimings(
     const raw = await AsyncStorage.getItem(key);
     if (raw) {
       const parsed = JSON.parse(raw) as VerseTimestamp[];
-      // Reject empty-array cache from old v1 data (defensive — v2 key is new).
-      // Also reject caches where page numbers are missing or zero — these were
-      // stored before the Quran.com page-number fetch was added (or if that fetch
-      // silently failed). A cache with pageNumber=0 breaks auto page advance.
-      // Exclude BSMLLH_ synthetic entries which derive pageNumber from verse 1.
+      // Reject caches where page numbers are missing or zero.
+      // Exclude BSMLLH_ synthetic entries (their pageNumber derives from verse 1).
       const verseEntries = parsed.filter(t => !t.verseKey.startsWith('BSMLLH_'));
       const hasValidPageNumbers =
         parsed.length > 0 &&
@@ -197,12 +203,28 @@ export async function fetchVerseTimings(
   const pagesJson = (await pagesRes.json()) as { verses: QuranVerseEntry[] };
 
   // Build page lookup: verse_key → page_number
-  // Use the first word's page_number (word-level, accurate) rather than the
-  // verse-level page_number field (which the API returns incorrectly for some surahs).
+  //
+  // Use the LAST valid word's page_number. Some verses span a page boundary
+  // (e.g. 2:6 starts at the bottom of page 2, bulk on page 3). The last word's
+  // page matches the verse-number ornament position — i.e. the canonical Mushaf
+  // page for the verse. This is what the verse-list renderer shows and what
+  // the user expects the audio cursor to follow.
+  //
+  // For verses entirely on one page, first == last, so no change.
+  // Verse-level page_number field is intentionally NOT used (inaccurate for some surahs).
   const pageMap = new Map<string, number>();
   for (const v of pagesJson.verses) {
-    const firstWord = v.words.find(w => w.code_v2 && (w.page_number ?? 0) > 0);
-    if (firstWord) pageMap.set(v.verse_key, firstWord.page_number);
+    const words = v.words;
+    // Scan from the end to find the last word with a valid page_number.
+    let lastPage = 0;
+    for (let i = words.length - 1; i >= 0; i--) {
+      const w = words[i];
+      if (w.code_v2 && (w.page_number ?? 0) > 0) {
+        lastPage = w.page_number;
+        break;
+      }
+    }
+    if (lastPage > 0) pageMap.set(v.verse_key, lastPage);
   }
 
   // QuranCDN returns an array with one entry per chapter audio file variant;

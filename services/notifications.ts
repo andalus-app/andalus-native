@@ -447,10 +447,21 @@ export async function savePushToken(attempt = 1): Promise<void> {
     // was previously registered anonymously, user has now logged in with a real ID).
     await supabase.from('push_tokens').delete().eq('token', token).neq('user_id', userId);
 
+    const liveNotifPref = await AsyncStorage.getItem(LIVE_NOTIF_ENABLED_KEY);
+    const liveNotif = liveNotifPref === 'true';
+
+    // Read announcement preference so new/rotated tokens preserve the user's choice.
+    // Without this, fresh rows default to null which the edge function treats as "allowed".
+    let announcementNotif = true;
+    try {
+      const settingsPref = await AsyncStorage.getItem('andalus_settings');
+      if (settingsPref) announcementNotif = JSON.parse(settingsPref)?.announcementNotifications ?? true;
+    } catch {}
+
     const { error } = await supabase
       .from('push_tokens')
       .upsert(
-        { user_id: userId, token, updated_at: new Date().toISOString() },
+        { user_id: userId, token, live_notif: liveNotif, announcement_notif: announcementNotif, updated_at: new Date().toISOString() },
         { onConflict: 'user_id' },
       );
 
@@ -702,6 +713,126 @@ export async function sendAnnouncementNotification(id: string, title: string, bo
       },
     });
   } catch {}
+}
+
+// ── Pre-prayer reminders (5-day rolling schedule) ────────────────────────────
+// Schedules a reminder X minutes before each of the 5 daily prayers for the
+// next 5 days. Self-contained: reads location and settings from AsyncStorage.
+
+export type PrayerReminderOffset = 'off' | 15 | 30 | 45 | 60;
+export const PRE_PRAYER_REMINDER_STORAGE_KEY = 'hidayah_prayer_reminder_offset';
+const PRE_PRAYER_REMINDER_PREFIX = 'hidayah-pre-prayer-';
+const PRE_PRAYER_KEYS = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'] as const;
+
+/** Fetches the 5 prayer times for a single date from Aladhan. */
+async function fetchDayTimings(
+  lat: number, lng: number, date: Date, method: number, school: number,
+): Promise<Record<string, string> | null> {
+  try {
+    const d = String(date.getDate()).padStart(2, '0');
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const y = date.getFullYear();
+    const url =
+      `https://api.aladhan.com/v1/timings/${d}-${m}-${y}` +
+      `?latitude=${lat}&longitude=${lng}&method=${method}&school=${school}`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const json = await res.json();
+    const t = json?.data?.timings;
+    if (!t) return null;
+    const strip = (s: string) => (s ? s.replace(/\s*\(.*\)/, '').trim() : '');
+    return {
+      Fajr: strip(t.Fajr), Dhuhr: strip(t.Dhuhr),
+      Asr:  strip(t.Asr),  Maghrib: strip(t.Maghrib), Isha: strip(t.Isha),
+    };
+  } catch { return null; }
+}
+
+export async function cancelPrePrayerReminders(): Promise<void> {
+  if (!N) return;
+  try {
+    const all  = await N.getAllScheduledNotificationsAsync();
+    const ours = all.filter(n => n.identifier.startsWith(PRE_PRAYER_REMINDER_PREFIX));
+    await Promise.all(ours.map(n => N!.cancelScheduledNotificationAsync(n.identifier)));
+  } catch {}
+}
+
+/** Reads the saved offset, cancels old pre-prayer reminders, then schedules
+ *  reminders for the next 5 days. Safe to call frequently — always cancels first.
+ *  Does nothing if offset is 'off' or permission is not granted. */
+export async function refreshPrePrayerReminderNotifications(): Promise<void> {
+  if (!N) return;
+  try {
+    const raw      = await AsyncStorage.getItem(PRE_PRAYER_REMINDER_STORAGE_KEY);
+    const offsetN  = raw ? parseInt(raw, 10) : NaN;
+    const VALID    = [15, 30, 45, 60] as const;
+    const offset: PrayerReminderOffset = (VALID as readonly number[]).includes(offsetN)
+      ? (offsetN as 15 | 30 | 45 | 60)
+      : 'off';
+
+    await cancelPrePrayerReminders();
+    if (offset === 'off') return;
+
+    const { status } = await N.getPermissionsAsync();
+    if (status !== 'granted') return;
+
+    const [locationRaw, settingsRaw] = await Promise.all([
+      AsyncStorage.getItem('andalus_location'),
+      AsyncStorage.getItem('andalus_settings'),
+    ]);
+    if (!locationRaw) return;
+
+    const loc      = JSON.parse(locationRaw) as { lat: number; lng: number };
+    const settings = settingsRaw ? JSON.parse(settingsRaw) : {};
+    const method: number = settings.calculationMethod ?? 3;
+    const school: number = settings.school ?? 0;
+
+    const now           = new Date();
+    const offsetMinutes = offset as number;
+
+    const daySets = await Promise.all(
+      Array.from({ length: 5 }, (_, i) => {
+        const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
+        return fetchDayTimings(loc.lat, loc.lng, d, method, school).then(times => ({ date: d, times }));
+      }),
+    );
+
+    for (const { date, times } of daySets) {
+      if (!times) continue;
+      const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+      for (const key of PRE_PRAYER_KEYS) {
+        const timeStr = times[key];
+        if (!timeStr) continue;
+        const [hh, mm] = timeStr.split(':').map(Number);
+        if (isNaN(hh) || isNaN(mm)) continue;
+        const totalMin = hh * 60 + mm - offsetMinutes;
+        if (totalMin < 0) continue;
+        const fire = new Date(date.getFullYear(), date.getMonth(), date.getDate(), Math.floor(totalMin / 60), totalMin % 60, 0, 0);
+        if (fire <= now) continue;
+        await N!.scheduleNotificationAsync({
+          identifier: `${PRE_PRAYER_REMINDER_PREFIX}${dateKey}-${key.toLowerCase()}`,
+          content: {
+            title: `${key} närmar sig`,
+            body:  `${offsetMinutes} min kvar`,
+            sound: true,
+            data: {
+              type:          'pre-prayer-reminder',
+              prayerKey:     key.toLowerCase(),
+              prayerName:    key,
+              offsetMinutes,
+            },
+          },
+          trigger: {
+            type: N!.SchedulableTriggerInputTypes.DATE,
+            date: fire,
+          },
+        });
+      }
+    }
+    console.log(`[PrePrayerReminder] Scheduled 5-day reminders (${offsetMinutes} min)`);
+  } catch (e) {
+    console.warn('[PrePrayerReminder] refreshPrePrayerReminderNotifications error:', e);
+  }
 }
 
 // ── Friday Al-Kahf reminder ───────────────────────────────────────────────────

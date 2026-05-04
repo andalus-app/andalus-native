@@ -294,7 +294,7 @@ function QuranAudioPlayer() {
 
   // Cross-surah "Spela till" target — set when stopAtVerseKey belongs to a future surah.
   // Persists across intermediate loadAndPlay calls so each surah advance can check it.
-  // Cleared by stop(), skipSurah(), and at the start of loadAndPlayFromVerse (new session).
+  // Cleared by stop() and at the start of loadAndPlayFromVerse (new session).
   const pendingStopVerseKeyRef = useRef<string | null>(null);
 
   // continuous: true = "Spela vidare" mode — auto-advance through surahs on finish.
@@ -304,9 +304,6 @@ function QuranAudioPlayer() {
   const loadAndPlayRef = useRef<((surahId: number) => void) | null>(null);
   const loadAndPlayFromVerseRef = useRef<((surahId: number, startVerseKey: string, stopAtVerseKey: string | null) => Promise<void>) | null>(null);
 
-  // Verse sync refs
-  const verseTimingsRef = useRef<VerseTimestamp[] | null>(null);
-  const lastVerseKeyRef = useRef<string | null>(null);
   const setPlaybackVerseRef = useRef(setPlaybackVerse);
   setPlaybackVerseRef.current = setPlaybackVerse;
 
@@ -358,6 +355,13 @@ function QuranAudioPlayer() {
       switch (snap.state) {
         case 'idle':
           setPlayerState({ mode: 'hidden' });
+          // Engine is idle → no verse-loop can be running. Clear the component-side
+          // ref so the reciter-change handler doesn't see stale verse-loop state
+          // from a previous session (e.g. finite verse-loop that completed, or
+          // stop() called while verse-loop was active). Without this, changing the
+          // reciter after a surah ends would incorrectly restart the old verse-loop
+          // instead of beginning the surah from the top.
+          verseLoopActiveRef.current = null;
           break;
         case 'downloading':
           setPlayerState({
@@ -416,6 +420,15 @@ function QuranAudioPlayer() {
   useEffect(() => {
     QuranAudioEngine.setRepeatSettings(repeatSettings);
   }, [repeatSettings]);
+
+  // When interval-repeat loops back to the from-verse the engine fires this
+  // callback so we can clear the user-page-override before the audio-driven
+  // page revert fires. Without this, the override (set by onViewableItemsChanged
+  // confirming the audio-advance to the to-verse's page) would block the revert.
+  useEffect(() => {
+    QuranAudioEngine.setIntervalLoopBackCallback(clearUserPageOverride);
+    return () => QuranAudioEngine.setIntervalLoopBackCallback(null);
+  }, [clearUserPageOverride]);
 
   // ── Chrome fade — replicated locally now that the player is mounted at app
   // root rather than wrapped by QuranScreen's chromeAnim Animated.View. The
@@ -486,96 +499,18 @@ function QuranAudioPlayer() {
   const stop = useCallback(() => {
     QuranAudioEngine.stop().catch(() => undefined);
     currentSurahIdRef.current = null;
+    verseLoopActiveRef.current = null;
     if (mountedRef.current) setPlayerState({ mode: 'hidden' });
   }, []);
 
-  const skipSurah = useCallback(
-    (delta: 1 | -1) => {
-      continuousPlayRef.current = false; // manual skip exits continuous mode
-      pendingStopVerseKeyRef.current = null;
-      const surahId = currentSurahIdRef.current;
-      if (surahId === null) return;
-      const next = Math.min(114, Math.max(1, surahId + delta));
-      if (next !== surahId) loadAndPlay(next);
-    },
-    [loadAndPlay],
-  );
-
   const skipVerse = useCallback(
     (delta: 1 | -1) => {
-      const surahId = currentSurahIdRef.current;
-      if (surahId === null) return;
-
-      const currentKey = activeVerseKeyRef.current;
-
-      // ── Case 1: currently on bismillah pre-play ────────────────────────────
-      // verseTimingsRef is null during bismillah (set to null in startWithBismillah).
-      // Read surahId from the active key and handle directly.
-      if (currentKey?.startsWith('BSMLLH_')) {
-        if (delta > 0) {
-          // Skip bismillah → start surah from verse 1 (no bismillah re-play)
-          loadAndPlayFromVerse(surahId, `${surahId}:1`, null);
-        } else {
-          // Previous from bismillah → last verse of previous surah
-          const prevSurah = Math.max(1, surahId - 1);
-          if (prevSurah !== surahId) {
-            continuousPlayRef.current = false;
-            pendingStopVerseKeyRef.current = null;
-            loadAndPlay(prevSurah);
-          }
-        }
-        return;
-      }
-
-      // ── Case 2: normal verse playback ─────────────────────────────────────
-      // Include BSMLLH_ entries so pressing ← on verse 1 reaches the bismillah.
-      const timings = verseTimingsRef.current;
-
-      if (!timings || timings.length === 0) {
-        // No timings available — fall back to surah skip
-        skipSurah(delta);
-        return;
-      }
-
-      const currentIndex = currentKey
-        ? timings.findIndex((t) => t.verseKey === currentKey)
-        : -1;
-
-      const nextIndex = currentIndex + delta;
-
-      if (nextIndex >= 0 && nextIndex < timings.length) {
-        const target = timings[nextIndex];
-        if (target.verseKey.startsWith('BSMLLH_')) {
-          // Target is bismillah — must reload via loadAndPlayFromVerse to trigger
-          // the Al-Fatiha pre-play sequence (seeking alone won't play it).
-          const targetSurahId = parseInt(target.verseKey.split('_')[1], 10);
-          loadAndPlayFromVerse(targetSurahId, target.verseKey, null);
-        } else {
-          // Normal verse within same surah — just seek, no audio reload
-          QuranAudioEngine.seekTo(target.timestampFrom).catch(() => undefined);
-        }
-      } else if (delta > 0) {
-        // Past last verse — go to next surah (bismillah included via loadAndPlay)
-        const nextSurah = Math.min(114, surahId + 1);
-        if (nextSurah !== surahId) {
-          continuousPlayRef.current = false;
-          pendingStopVerseKeyRef.current = null;
-          loadAndPlay(nextSurah);
-        }
-      } else {
-        // Before first verse (surah 1/9 or no BSMLLH_ entry) — previous surah
-        const prevSurah = Math.max(1, surahId - 1);
-        if (prevSurah !== surahId) {
-          continuousPlayRef.current = false;
-          pendingStopVerseKeyRef.current = null;
-          loadAndPlay(prevSurah);
-        }
-      }
+      // Delegate entirely to the engine's skipVerse which holds live timings,
+      // handles verse-loop / BSMLLH_ / surah-boundary cases, and is the same
+      // implementation used by the lock-screen remote controls.
+      QuranAudioEngine.skipVerse(delta).catch(() => undefined);
     },
-    // loadAndPlayFromVerse is declared below; use its stable ref to avoid
-    // forward-reference TDZ errors while still calling the latest version.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [skipSurah, loadAndPlay],
+    [],
   );
 
   const seekTo = useCallback((positionMs: number) => {
@@ -682,7 +617,12 @@ function QuranAudioPlayer() {
       currentSurahIdRef.current = surahId;
 
       QuranAudioEngine.setReciter(settings.reciterId);
-      QuranAudioEngine.setRepeatSettings(repeatSettings);
+      // Use the ref instead of the closure-captured state so callers like
+      // handleUpdateRepeatSettings can update repeatSettingsRef.current before
+      // calling loadAndPlayFromVerse and have the engine receive the new value.
+      // The state value (repeatSettings) may be stale when setRepeatSettings() +
+      // loadAndPlayFromVerse() are called in the same synchronous event handler.
+      QuranAudioEngine.setRepeatSettings(repeatSettingsRef.current);
 
       setPlaybackVerseRef.current(startVerseKey, currentPage);
       continuousPlayRef.current = continuous ?? false;
@@ -974,18 +914,45 @@ function QuranAudioPlayer() {
       pendingStopVerseKeyRef.current = null;
     }
 
+    // Update the ref synchronously BEFORE setRepeatSettings schedules its async
+    // state update. loadAndPlayFromVerse (called below) reads repeatSettingsRef
+    // to push settings to the engine. If we only call setRepeatSettings here,
+    // the ref still holds the OLD value when loadAndPlayFromVerse runs (React
+    // state updates are batched; the useEffect that syncs the ref fires after
+    // the next render, too late). Without this, the engine receives the old
+    // settings (repeatInterval: false) and does not set up _intervalLoop,
+    // causing the repeat range to be ignored on the first play after enabling.
+    repeatSettingsRef.current = newSettings;
     setRepeatSettings(newSettings);
 
-    // When interval repeat is newly enabled or the from-position changes while
-    // interval is active, immediately start playing from the from-verse. This
-    // ensures "Från Al-Ikhlas: 1" actually begins playback at verse 1 right away
-    // rather than waiting for the current position to drift there naturally.
+    // Interval repeat turned OFF mid-playback: cancel the active loop immediately
+    // so the surah continues to its natural end instead of looping.
+    if (prev.repeatInterval && !newSettings.repeatInterval) {
+      QuranAudioEngine.cancelIntervalRepeat();
+    }
+
+    // When interval repeat is newly enabled or the interval range changes while
+    // active, restart playback from the from-verse so the engine picks up the
+    // new settings. Three triggers:
+    //   1. intervalNewlyEnabled: toggle was OFF → ON.
+    //   2. fromPositionChanged:  fromSurahId or fromVerse changed.
+    //   3. toPositionChanged:    toSurahId or toVerse changed.
+    //
+    // Case 3 is critical: when the user toggles ON (which fires an immediate
+    // restart with the default toVerse = surah.versesCount and canUseNativeLoop
+    // = true → RepeatMode.Track, no _intervalLoop), then picks a toVerse < last
+    // (e.g. verse 5), the engine must restart with the new range. Without this,
+    // the engine stays in native-loop-full-surah mode and never monitors the
+    // verse-5 boundary, so interval repeat appears to do nothing on the first try.
     const intervalNewlyEnabled = !prev.repeatInterval && newSettings.repeatInterval;
     const fromPositionChanged =
       newSettings.repeatInterval &&
       (prev.fromSurahId !== newSettings.fromSurahId || prev.fromVerse !== newSettings.fromVerse);
+    const toPositionChanged =
+      newSettings.repeatInterval &&
+      (prev.toSurahId !== newSettings.toSurahId || prev.toVerse !== newSettings.toVerse);
 
-    if ((intervalNewlyEnabled || fromPositionChanged) && currentSurahIdRef.current !== null) {
+    if ((intervalNewlyEnabled || fromPositionChanged || toPositionChanged) && currentSurahIdRef.current !== null) {
       const fromKey = `${newSettings.fromSurahId}:${newSettings.fromVerse}`;
       loadAndPlayFromVerseRef.current?.(newSettings.fromSurahId, fromKey, null);
     }
@@ -1084,16 +1051,21 @@ function QuranAudioPlayer() {
               StyleSheet.absoluteFill,
               { backgroundColor: isDark ? 'rgba(15,31,26,0.88)' : 'rgba(252,252,255,0.72)' },
             ]} />
-            <TouchableOpacity
-              style={styles.reciterChipBtn}
-              onPress={openReciterSelector}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.reciterChipText, { color: isDark ? '#FFFFFF' : T.text }]} numberOfLines={1}>
-                {reciterName}
+            <View style={styles.idleInfoZone}>
+              <Text style={[styles.idleSurahName, { color: isDark ? '#FFFFFF' : T.text }]} numberOfLines={1}>
+                {surahName}
               </Text>
-              <SvgIcon name="chevron-down" size={13} color={isDark ? 'rgba(255,255,255,0.55)' : T.textMuted} />
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.idleReciterRow}
+                onPress={openReciterSelector}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.idleReciterText, { color: isDark ? 'rgba(255,255,255,0.55)' : T.textMuted }]} numberOfLines={1}>
+                  {reciterName}
+                </Text>
+                <SvgIcon name="chevron-down" size={11} color={isDark ? 'rgba(255,255,255,0.55)' : T.textMuted} />
+              </TouchableOpacity>
+            </View>
             <View style={[styles.idleChipDivider, { backgroundColor: isDark ? 'rgba(255,255,255,0.12)' : T.border }]} />
             <TouchableOpacity
               style={[styles.idlePlayBtn, { backgroundColor: T.accent }]}
@@ -1370,14 +1342,23 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     gap: 8,
   },
-  reciterChipBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
+  idleInfoZone: {
+    maxWidth: 190,
+    flexShrink: 1,
   },
-  reciterChipText: {
+  idleSurahName: {
     fontSize: 13,
     fontWeight: '600',
+  },
+  idleReciterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    marginTop: 1,
+  },
+  idleReciterText: {
+    fontSize: 11,
+    fontWeight: '500',
   },
   idleChipDivider: {
     width: StyleSheet.hairlineWidth,

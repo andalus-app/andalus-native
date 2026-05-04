@@ -110,7 +110,7 @@ function NotificationPill({ item, onDismiss }: { item: NotifItem; onDismiss: () 
               fontSize: 11, fontWeight: '600', color: T.textMuted,
               letterSpacing: 0.3, marginBottom: 3,
             }}>
-              ANDALUS
+              HIDAYAH
             </Text>
             <Text style={{
               fontSize: 13, fontWeight: '600', color: T.text, lineHeight: 18,
