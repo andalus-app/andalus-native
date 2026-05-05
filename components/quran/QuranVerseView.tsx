@@ -28,7 +28,7 @@ import { ScrollView } from 'react-native-gesture-handler';
 import Svg, { Text as SvgText, G, Path, Defs, ClipPath, Rect, Line as SvgLine } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
-import { useQuranContext } from '../../context/QuranContext';
+import { useQuranContext, useActiveVerseKey } from '../../context/QuranContext';
 import {
   fetchComposedMushafPage,
   type MushafSlot,
@@ -694,11 +694,12 @@ const VerseCard = memo(function VerseCard({
 function QuranVerseView({ pageNumber, width, height, isActive }: Props) {
   const { theme: T, isDark } = useTheme();
   const {
-    activeVerseKey, settings, longPressedVerse, setLongPressedVerse,
+    settings, longPressedVerse, setLongPressedVerse,
     pendingSurahScroll, clearPendingSurahScroll,
     pendingVerseHighlight, clearPendingVerseHighlight,
     khatmahRange, toggleChrome,
   } = useQuranContext();
+  const activeVerseKey = useActiveVerseKey();
   const insets = useSafeAreaInsets();
 
   const [selectedSurahId, setSelectedSurahId] = useState<number | null>(null);

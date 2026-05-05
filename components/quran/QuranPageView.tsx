@@ -10,7 +10,7 @@ import QuranVerseView from './QuranVerseView';
 import { fetchComposedMushafPage, getComposedPageSync } from '../../services/mushafApi';
 import type { ComposedMushafPage } from '../../services/mushafApi';
 import { useTheme } from '../../context/ThemeContext';
-import { useQuranContext } from '../../context/QuranContext';
+import { useQuranContext, useActiveVerseKey } from '../../context/QuranContext';
 import type { LongPressedVerse } from '../../context/QuranContext';
 import SurahDetailSheet from './SurahDetailSheet';
 
@@ -275,9 +275,10 @@ const SurahHeaderZone = memo(function SurahHeaderZone({
 function QuranPageView({ pageNumber, width, height, viewportHeight, screenWidth, isActive }: Props) {
   const { theme: T, isDark } = useTheme();
   const {
-    activeVerseKey, settings, longPressedVerse, setLongPressedVerse,
+    settings, longPressedVerse, setLongPressedVerse,
     toggleChrome, khatmahRange, bookmarks,
   } = useQuranContext();
+  const activeVerseKey = useActiveVerseKey();
 
   // Initialize synchronously from the in-memory composed-page cache when
   // available (pre-warmed by QuranPager). This skips the idle→loading→ready
@@ -466,6 +467,30 @@ function QuranPageView({ pageNumber, width, height, viewportHeight, screenWidth,
     ? `SURAH_${pressedSurahId}`
     : null;
 
+  // Per-page highlight filter: only pass a non-null key to MushafRenderer when
+  // the verse/key actually belongs to THIS page. For the 4 adjacent pages that
+  // are mounted but not visible, this keeps activeVerseKey as null→null across
+  // audio ticks so MushafRenderer's custom memo comparator blocks their re-renders.
+  const rawKey = highlightKey ?? pendingKey ?? surahKey;
+  const pageHighlightKey = (() => {
+    if (!rawKey) return null;
+    const slots = loadState.page.slots;
+    if (rawKey.startsWith('BSMLLH_')) {
+      const id = parseInt(rawKey.slice(7), 10);
+      return slots.some(s =>
+        (s.kind === 'bismillah' && s.surahId === id) ||
+        (s.kind === 'surah_header' && s.surah.id === id && s.bismillahEmbedded),
+      ) ? rawKey : null;
+    }
+    if (rawKey.startsWith('SURAH_')) {
+      const id = parseInt(rawKey.slice(6), 10);
+      return slots.some(s => s.kind === 'surah_header' && s.surah.id === id) ? rawKey : null;
+    }
+    return slots.some(s =>
+      s.kind === 'verse_line' && s.line.verseKeys.includes(rawKey),
+    ) ? rawKey : null;
+  })();
+
   return (
     <Animated.View style={{ width, height, opacity: fadeAnim }}>
       <MushafRenderer
@@ -475,7 +500,7 @@ function QuranPageView({ pageNumber, width, height, viewportHeight, screenWidth,
         viewportHeight={viewportHeight}
         screenWidth={screenWidth}
         isDark={isDark}
-        activeVerseKey={highlightKey ?? pendingKey ?? surahKey}
+        activeVerseKey={pageHighlightKey}
         khatmahMarkers={khatmahRange
           ? { startVerseKey: khatmahRange.startVerseKey, endVerseKey: khatmahRange.endVerseKey }
           : null}

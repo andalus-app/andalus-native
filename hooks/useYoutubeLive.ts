@@ -48,16 +48,17 @@ function isStaleUpcoming(stream: YTStream | null | undefined): boolean {
 }
 
 function pollInterval(stream: YTStream | null): number {
-  if (!stream) return 3 * 60 * 60 * 1000;
-  if (stream.status === 'live') return 60 * 1000;
+  if (!stream) return 3 * 3_600_000;             // 3 h — ingen stream
+  if (stream.status === 'live') return 60_000;    // 1 min — bekräfta fortfarande live
   if (stream.status === 'upcoming' && stream.scheduledStart) {
     const ms = new Date(stream.scheduledStart).getTime() - Date.now();
-    if (ms < 0)              return 60 * 1000;
-    if (ms < 30 * 60_000)   return 3 * 60_000;
-    if (ms < 6 * 3_600_000) return 15 * 60_000;
-    return 60 * 60_000;
+    if (ms < 0)              return 30_000;        // förbi starttid → 30 sek
+    if (ms < 15 * 60_000)   return 5 * 60_000;   // <15 min → 5 min
+    if (ms < 60 * 60_000)   return 30 * 60_000;  // <1 h → 30 min
+    if (ms < 2 * 3_600_000) return 30 * 60_000;  // <2 h → 30 min
+    return 3_600_000;                              // >2 h → 1 h
   }
-  return 3 * 60 * 60 * 1000;
+  return 3 * 3_600_000;
 }
 
 async function fetchStream(): Promise<YTStream | null> {
@@ -166,8 +167,8 @@ export function useYoutubeLive() {
       console.warn('[useYoutubeLive] fetch error:', msg);
       setApiError(msg);
       if (timerRef.current) clearTimeout(timerRef.current);
-      // Error back-off: retry in 5 minutes — polling must never permanently stop
-      timerRef.current = setTimeout(() => doFetch(), 5 * 60 * 1000);
+      // Error back-off: retry in 1 minute — polling must never permanently stop
+      timerRef.current = setTimeout(() => doFetch(), 60_000);
     }
   }
 

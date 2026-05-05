@@ -19,11 +19,11 @@ type LocationData = { lat: number; lng: number; city: string; suburb: string; co
 
 async function fetchMonthData(
   year: number, month: number,
-  lat: number, lng: number,
+  city: string, lat: number, lng: number,
   method: number, school: number,
 ): Promise<DayRow[]> {
-  // Try cache first
-  const cached = await getMonthFromCache(year, month, lat, lng, method, school);
+  // Try city-based cache first
+  const cached = await getMonthFromCache(year, month, city, method, school);
   if (cached) return cached;
 
   // Cache miss — fetch this month + next for midnight calc
@@ -258,7 +258,7 @@ export default function MonthlyScreen() {
     let cancelled = false;
 
     // Check cache synchronously-ish — show instantly if available
-    getMonthFromCache(year, month, location.lat, location.lng, method, school).then(cached => {
+    getMonthFromCache(year, month, location.city, method, school).then(cached => {
       if (cancelled) return;
       if (cached) {
         setRows(cached);
@@ -266,7 +266,7 @@ export default function MonthlyScreen() {
       } else {
         setLoading(true);
         setRows([]);
-        fetchMonthData(year, month, location.lat, location.lng, method, school)
+        fetchMonthData(year, month, location.city, location.lat, location.lng, method, school)
           .then(data => { if (!cancelled) { setRows(data); setLoading(false); } })
           .catch(() => { if (!cancelled) setLoading(false); });
       }
@@ -294,8 +294,10 @@ export default function MonthlyScreen() {
       const result    = await Print.printToFileAsync({ html, base64: false });
       const monthName = SWEDISH_MONTHS[month - 1];
       const locLabel  = location.suburb ? `${location.suburb}, ${location.city}` : location.city;
-      const safeName  = `Bönetider för ${locLabel} ${monthName} ${year}.pdf`.replace(/[/\\:*?"<>|]/g, '-');
-      const destUri   = `${FileSystem.cacheDirectory}${safeName}`;
+      // Commas break LaunchServices URL parsing — include in sanitized set.
+      // Use documentDirectory: iOS share sheet cannot reliably access cacheDirectory.
+      const safeName = `Bönetider för ${locLabel} ${monthName} ${year}.pdf`.replace(/[/\\:*?"<>|]/g, '-');
+      const destUri  = `${FileSystem.cacheDirectory}${safeName}`;
       await FileSystem.copyAsync({ from: result.uri, to: destUri });
       await Sharing.shareAsync(destUri, {
         mimeType: 'application/pdf',

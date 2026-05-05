@@ -333,7 +333,7 @@ canvas { display:block; }
     // ── Swedish meaning ───────────────────────────────────────────────────────
     var swStartY = translStartY + translBlockH + 24;
     ctx.font = 'italic ' + SWEDISH_SIZE + 'px -apple-system, system-ui, sans-serif';
-    ctx.fillStyle = C_MUTED;
+    ctx.fillStyle = C_TRANS;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'alphabetic';
     for (var sli = 0; sli < swedishLines.length; sli++) {
@@ -343,13 +343,13 @@ canvas { display:block; }
     // ── Förklaring ────────────────────────────────────────────────────────────
     if (hasForklaring) {
       var fSepY = swStartY + swBlockH + 22;
-      ctx.fillStyle = IS_DARK ? 'rgba(255,255,255,0.15)' : 'rgba(26,26,24,0.15)';
+      ctx.fillStyle = IS_DARK ? 'rgba(255,255,255,0.18)' : 'rgba(26,26,24,0.18)';
       ctx.fillRect(PAD_H, fSepY, W - PAD_H * 2, 1);
 
       var fStartY = fSepY + 1 + 22;
       ctx.direction = 'ltr';
       ctx.font = FORKL_SIZE + 'px -apple-system, system-ui, sans-serif';
-      ctx.fillStyle = IS_DARK ? 'rgba(255,255,255,0.60)' : 'rgba(26,26,24,0.50)';
+      ctx.fillStyle = C_MUTED;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'alphabetic';
       for (var fli = 0; fli < forklaringLines.length; fli++) {

@@ -237,13 +237,14 @@ export default function NextPrayerCard() {
         easing: Easing.out(Easing.cubic),
       }).start();
     } else {
-      // Normal per-second tick: animate smoothly to next position
-      Animated.timing(dashOffsetAnim, {
-        toValue: target,
-        duration: 950,
-        useNativeDriver: false,
-        easing: Easing.linear,
-      }).start();
+      // Normal per-second tick: instant snap.
+      // A 950ms Animated.timing with useNativeDriver:false was running at 60fps,
+      // cloning the RNSVGCircle shadow node and triggering a Yoga cascade on every
+      // frame. Over 5+ minutes this saturated the JS thread and caused 5-6s tab-
+      // switch delays. The ring updates once per second — same cadence as the text
+      // countdown — which is imperceptible to users.
+      dashOffsetAnim.stopAnimation();
+      dashOffsetAnim.setValue(target);
     }
   }, [info, appActive, dashOffsetAnim]);
 

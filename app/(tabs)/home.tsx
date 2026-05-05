@@ -576,11 +576,12 @@ export default function HomeScreen() {
   // Active home_top banner (alternates with greeting every 5 s) — stored in AsyncStorage only
   const [homeTopBanner, setHomeTopBanner] = useState<{ text: string; url: string; active: boolean } | null>(null);
   // 0 = greeting visible, 1 = banner visible
-  const homeTopPhase  = useRef<0 | 1>(0);
-  const greetingX     = useRef(new Animated.Value(0)).current;
-  const bannerX       = useRef(new Animated.Value(400)).current;
-  const homeTopTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const homeTopPhase     = useRef<0 | 1>(0);
+  const greetingX        = useRef(new Animated.Value(0)).current;
+  const bannerX          = useRef(new Animated.Value(400)).current;
+  const homeTopTimer     = useRef<ReturnType<typeof setTimeout> | null>(null);
   const restartBannerTimerRef = useRef<(() => void) | null>(null);
+  const bannerRunningRef = useRef(false);
 
   // ── Preferred name (greeting) ─────────────────────────────────────────────
   const [preferredName,    setPreferredName]    = useState<string | null>(null);
@@ -847,22 +848,23 @@ export default function HomeScreen() {
 
     function scheduleNext() {
       homeTopTimer.current = setTimeout(() => {
+        if (!bannerRunningRef.current) return;
         if (homeTopPhase.current === 0) {
-          // 1. Greeting flies out to the left
-          Animated.timing(greetingX, { toValue: -400, duration: OUT_MS, easing: easeIn, useNativeDriver: true }).start(() => {
-            // 2. Banner enters from the right, decelerates to rest
+          Animated.timing(greetingX, { toValue: -400, duration: OUT_MS, easing: easeIn, useNativeDriver: true }).start(({ finished }) => {
+            if (!bannerRunningRef.current || !finished) return;
             bannerX.setValue(400);
-            Animated.timing(bannerX, { toValue: 0, duration: IN_MS, easing: easeOut, useNativeDriver: true }).start(() => {
+            Animated.timing(bannerX, { toValue: 0, duration: IN_MS, easing: easeOut, useNativeDriver: true }).start(({ finished: f }) => {
+              if (!bannerRunningRef.current || !f) return;
               homeTopPhase.current = 1;
               scheduleNext();
             });
           });
         } else {
-          // 1. Banner flies out to the left
-          Animated.timing(bannerX, { toValue: -400, duration: OUT_MS, easing: easeIn, useNativeDriver: true }).start(() => {
-            // 2. Greeting enters from the right, decelerates to rest
+          Animated.timing(bannerX, { toValue: -400, duration: OUT_MS, easing: easeIn, useNativeDriver: true }).start(({ finished }) => {
+            if (!bannerRunningRef.current || !finished) return;
             greetingX.setValue(400);
-            Animated.timing(greetingX, { toValue: 0, duration: IN_MS, easing: easeOut, useNativeDriver: true }).start(() => {
+            Animated.timing(greetingX, { toValue: 0, duration: IN_MS, easing: easeOut, useNativeDriver: true }).start(({ finished: f }) => {
+              if (!bannerRunningRef.current || !f) return;
               homeTopPhase.current = 0;
               scheduleNext();
             });
@@ -885,6 +887,7 @@ export default function HomeScreen() {
 
   // Pause banner crossfade when leaving home tab; resume on return.
   useFocusEffect(useCallback(() => {
+    bannerRunningRef.current = true;
     if (homeTopBanner && homeTopTimer.current === null && restartBannerTimerRef.current) {
       greetingX.setValue(0);
       bannerX.setValue(400);
@@ -892,6 +895,7 @@ export default function HomeScreen() {
       restartBannerTimerRef.current();
     }
     return () => {
+      bannerRunningRef.current = false;
       if (homeTopTimer.current) {
         clearTimeout(homeTopTimer.current);
         homeTopTimer.current = null;
@@ -917,11 +921,12 @@ export default function HomeScreen() {
   useEffect(() => {
     const pollRef = { timer: null as ReturnType<typeof setInterval> | null };
 
-    const start = () => {
-      pollRef.timer = setInterval(() => { loadAnnouncements(); }, 60_000);
-    };
     const stop = () => {
       if (pollRef.timer) { clearInterval(pollRef.timer); pollRef.timer = null; }
+    };
+    const start = () => {
+      stop(); // always clear the old timer before creating a new one
+      pollRef.timer = setInterval(() => { loadAnnouncements(); }, 60_000);
     };
 
     start();

@@ -17,6 +17,7 @@ import { initStorage } from '../services/storage';
 import { syncKahfReminderOnStartup, savePushToken, syncAllahNamesReminderOnStartup } from '../services/notifications';
 import { syncZakatRemindersOnStartup } from '../services/zakatReminderService';
 import '../services/quranLastPage'; // side-effect: pre-warms last Quran page font + data at startup
+import '../services/backgroundLocation'; // side-effect: registers HIDAYAH_BACKGROUND_LOCATION task
 import { startGlobalCache } from '../services/quranOfflineManager';
 import CustomSplashScreen from '../components/SplashScreen';
 import { YoutubePlayerProvider } from '../context/YoutubePlayerContext';

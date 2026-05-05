@@ -9,6 +9,7 @@ import * as Location from 'expo-location';
 import HidayahLogo from '../../components/HidayahLogo';
 import SvgIcon from '../../components/SvgIcon';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getPrayerTimesWithFallback } from '../../services/monthlyCache';
 
 import { SvgXml } from 'react-native-svg';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -40,6 +41,12 @@ function calcMidnight(maghrib: string, fajrNext: string) {
   return `${String(Math.floor(midMin / 60)).padStart(2,'0')}:${String(midMin % 60).padStart(2,'0')}`;
 }
 function timeToMinutes(t: string) { const [h, m] = t.split(':').map(Number); return h * 60 + m; }
+function splitCity(combined: string): { suburb: string; cityName: string } {
+  if (!combined) return { suburb: '', cityName: '' };
+  const idx = combined.indexOf(', ');
+  if (idx === -1) return { suburb: '', cityName: combined };
+  return { suburb: combined.slice(0, idx), cityName: combined.slice(idx + 2) };
+}
 function nowMinutes() { const n = new Date(); return n.getHours() * 60 + n.getMinutes(); }
 function nowSeconds() { const n = new Date(); return n.getHours() * 3600 + n.getMinutes() * 60 + n.getSeconds(); }
 function getActivePrayer(timings: Record<string, string>) {
@@ -100,16 +107,12 @@ export default function PrayerTimesScreen() {
   }
   const _seed = _seedCountdown(_seedT, _seedTom);
 
-  // AppContext stores location.city as "${suburb}, ${city}" when a suburb exists
-  // (built in fetchAndSetTimes). Parse it here so the initial render already uses
-  // the correct split — suburb shown small, cityName shown large — with no jump.
-  function _splitCity(combined: string): { suburb: string; cityName: string } {
-    if (!combined) return { suburb: '', cityName: '' };
-    const idx = combined.indexOf(', ');
-    if (idx === -1) return { suburb: '', cityName: combined };
-    return { suburb: combined.slice(0, idx), cityName: combined.slice(idx + 2) };
-  }
-  const _initCity = _splitCity(app.location?.city || '');
+  // AppContext now stores suburb and city as separate fields — read them directly
+  // so the initial render shows the correct suburb/city split with no async jump.
+  const _initCity = {
+    suburb:   app.location?.suburb || '',
+    cityName: app.location?.city   || '',
+  };
 
   const [timings,         setTimings]         = useState<Record<string, string> | null>(_seedT);
   const [tomorrowTimings, setTomorrowTimings] = useState<Record<string, string> | null>(_seedTom);
@@ -329,9 +332,8 @@ export default function PrayerTimesScreen() {
     }
     setShowNoLocation(false);
 
-    let hasCached = false;
     try {
-      hasCached = await restoreCache();
+      await restoreCache();  // show stale data instantly; await is safe (AsyncStorage ~2ms vs GPS+API ~500ms+)
 
       let lat: number, lng: number;
       let resolvedCity = '', resolvedCountry = '', resolvedSuburb = '';
@@ -380,8 +382,32 @@ export default function PrayerTimesScreen() {
         }
       }
 
-      await fetchAndSetTimes(lat, lng, method, school, resolvedCity, resolvedCountry, resolvedSuburb);
-    } catch { /* Network or GPS failure — silently keep whatever cache was loaded */ }
+      try {
+        await fetchAndSetTimes(lat, lng, method, school, resolvedCity, resolvedCountry, resolvedSuburb);
+      } catch {
+        // API failed — fallback priority:
+        //   1. valid daily cache for today  (readDailyCache validates date)
+        //   2. yearly cache for today       (getTodayFromYearlyCache)
+        //   3. stale data from restoreCache() remains visible as emergency last resort
+        const local = await getPrayerTimesWithFallback(resolvedCity, lat, lng, method, school);
+        if (local) {
+          timingsRef.current         = local.todayT;
+          tomorrowTimingsRef.current = local.tomT;
+          loadedDateRef.current      = new Date().toDateString();
+          setTimings(local.todayT);
+          setTomorrowTimings(local.tomT);
+          const np       = getNextPrayer(local.todayT);
+          const fajrMin  = local.todayT['Fajr'] ? timeToMinutes(local.todayT['Fajr']) : -1;
+          const isPost   = np === 'Fajr' && fajrMin >= 0 && fajrMin <= nowMinutes();
+          const initTime = isPost && local.tomT?.['Fajr'] ? local.tomT['Fajr'] : (local.todayT[np] || '');
+          setNextPrayer(np);
+          setActivePrayer(getActivePrayer(local.todayT));
+          setCountdown(getTimeUntil(initTime));
+          startCountdownInterval();
+        }
+        // local === null: stale data from restoreCache() stays in refs — no action needed
+      }
+    } catch { /* GPS/location failure — silently keep whatever cache was loaded */ }
     lastFetchRef.current = Date.now();
     reloadingRef.current = false;
   }
@@ -486,10 +512,9 @@ export default function PrayerTimesScreen() {
     if (resolvedCity) {
       appDispatch({ type: 'SET_LOCATION', payload: {
         latitude: lat, longitude: lng,
-        city: resolvedSuburb && resolvedCity && resolvedSuburb !== resolvedCity
-          ? `${resolvedSuburb}, ${resolvedCity}`
-          : resolvedCity,
-        country: resolvedCountry,
+        city:     resolvedCity,
+        suburb:   resolvedSuburb,
+        country:  resolvedCountry,
       }});
     }
     appDispatch({ type: 'SET_PRAYER_TIMES',   payload: mapped });
@@ -639,7 +664,7 @@ export default function PrayerTimesScreen() {
           const raw = suburb && cityName
             ? `${suburb}, ${cityName}`
             : (cityName || suburb);
-          const split = _splitCity(raw);
+          const split = splitCity(raw);
           return (
             <>
               {split.suburb ? (

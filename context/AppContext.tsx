@@ -3,7 +3,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import { Platform } from 'react-native';
 import { fetchPrayerTimes, fetchTomorrowPrayerTimes, calcMidnight, reverseGeocode } from '../services/prayerApi';
-import { buildYearlyCache } from '../services/monthlyCache';
+import { startBackgroundLocationUpdates, stopBackgroundLocationUpdates } from '../services/backgroundLocation';
+import { buildYearlyCache, getPrayerTimesWithFallback } from '../services/monthlyCache';
 import { schedulePrayerNotifications, cancelPrayerNotifications, scheduleDhikrReminder, cancelDhikrReminder, scheduleFridayDuaReminder, cancelFridayDuaReminder, refreshPrePrayerReminderNotifications } from '../services/notifications';
 import { updateWidgetData } from '../modules/WidgetData';
 
@@ -33,7 +34,7 @@ function getTodayStr() {
   return String(n.getDate()).padStart(2,'0')+'-'+String(n.getMonth()+1).padStart(2,'0')+'-'+n.getFullYear();
 }
 
-type LocationType = { latitude: number; longitude: number; city: string; country: string } | null;
+type LocationType = { latitude: number; longitude: number; city: string; suburb?: string; country: string } | null;
 type Settings = { calculationMethod: number; school: number; notifications: boolean; announcementNotifications: boolean; autoLocation: boolean; dhikrReminder: boolean; fridayDuaReminder: boolean };
 type Timings  = Record<string, string> | null;
 
@@ -98,38 +99,8 @@ type ContextType = State & {
 const AppContext = createContext<ContextType | null>(null);
 
 // ── Cache helpers ──
-// The prayer tab (index.tsx) writes to the same key but in a different format:
-//   prayer tab: { date: toDateString(), timings, tomorrowTimings, hijri, ... }
-//   AppContext:  { key, date: getTodayStr(), todayT, tomT, hijri }
-// getCached handles both formats so AppContext can read the cache regardless of
-// which writer last touched it.
 function isCacheToday(dateStr: string): boolean {
   return dateStr === getTodayStr() || dateStr === new Date().toDateString();
-}
-
-async function getCached(loc: LocationType, method: number, school: number) {
-  if (!loc) return null;
-  try {
-    const raw = await AsyncStorage.getItem(CACHE_KEY);
-    if (!raw) return null;
-    const cached = JSON.parse(raw);
-    if (!isCacheToday(cached.date)) return null;
-
-    // AppContext format — validate location+method+school key
-    if ('key' in cached && 'todayT' in cached) {
-      const key = loc.latitude.toFixed(4)+','+loc.longitude.toFixed(4)+','+method+','+school;
-      if (cached.key !== key) return null;
-      return { todayT: cached.todayT, tomT: cached.tomT, hijri: cached.hijri };
-    }
-
-    // Prayer tab format — no key field; location is implicitly correct
-    // (the prayer tab always writes after fetching for the current GPS position)
-    if (cached.timings) {
-      return { todayT: cached.timings, tomT: cached.tomorrowTimings ?? null, hijri: cached.hijri ?? null };
-    }
-
-    return null;
-  } catch { return null; }
 }
 
 async function setCached(loc: LocationType, method: number, school: number, todayT: any, tomT: any, hijri: any) {
@@ -189,6 +160,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             }
           } catch {}
         }
+
+        // Refresh GPS silently in background so home screen and prayer tab both
+        // show up-to-date location without the user having to visit the prayer tab.
+        // Cached data is already displayed above — this only updates if location changed.
+        const autoLocation = savedSettings?.autoLocation ?? DEFAULT_SETTINGS.autoLocation;
+        if (autoLocation) {
+          refreshLocation().catch(() => {});
+        }
       } catch {}
     })();
   }, []);
@@ -209,22 +188,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     loadPrayers(state.location, state.settings.calculationMethod, state.settings.school);
   }, [state.location, state.settings.calculationMethod, state.settings.school]); // eslint-disable-line
 
+  // ── Bygg stadsbaserad bönetidscache direkt när plats/metod/skola ändras ──
+  // Cachen är stabil per stad — GPS-rörelse inom samma stad triggar aldrig ombyggnad.
+  useEffect(() => {
+    if (!state.location?.city) return;
+    const { latitude: lat, longitude: lng, city } = state.location;
+    const { calculationMethod: method, school } = state.settings;
+    buildYearlyCache(city, lat, lng, method, school).catch(() => {});
+  }, [state.location, state.settings.calculationMethod, state.settings.school]); // eslint-disable-line
+
   async function loadPrayers(loc: LocationType, method: number, school: number) {
     if (!loc) return;
     const key = loc.latitude.toFixed(4)+','+loc.longitude.toFixed(4)+','+method+','+school;
     if (lastFetchRef.current === key) return;
     lastFetchRef.current = key;
 
-    // Visa cache direkt (ingen laddningsflash) — samma som PWA
-    const cached = await getCached(loc, method, school);
-    if (cached) {
-      dispatch({ type: 'SET_PRAYER_TIMES',   payload: cached.todayT });
-      dispatch({ type: 'SET_TOMORROW_TIMES', payload: cached.tomT });
-      dispatch({ type: 'SET_HIJRI',          payload: cached.hijri });
+    // Fallback-kedja: dagscache → stadsbaserad årsvis cache → offline-fel
+    const localData = await getPrayerTimesWithFallback(loc.city, loc.latitude, loc.longitude, method, school);
+
+    if (localData) {
+      dispatch({ type: 'SET_PRAYER_TIMES',   payload: localData.todayT });
+      dispatch({ type: 'SET_TOMORROW_TIMES', payload: localData.tomT });
+      if (localData.hijri) dispatch({ type: 'SET_HIJRI', payload: localData.hijri });
       dispatch({ type: 'SET_ERROR',          payload: null });
     }
 
-    dispatch({ type: 'SET_LOADING', payload: !cached }); // spinner bara vid första laddning utan cache
+    dispatch({ type: 'SET_LOADING', payload: !localData });
     dispatch({ type: 'SET_ERROR',   payload: null });
 
     try {
@@ -275,19 +264,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         });
       }
 
-      // Pre-cache all 12 months in the background (fire-and-forget)
-      buildYearlyCache(
-        new Date().getFullYear(),
-        loc.latitude, loc.longitude,
-        method, school,
-      ).catch(() => {});
     } catch {
       lastFetchRef.current = null; // tillåt retry
-      if (!cached) dispatch({ type: 'SET_ERROR', payload: 'offline' });
+      if (!localData) dispatch({ type: 'SET_ERROR', payload: 'offline' });
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
     }
   }
+
+  // ── Bakgrundsplatstask: start/stop baserat på autoLocation ──
+  useEffect(() => {
+    if (state.settings.autoLocation) {
+      startBackgroundLocationUpdates().catch(() => {});
+    } else {
+      stopBackgroundLocationUpdates().catch(() => {});
+    }
+  }, [state.settings.autoLocation]); // eslint-disable-line
 
   // ── Hämta GPS + uppdatera plats ──
   // Begär foreground, sedan background (för widget). Kallar loadPrayers automatiskt
@@ -312,6 +304,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         latitude:  loc.coords.latitude,
         longitude: loc.coords.longitude,
         city:      geo.city,
+        suburb:    geo.subLocality,
         country:   geo.country,
       }});
     } catch {}

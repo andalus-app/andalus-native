@@ -2,7 +2,7 @@ import {
   View, Text, StyleSheet, Dimensions, Animated,
   ActivityIndicator, TouchableOpacity,
 } from 'react-native';
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useFocusEffect } from 'expo-router';
 import * as Location from 'expo-location';
 import { Qibla } from 'adhan';
@@ -322,11 +322,11 @@ export default function QiblaScreen() {
           if (qiblaDeg !== null) {
             const diff = normDeg(smoothRef.current - qiblaDeg);
             const isAligned = diff <= QIBLA_ALIGNED_THRESHOLD || diff >= 360 - QIBLA_ALIGNED_THRESHOLD;
-            if (isAligned && !alignedRef.current) {
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            if (isAligned !== alignedRef.current) {
+              if (isAligned) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              alignedRef.current = isAligned;
+              setAligned(isAligned);
             }
-            alignedRef.current = isAligned;
-            setAligned(isAligned);
           }
         }
         rafRef.current = requestAnimationFrame(loop);
@@ -335,6 +335,60 @@ export default function QiblaScreen() {
       return () => cancelAnimationFrame(rafRef.current);
     }, [qiblaDeg]),
   );
+
+  // ── Memoized SVG elements — only recomputed when theme / aligned changes, never at 60fps ──
+  const ticks = useMemo(() => Array.from({ length: 72 }, (_, i) => i * 5).map(d => {
+    const is90 = d % 90 === 0;
+    const is30 = d % 30 === 0;
+    const is10 = d % 10 === 0;
+    const tl   = is90 ? 18 : is30 ? 13 : is10 ? 8 : 4;
+    const sw   = is90 ? 2.5 : is30 ? 1.5 : 0.8;
+    const col  = is90 ? T.text : is30 ? T.textSecondary : T.textMuted;
+    const op   = is90 ? 1 : is30 ? 0.6 : 0.25;
+    return (
+      <Line key={d}
+        x1={px(d, TR - 1)} y1={py(d, TR - 1)}
+        x2={px(d, TR - tl)} y2={py(d, TR - tl)}
+        stroke={col} strokeWidth={sw} opacity={op} />
+    );
+  }), [T]);
+
+  const degLabels = useMemo(() => Array.from({ length: 12 }, (_, i) => i * 30).map(d => {
+    const lx = px(d, OR - 4);
+    const ly = py(d, OR - 4);
+    return (
+      <SvgText key={d}
+        x={lx} y={ly + 4.5}
+        textAnchor="middle"
+        fontSize={d % 90 === 0 ? 13 : 11}
+        fontWeight={d % 90 === 0 ? '700' : '400'}
+        fill={d % 90 === 0 ? T.text : T.textMuted}
+        opacity={d % 90 === 0 ? 1 : 0.6}
+        rotation={d}
+        origin={`${lx},${ly}`}>
+        {d}
+      </SvgText>
+    );
+  }), [T]);
+
+  const cardinalLetters = useMemo(() => (
+    [{ l: 'N', d: 0 }, { l: 'Ö', d: 90 }, { l: 'S', d: 180 }, { l: 'V', d: 270 }]
+      .map(({ l, d }) => {
+        const lx = px(d, TI + 20);
+        const ly = py(d, TI + 20);
+        return (
+          <SvgText key={l}
+            x={lx} y={ly + 6}
+            textAnchor="middle"
+            fontSize={20} fontWeight="800"
+            fill={l === 'N' ? (aligned ? GREEN : T.accent) : T.text}
+            rotation={d}
+            origin={`${lx},${ly}`}>
+            {l}
+          </SvgText>
+        );
+      })
+  ), [T, aligned]);
 
   function getInstruction(): string {
     if (qiblaDeg === null) return '';
@@ -359,62 +413,6 @@ export default function QiblaScreen() {
   // ── Kompass-beräkningar ────────────────────────────────────────────────────
   const ringRot    = -normDeg(displayHeading);
   const instruction = getInstruction();
-
-  // Ticks — 72 stycken, var 5°
-  const ticks = Array.from({ length: 72 }, (_, i) => i * 5).map(d => {
-    const is90 = d % 90 === 0;
-    const is30 = d % 30 === 0;
-    const is10 = d % 10 === 0;
-    const tl   = is90 ? 18 : is30 ? 13 : is10 ? 8 : 4;
-    const sw   = is90 ? 2.5 : is30 ? 1.5 : 0.8;
-    const col  = is90 ? T.text : is30 ? T.textSecondary : T.textMuted;
-    const op   = is90 ? 1 : is30 ? 0.6 : 0.25;
-    return (
-      <Line key={d}
-        x1={px(d, TR - 1)} y1={py(d, TR - 1)}
-        x2={px(d, TR - tl)} y2={py(d, TR - tl)}
-        stroke={col} strokeWidth={sw} opacity={op} />
-    );
-  });
-
-  // Gradsiffror utanför ringen, var 30°
-  const degLabels = Array.from({ length: 12 }, (_, i) => i * 30).map(d => {
-    const lx = px(d, OR - 4);
-    const ly = py(d, OR - 4);
-    return (
-      <SvgText key={d}
-        x={lx} y={ly + 4.5}
-        textAnchor="middle"
-        fontSize={d % 90 === 0 ? 13 : 11}
-        fontWeight={d % 90 === 0 ? '700' : '400'}
-        fill={d % 90 === 0 ? T.text : T.textMuted}
-        opacity={d % 90 === 0 ? 1 : 0.6}
-        rotation={d}
-        origin={`${lx},${ly}`}>
-        {d}
-      </SvgText>
-    );
-  });
-
-  // Kardinalletters inuti ringen
-  const cardinalLetters = (
-    [{ l: 'N', d: 0 }, { l: 'Ö', d: 90 }, { l: 'S', d: 180 }, { l: 'V', d: 270 }]
-      .map(({ l, d }) => {
-        const lx = px(d, TI + 20);
-        const ly = py(d, TI + 20);
-        return (
-          <SvgText key={l}
-            x={lx} y={ly + 6}
-            textAnchor="middle"
-            fontSize={20} fontWeight="800"
-            fill={l === 'N' ? (aligned ? GREEN : T.accent) : T.text}
-            rotation={d}
-            origin={`${lx},${ly}`}>
-            {l}
-          </SvgText>
-        );
-      })
-  );
 
   return (
     <View style={[s.container, { backgroundColor: T.bg }]}>

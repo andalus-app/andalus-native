@@ -53,11 +53,7 @@ export async function fetchQiblaDirection(lat: number, lng: number) {
 export async function reverseGeocode(lat: number, lng: number) {
   const { nativeReverseGeocode } = require('./geocoding');
   const geo = await nativeReverseGeocode(lat, lng);
-  // Combine subLocality + city for callers that only need a single display string
-  const combined = geo.subLocality && geo.city && geo.subLocality !== geo.city
-    ? geo.subLocality + ', ' + geo.city
-    : geo.city || geo.subLocality || '';
-  return { city: combined, country: geo.country };
+  return { city: geo.city || geo.subLocality || '', subLocality: geo.subLocality, country: geo.country };
 }
 export async function searchCity(query: string) {
   const res = await fetch('https://nominatim.openstreetmap.org/search?q='+encodeURIComponent(query)+'&format=json&limit=6&addressdetails=1', { headers: { 'Accept': 'application/json', 'User-Agent': 'AndalusApp/1.0' } });

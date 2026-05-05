@@ -7,11 +7,27 @@ import React, {
   useRef,
   useEffect,
 } from 'react';
-
 import { surahForPage, SURAH_INDEX, type SurahInfo } from '../data/surahIndex';
 import { useQuranSettings, QuranSettings, ReadingMode } from '../hooks/quran/useQuranSettings';
 import { saveLastPage, getCachedLastPage, whenLastPageReady } from '../services/quranLastPage';
 import { useQuranBookmarks, Bookmark } from '../hooks/quran/useQuranBookmarks';
+
+// ── Playback context (lightweight — changes 4×/s during audio) ────────────────
+//
+// Keeping activeVerseKey in the main QuranContext caused all consumers
+// (QuranHeader, QuranPagePicker, QuranPager, etc.) to re-render on every
+// audio tick, including all five mounted QuranPageView instances during the
+// slide-in animation. A dedicated context limits re-renders to the three
+// components that actually need the verse key (QuranPageView, QuranVerseView,
+// QuranAudioPlayer). All other consumers remain stable across audio ticks.
+
+type QuranPlaybackValue = { activeVerseKey: string | null };
+const QuranPlaybackContext = createContext<QuranPlaybackValue>({ activeVerseKey: null });
+
+/** Subscribe to the currently-playing verse key. Re-renders 4×/s during audio. */
+export function useActiveVerseKey(): string | null {
+  return useContext(QuranPlaybackContext).activeVerseKey;
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -85,10 +101,8 @@ type QuranContextValue = {
   // player can notify it after a background download completes.
   audioCacheRefreshRef: React.MutableRefObject<(() => void) | null>;
 
-  // Playback sync — active verse key being recited right now (null when stopped)
-  activeVerseKey: string | null;
-  // Called by QuranAudioPlayer on every status tick with the current verse + its page.
-  // Triggers highlight update and auto page advance when the page changes.
+  // Playback sync — called by QuranAudioPlayer on every status tick.
+  // activeVerseKey is in QuranPlaybackContext (useActiveVerseKey) — not here.
   setPlaybackVerse: (verseKey: string | null, pageNumber: number | null) => void;
 
   // Long-press verse selection — set by page/verse views, cleared by VerseActionsMenu
@@ -439,7 +453,6 @@ export function QuranProvider({ children }: Props) {
       goToBookmark,
       audioCommandsRef,
       audioCacheRefreshRef,
-      activeVerseKey,
       setPlaybackVerse,
       longPressedVerse,
       setLongPressedVerse,
@@ -482,7 +495,6 @@ export function QuranProvider({ children }: Props) {
       updateNote,
       isBookmarked,
       goToBookmark,
-      activeVerseKey,
       setPlaybackVerse,
       longPressedVerse,
       setLongPressedVerse,
@@ -497,5 +509,16 @@ export function QuranProvider({ children }: Props) {
     ],
   );
 
-  return <QuranContext.Provider value={value}>{children}</QuranContext.Provider>;
+  // activeVerseKey lives in QuranPlaybackContext so only the three components
+  // that need it (QuranPageView, QuranVerseView, QuranAudioPlayer) re-render
+  // on audio ticks — not the entire QuranContext consumer tree.
+  const playbackValue = useMemo(() => ({ activeVerseKey }), [activeVerseKey]);
+
+  return (
+    <QuranContext.Provider value={value}>
+      <QuranPlaybackContext.Provider value={playbackValue}>
+        {children}
+      </QuranPlaybackContext.Provider>
+    </QuranContext.Provider>
+  );
 }

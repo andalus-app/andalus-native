@@ -38,7 +38,7 @@ import { BlurView } from 'expo-blur';
 import { usePathname } from 'expo-router';
 import SvgIcon from '../SvgIcon';
 import { useTheme } from '../../context/ThemeContext';
-import { useQuranContext } from '../../context/QuranContext';
+import { useQuranContext, useActiveVerseKey } from '../../context/QuranContext';
 import { useNotification } from '../../context/NotificationContext';
 import { pauseYoutubePlayer } from '../../context/YoutubePlayerContext';
 import {
@@ -200,7 +200,6 @@ function QuranAudioPlayer() {
     currentSurahId,
     currentPage,
     setPlaybackVerse,
-    activeVerseKey,
     chromeVisible,
     contentsMenuOpen,
     settingsPanelOpen,
@@ -209,6 +208,7 @@ function QuranAudioPlayer() {
     longPressedVerse,
     clearUserPageOverride,
   } = useQuranContext();
+  const activeVerseKey = useActiveVerseKey();
 
   // This component is mounted at app root (see app/_layout.tsx) so the audio
   // engine — player ref, status listener, lock-screen integration, repeat
