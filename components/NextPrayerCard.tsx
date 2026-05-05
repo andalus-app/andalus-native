@@ -252,9 +252,9 @@ export default function NextPrayerCard() {
 
   const goldColor = isDark ? '#cab488' : T.accent;
 
-  // Location: rawCity is already "subLocality, city" or just "city" from prayerApi.reverseGeocode.
-  // Show both parts — ort first, then stad.
-  const cityDisplay = app.location?.city ?? '';
+  const cityDisplay = app.location
+    ? [app.location.suburb, app.location.city].filter(Boolean).join(', ')
+    : '';
 
   const dashOffset = info ? CIRCUMFERENCE * (1 - info.progress) : 0;
 
