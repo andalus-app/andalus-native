@@ -1,6 +1,6 @@
 import {
   View, Text, ScrollView, TouchableOpacity, Switch,
-  Modal, Alert, ActivityIndicator, Platform, TextInput, Animated, Easing,
+  Modal, Alert, ActivityIndicator, Platform, TextInput, Animated, Easing, Linking,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useState, useCallback, useRef, type ReactNode } from 'react';
@@ -158,6 +158,8 @@ export default function SettingsScreen() {
   const prCheckScale   = useRef(new Animated.Value(0)).current;
   const prCheckOpacity = useRef(new Animated.Value(0)).current;
   const prTextOpacity  = useRef(new Animated.Value(0)).current;
+  const [bgPermissionGranted, setBgPermissionGranted] = useState<boolean | null>(null);
+  const [bgBannerDismissed,   setBgBannerDismissed]   = useState(false);
   const [preferredName,    setPreferredName]    = useState<string | null>(null);
   const [nameModalVisible, setNameModalVisible] = useState(false);
   const nameSlideAnim = useRef(new Animated.Value(-400)).current;
@@ -201,6 +203,14 @@ export default function SettingsScreen() {
       }
       const name = await AsyncStorage.getItem('andalus_preferred_name');
       setPreferredName(name ?? null);
+      if (Platform.OS === 'ios') {
+        const [{ status: bgStatus }, dismissed] = await Promise.all([
+          Location.getBackgroundPermissionsAsync(),
+          AsyncStorage.getItem('hidayah_bg_banner_dismissed'),
+        ]);
+        setBgPermissionGranted(bgStatus === 'granted');
+        setBgBannerDismissed(dismissed === 'true');
+      }
     } catch {}
   }
 
@@ -360,6 +370,36 @@ export default function SettingsScreen() {
           right={<Switch value={settings.autoLocation}
             onValueChange={v => { saveSettings({autoLocation:v}); if(v) detectLocation(); }}
             trackColor={{false:T.border,true:T.accent}} thumbColor="#fff" ios_backgroundColor={T.border}/>}/>
+        {settings.autoLocation && bgPermissionGranted === false && Platform.OS === 'ios' && !bgBannerDismissed && (
+          <View style={{backgroundColor:T.card,borderRadius:14,borderWidth:0.5,borderColor:'#d97706',padding:14,marginBottom:8}}>
+            <View style={{flexDirection:'row',alignItems:'flex-start',gap:10}}>
+              <Text style={{flex:1,fontSize:13,color:T.text,lineHeight:18}}>
+                {'För automatisk uppdatering av bönetider och widget behöver platsåtkomst vara satt till Alltid.'}
+              </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setBgBannerDismissed(true);
+                  AsyncStorage.setItem('hidayah_bg_banner_dismissed', 'true').catch(() => {});
+                }}
+                hitSlop={{top:8,right:8,bottom:8,left:8}}
+                activeOpacity={0.6}>
+                <Text style={{fontSize:18,color:T.textMuted,lineHeight:20,marginTop:-1}}>×</Text>
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity
+              onPress={() => Linking.openSettings()}
+              style={{alignSelf:'flex-start',backgroundColor:'#d97706',borderRadius:8,paddingVertical:7,paddingHorizontal:14,marginTop:10}}
+              activeOpacity={0.8}>
+              <Text style={{fontSize:13,fontWeight:'600',color:'#fff'}}>Öppna inställningar</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+        {settings.autoLocation && bgPermissionGranted === false && Platform.OS === 'ios' && bgBannerDismissed && (
+          <View style={{flexDirection:'row',alignItems:'center',gap:6,paddingHorizontal:4,marginBottom:8}}>
+            <Text style={{fontSize:11,color:'#d97706'}}>⚠</Text>
+            <Text style={{fontSize:11,color:T.textMuted,flex:1}}>{'Widgeten kräver platsåtkomst "Alltid" — ändra i inställningar.'}</Text>
+          </View>
+        )}
         <Row T={T} iconName="map-point" label="Nuvarande stad" value={locationLabel}
           onPress={() => setCityModal(true)}
           right={detecting

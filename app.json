@@ -92,7 +92,8 @@
           "locationAlwaysAndWhenInUsePermission": "Hidayah använder din plats för att beräkna korrekta bönetider. Välj 'Alltid' så att widgeten uppdateras automatiskt.",
           "locationAlwaysPermission": "Tillåt alltid plats så att widgeten kan visa aktuella bönetider även när appen är stängd.",
           "locationWhenInUsePermission": "Hidayah använder din plats för att beräkna korrekta bönetider för din stad.",
-          "isAndroidBackgroundLocationEnabled": true
+          "isAndroidBackgroundLocationEnabled": true,
+          "isIosBackgroundLocationEnabled": true
         }
       ],
       "expo-asset"
