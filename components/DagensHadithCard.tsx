@@ -13,6 +13,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Animated, AppState, AppStateStatus, Text, TouchableOpacity, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/context/ThemeContext';
+import { useApp } from '@/context/AppContext';
 import { getDailyHadith } from '@/services/dailyReminder';
 
 const COLLAPSED_HEIGHT = 63;
@@ -32,6 +33,7 @@ function msUntilMidnight(): number {
 function DagensHadithCard() {
   const { theme: T, isDark } = useTheme();
   const router = useRouter();
+  const { hijriDate } = useApp();
   const titleColor = isDark ? 'rgba(255,255,255,0.72)' : 'rgba(0,0,0,0.68)';
   const bodyColor  = isDark ? 'rgba(255,255,255,0.90)' : 'rgba(0,0,0,0.86)';
   const [dateKey, setDateKey] = useState<string>(todayStr);
@@ -47,7 +49,7 @@ function DagensHadithCard() {
   const animHeight  = useRef(new Animated.Value(COLLAPSED_HEIGHT)).current;
   const expandedRef = useRef(false);
 
-  const hadith = useMemo(() => getDailyHadith(new Date()), [dateKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const hadith = useMemo(() => getDailyHadith(new Date(), hijriDate), [dateKey, hijriDate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Toggle expand/collapse with spring animation
   const toggleExpanded = useCallback(() => {

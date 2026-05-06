@@ -192,6 +192,12 @@
     "källa": "Sahih ul-Bukhari 1429"
   },
   {
+    "hadith_nr": 33,
+    "arabiska": "مَنْ صَامَ رَمَضَانَ، ثُمَّ أَتْبَعَهُ سِتًّا مِّن شَوَّالٍ، كَانَ كَصِيَامِ الدَّهْرِ",
+    "svenska": "Den som fastar hela månaden Ramadan och därefter följer upp det med sex dagar i Shawal (månaden efter) belönas som om han fastat året runt.",
+    "källa": "Sahih Muslim 1164"
+  },
+  {
     "hadith_nr": 34,
     "arabiska": "مَا مِنْ مُسْلِمٍ يَغْرِسُ غَرْسًا أَوْ يَزْرَعُ زَرْعًا فَيَأْكُلُ مِنْهُ طَيْرٌ أَوْ إِنْسَانٌ أَوْ بَهِيمَةٌ إِلَّا كَانَ لَهُ بِهِ صَدَقَةٌ",
     "svenska": "Profeten ﷺ sade: \"Om en muslim planterar något så kommer han att belönas så fort någon äter från det. Ja, även om någon skulle äta av det olovligt, eller om djur och fåglar äter av det. Han blir belönad för var och en som tar av det han planterat.\"",
@@ -312,6 +318,18 @@
     "källa": "Sahih Muslim 2965"
   },
   {
+    "hadith_nr": 54,
+    "arabiska": "إِنَّ رَجُلًا قَالَ لِلنَّبِيِّ ﷺ: أَوْصِنِي، قَالَ: لَا تَغْضَبْ، فَرَدَّدَ مِرَارًا، قَالَ: لَا تَغْضَبْ",
+    "svenska": "En man sade en gång till Profeten ﷺ: \"Ge mig ett råd!\" Han sade då: \"Bli inte arg!\" Mannen upprepade sin förfrågan flera gånger, och vid varje tillfälle svarade Profeten ﷺ: \"Bli inte arg!\"",
+    "källa": "Sahih ul-Bukhari 6116"
+  },
+  {
+    "hadith_nr": 55,
+    "arabiska": "لَيْسَ الشَّدِيدُ بِالصُّرَعَةِ، إِنَّمَا الشَّدِيدُ الَّذِي يَمْلِكُ نَفْسَهُ عِنْدَ الْغَضَبِ",
+    "svenska": "Den är inte stark, som kan brotta ner andra. Nej, den starke är den som lägger band på sig när han blir arg.",
+    "källa": "Sahih ul-Bukhari 6114"
+  },
+  {
     "hadith_nr": 56,
     "arabiska": "الْحَيَاءُ لاَ يَأْتِي إِلاَّ بِخَيْرٍ",
     "svenska": "Profeten ﷺ sade: \"Blyghet för bara med sig gott.\"",
@@ -348,6 +366,12 @@
     "källa": "Sahih Muslim 1893"
   },
   {
+    "hadith_nr": 62,
+    "arabiska": "إِنَّ اللهَ يَقْبَلُ تَوْبَةَ الْعَبْدِ مَا لَمْ يُغَرْغِرْ",
+    "svenska": "Allah accepterar sannerligen en tjänares tawbah så länge hans själ inte nått halsen.",
+    "källa": "Jami' ut-Tirmidhi 3537"
+  },
+  {
     "hadith_nr": 63,
     "arabiska": "كُلُّ أُمَّتِي يَدْخُلُونَ الْجَنَّةَ إِلاَّ مَنْ أَبَى. قَالُوا يَا رَسُولَ اللَّهِ وَمَنْ يَأْبَى قَالَ مَنْ أَطَاعَنِي دَخَلَ الْجَنَّةَ وَمَنْ عَصَانِي فَقَدْ أَبَى",
     "svenska": "Profeten ﷺ sade: \"Den som lyder mig träder in i Paradiset och den som är olydig mot mig har själv vägrat.\"",
@@ -360,10 +384,22 @@
     "källa": "Sahih ul-Bukhari 2697"
   },
   {
+    "hadith_nr": 65,
+    "arabiska": "مَنْ كَانَ يُؤْمِنُ بِاللهِ وَالْيَوْمِ الْآخِرِ فَلْيَقُلْ خَيْرًا أَوْ لِيَصْمُتْ",
+    "svenska": "Den som tror på Allah och den sista dagen ska se till att han talar gott eller inte tala alls.",
+    "källa": "Sahih ul-Bukhari 6138"
+  },
+  {
     "hadith_nr": 66,
     "arabiska": "مَنْ شَهِدَ أَنْ لاَ إِلَهَ إِلاَّ اللَّهُ وَأَنَّ مُحَمَّدًا رَسُولُ اللَّهِ حَرَّمَ اللَّهُ عَلَيْهِ النَّارَ",
     "svenska": "Profeten ﷺ sade: \"Helvetet kommer att förbjudas för alla som vittnar om att ingen gudom dyrkas i sanning förutom Allah och att Muhammad (ﷺ) är hans sändebud.\"",
     "källa": "Sahih Muslim 29"
+  },
+  {
+    "hadith_nr": 67,
+    "arabiska": "إِنَّمَا الصَّبْرُ عِنْدَ الصَّدْمَةِ الْأُولَى",
+    "svenska": "Det är vid chockens första skede som det sanna tålamodet ger sig till känna.",
+    "källa": "Sahih ul-Bukhari 1283"
   },
   {
     "hadith_nr": 68,
@@ -432,6 +468,12 @@
     "källa": "Sahih ul-Bukhari 1294"
   },
   {
+    "hadith_nr": 79,
+    "arabiska": "دَعْ مَا يَرِيبُكَ إِلَى مَا لَا يَرِيبُكَ؛ فَإِنَّ الصِّدْقَ طُمَأْنِينَةٌ، وَإِنَّ الْكَذِبَ رِيبَةٌ",
+    "svenska": "Lämna allting vars goda du tvivlar på och gör istället sådant som inte får dig att tvivla. Ty ärlighet leder till lugn medan lögn leder till tvivel.",
+    "källa": "Jami' ut-Tirmidhi 2518"
+  },
+  {
     "hadith_nr": 80,
     "arabiska": "مَا مِنْ أَيَّامٍ الْعَمَلُ الصَّالِحُ فِيهَا أَحَبُّ إِلَى اللَّهِ مِنْ هَذِهِ الأَيَّامِ - يَعْنِي أَيَّامَ الْعَشْرِ. قَالُوا يَا رَسُولَ اللَّهِ وَلا الْجِهَادُ فِي سَبِيلِ اللَّهِ؟ قَالَ وَلا الْجِهَادُ فِي سَبِيلِ اللَّهِ إِلا رَجُلٌ خَرَجَ بِنَفْسِهِ وَمَالِهِ فَلَمْ يَرْجِعْ مِنْ ذَلِكَ بِشَيْءٍ",
     "svenska": "Profeten ﷺ sade: \"Inga goda gärningar är så älskade hos Allah som de som görs under de tio första dagarna i dhul-hijjah. De sade: 'Allahs sändebud! Inte ens jihad för Allahs sak?' Han sade: 'Inte ens jihad för Allahs sak. Förutom, en man som med egna medel och med sitt eget liv på spel beger sig iväg för att kriga och sedan inte lyckas återvända varken med livet eller pengarna i behåll.'\"",
@@ -478,6 +520,12 @@
     "arabiska": "لَا يَرْحَمُ اللَّهُ مَنْ لَا يَرْحَمُ النَّاسَ",
     "svenska": "Profeten ﷺ sade: \"Allah visar inte barmhärtighet mot den som inte visar barmhärtighet mot människor.\"",
     "källa": "Sahih ul-Bukhari 7376"
+  },
+  {
+    "hadith_nr": 88,
+    "arabiska": "اتَّقِ اللهَ حَيْثُمَا كُنْتَ، وَأَتْبِعِ السَّيِّئَةَ الْحَسَنَةَ تَمْحُهَا، وَخَالِقِ النَّاسَ بِخُلُقٍ حَسَنٍ",
+    "svenska": "Var gudfruktig vart du än befinner dig! Följ upp dina dåliga handlingar med goda och uppför dig väl mot andra!",
+    "källa": "Jami' ut-Tirmidhi 1987"
   },
   {
     "hadith_nr": 89,
@@ -562,6 +610,12 @@
     "arabiska": "عَيْنَانِ لَا تَمَسُّهُمَا النَّارُ عَيْنٌ بَكَتْ مِنْ خَشْيَةِ اللَّهِ",
     "svenska": "Profeten ﷺ sade: \"Det finns två sorters ögon som Elden inte rör: Det ena är ögat som gråter i fruktan för Allah och det andra är det öga som bevakar [frontlinjerna] för Allahs skull.\"",
     "källa": "Jami’ ut-Tirmidhi 1639"
+  },
+  {
+    "hadith_nr": 103,
+    "arabiska": "أَنْ تَصَدَّقَ وَأَنْتَ صَحِيحٌ شَحِيحٌ تَخْشَى الْفَقْرَ، وَتَأْمُلُ الْغِنَى، وَلَا تُمْهِلْ حَتَّى إِذَا بَلَغَتِ الْحُلْقُومَ، قُلْتَ: لِفُلَانٍ كَذَا وَلِفُلَانٍ كَذَا، وَقَدْ كَانَ لِفُلَانٍ",
+    "svenska": "En man kom till Profeten ﷺ och sade: \"Allahs sändebud! Vilken sorts välgörenhet belönas man rikligast för?\" Han svarade: \"Det är när du skänker till andra medan du är frisk, som mest sparsam, samtidigt som du fruktar fattigdom och längtar efter att bli rik. Skjut inte upp givmildheten så att du först på din dödsbädd säger: ‘Det här ska den och den få och det här ska den och den få.’\"",
+    "källa": "Sahih ul-Bukhari 1419"
   },
   {
     "hadith_nr": 104,

@@ -74,11 +74,49 @@ export function getDailyQuranVerse(date: Date): QuranReminder {
   return buildDagensKoranversReminder(daysSinceRef(date));
 }
 
+export type HijriDateShape = { day: number; month: { number: number } };
+
+// Fästa hadither per hijri-datum (månad 1-indexerad, Dhul Hijjah = 12)
+const PINNED_HADITHS: Array<{ hijriMonth: number; hijriDay: number; hadithNr: number }> = [
+  { hijriMonth: 9,  hijriDay: 1, hadithNr: 141 }, // Ramadan 1 — fasta med iman
+  { hijriMonth: 9,  hijriDay: 2, hadithNr: 175 }, // Ramadan 2 — nattbön med iman
+  { hijriMonth: 9,  hijriDay: 3, hadithNr: 107 }, // Ramadan 3 — islams fem pelare
+  { hijriMonth: 9,  hijriDay: 4,  hadithNr: 70  }, // Ramadan 4 — kvinnan som ber, fastar och lyder
+  { hijriMonth: 9,  hijriDay: 20, hadithNr: 140 }, // Ramadan 20 — Laylat ul-Qadr
+  { hijriMonth: 9,  hijriDay: 22, hadithNr: 140 }, // Ramadan 22 — Laylat ul-Qadr
+  { hijriMonth: 9,  hijriDay: 24, hadithNr: 140 }, // Ramadan 24 — Laylat ul-Qadr
+  { hijriMonth: 9,  hijriDay: 26, hadithNr: 140 }, // Ramadan 26 — Laylat ul-Qadr
+  { hijriMonth: 9,  hijriDay: 28, hadithNr: 140 }, // Ramadan 28 — Laylat ul-Qadr
+  { hijriMonth: 12, hijriDay: 1, hadithNr: 80  }, // Dhul Hijjah 1 — de tio bästa dagarna
+  { hijriMonth: 12, hijriDay: 2, hadithNr: 107 }, // Dhul Hijjah 2 — islams fem pelare
+  { hijriMonth: 12, hijriDay: 3, hadithNr: 81  }, // Dhul Hijjah 3 — hajj utan synd
+  { hijriMonth: 12, hijriDay: 4, hadithNr: 113 }, // Dhul Hijjah 4 — fajr i församling + duha
+  { hijriMonth: 12, hijriDay: 8, hadithNr: 100 }, // Yawm at-Tarwiyah — Arafah-fasta
+  { hijriMonth: 12, hijriDay: 9, hadithNr: 82  }, // Yawm Arafah — frigörelse från elden
+];
+
 /**
  * Returns today's hadith. Cycles through all hadiths daily.
  * Same date → same hadith, always.
+ * Exceptions: pinned hadiths on specific Hijri dates (sourced from Aladhan via AppContext).
  */
-export function getDailyHadith(date: Date): HadithReminder {
+export function getDailyHadith(date: Date, hijri?: HijriDateShape | null): HadithReminder {
+  if (hijri) {
+    const pin = PINNED_HADITHS.find(
+      p => p.hijriMonth === hijri.month?.number && p.hijriDay === hijri.day,
+    );
+    if (pin) {
+      const pinned = HADITH_POOL.find(h => h.hadith_nr === pin.hadithNr)!;
+      return {
+        type:           'hadith',
+        hadithNr:       pinned.hadith_nr,
+        arabiska:       pinned.arabiska,
+        svenska:        pinned.svenska,
+        kalla:          pinned.källa,
+        navigationPath: `/hadith/${pinned.hadith_nr}`,
+      };
+    }
+  }
   const slot  = daysSinceRef(date);
   const entry = HADITH_POOL[slot % HADITH_POOL.length];
   return {

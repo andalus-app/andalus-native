@@ -41,3 +41,10 @@ app-example
 # generated native folders
 # /ios
 /android
+
+# Prayer import local files
+scripts/prayer-import/.venv/
+scripts/prayer-import/.env
+scripts/prayer-import/**/*.env
+scripts/prayer-import/*.log
+*.log
