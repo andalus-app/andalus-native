@@ -4,9 +4,23 @@ import * as Location from 'expo-location';
 import { Platform } from 'react-native';
 import { fetchPrayerTimes, fetchTomorrowPrayerTimes, calcMidnight, reverseGeocode } from '../services/prayerApi';
 import { startBackgroundLocationUpdates, stopBackgroundLocationUpdates } from '../services/backgroundLocation';
+import { warmupNativeCache } from '../services/nativeCacheWarmup';
 import { buildYearlyCache, getPrayerTimesWithFallback } from '../services/monthlyCache';
 import { schedulePrayerNotifications, cancelPrayerNotifications, scheduleDhikrReminder, cancelDhikrReminder, scheduleFridayDuaReminder, cancelFridayDuaReminder, refreshPrePrayerReminderNotifications } from '../services/notifications';
-import { updateWidgetData } from '../modules/WidgetData';
+import {
+  updateWidgetData,
+  setAutoLocation,
+  getBackgroundLocationUpdate,
+  clearNeedsPrayerRefresh,
+  setNativeSettings,
+  updateLocationIndexEntry,
+  upsertCityPrayerCache,
+  setNotificationScheduleState,
+  getNotificationScheduleState,
+  type NotificationScheduleState,
+} from '../modules/WidgetData';
+import { getEffectivePrayerCity } from '../services/monthlyCache';
+import { getPrayerMonthFromSupabaseFallback } from '../services/supabasePrayerFallback';
 
 // ── Samma CALC_METHODS som PWA (method=3 = Muslim World League) ──
 export const CALC_METHODS = {
@@ -113,7 +127,10 @@ async function setCached(loc: LocationType, method: number, school: number, toda
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState);
-  const lastFetchRef = useRef<string | null>(null);
+  const lastFetchRef       = useRef<string | null>(null);
+  // Set when native background location detected a move while app was closed.
+  // Cleared only after a successful loadPrayers() call — never cleared on error.
+  const pendingBgClearRef  = useRef(false);
 
   // ── Ladda sparad state vid start ──
   // Reads STORAGE_KEY and CACHE_KEY in parallel so prayer times can be hydrated
@@ -161,6 +178,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           } catch {}
         }
 
+        // Check if native significant-location monitor detected a new position while
+        // the app was closed. Mark pendingBgClearRef so clearNeedsPrayerRefresh() is
+        // called only after loadPrayers() succeeds. If the refresh fails (network down,
+        // GPS timeout, API error), the flag stays set and will be retried on next open.
+        if (Platform.OS === 'ios') {
+          getBackgroundLocationUpdate()
+            .then(bgUpdate => { if (bgUpdate) pendingBgClearRef.current = true; })
+            .catch(() => {});
+        }
+
         // Refresh GPS silently in background so home screen and prayer tab both
         // show up-to-date location without the user having to visit the prayer tab.
         // Cached data is already displayed above — this only updates if location changed.
@@ -188,13 +215,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     loadPrayers(state.location, state.settings.calculationMethod, state.settings.school);
   }, [state.location, state.settings.calculationMethod, state.settings.school]); // eslint-disable-line
 
-  // ── Bygg stadsbaserad bönetidscache direkt när plats/metod/skola ändras ──
+  // ── Bygg stadsbaserad bönetidscache + spegla stadsindex till App Group ──
   // Cachen är stabil per stad — GPS-rörelse inom samma stad triggar aldrig ombyggnad.
+  // App Group-indexet låter den native schemaläggaren hitta närmaste cachade stad
+  // utan nätverksåtkomst eller JS-körning.
   useEffect(() => {
     if (!state.location?.city) return;
     const { latitude: lat, longitude: lng, city } = state.location;
     const { calculationMethod: method, school } = state.settings;
     buildYearlyCache(city, lat, lng, method, school).catch(() => {});
+    if (Platform.OS === 'ios') {
+      const effectiveCity = getEffectivePrayerCity(city);
+      const cityKey = `${effectiveCity.toLowerCase()}_${method}_${school}`;
+      updateLocationIndexEntry({ cityKey, displayName: effectiveCity, lat, lng, method, school })
+        .catch(() => {});
+    }
   }, [state.location, state.settings.calculationMethod, state.settings.school]); // eslint-disable-line
 
   async function loadPrayers(loc: LocationType, method: number, school: number) {
@@ -262,24 +297,154 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }).catch(() => {
           // Non-fatal — widget will continue showing previous data
         });
+
+        // Mirror today/tomorrow prayer times to App Group so the native notification
+        // scheduler can reschedule in the background without network access.
+        const effectiveCity  = getEffectivePrayerCity(loc.city);
+        const cityKey        = `${effectiveCity.toLowerCase()}_${method}_${school}`;
+        const todayDate      = new Date();
+        const tomorrowDate   = new Date(Date.now() + 86_400_000);
+        upsertCityPrayerCache({
+          cityKey,
+          displayName:  effectiveCity,
+          lat:          loc.latitude,
+          lng:          loc.longitude,
+          date:         todayDate.toISOString().slice(0, 10),
+          tomorrowDate: tomorrowDate.toISOString().slice(0, 10),
+          method,
+          school,
+          todayT,
+          tomT: tomT ?? null,
+          updatedAt: Date.now() / 1000,
+        }).catch(() => {});
+
+        // Warmup all 25 bundled fallback cities in the native cache so native
+        // can reschedule notifications for any Swedish city even on first visit.
+        // Fire-and-forget — does not block main fetch. Skips cities already fresh.
+        warmupNativeCache(method, school).catch((err) => {
+          if (__DEV__) console.warn('[NativeCacheWarmup] failed', err);
+        });
+
+        // Write schedule state after this JS refresh so the native scheduler can
+        // skip a redundant reschedule when it next wakes from a location event.
+        AsyncStorage.getItem('hidayah_prayer_reminder_offset').then(raw => {
+          const offset = raw ? parseInt(raw, 10) : 0;
+          const scheduleState: NotificationScheduleState = {
+            version:         1,
+            owner:           'js',
+            source:          'app_open',
+            cityKey,
+            displayName:     effectiveCity,
+            lat:             loc.latitude,
+            lng:             loc.longitude,
+            date:            todayDate.toISOString().slice(0, 10),
+            method,
+            school,
+            todayT,
+            tomT:            tomT ?? undefined,
+            dhikrEnabled:    state.settings.dhikrReminder,
+            prePrayerOffset: isNaN(offset) ? 0 : offset,
+            updatedAt:       Date.now() / 1000,
+          };
+          return setNotificationScheduleState(scheduleState);
+        }).catch(() => {});
+
+        // Clear the background-location signal only on success. If the network
+        // call above failed, we never reach this line — needsPrayerRefresh stays
+        // set so the next app open will retry the full refresh.
+        if (pendingBgClearRef.current) {
+          pendingBgClearRef.current = false;
+          clearNeedsPrayerRefresh().catch(() => {});
+        }
       }
 
     } catch {
       lastFetchRef.current = null; // tillåt retry
-      if (!localData) dispatch({ type: 'SET_ERROR', payload: 'offline' });
+      if (!localData) {
+        // Daily cache, yearly cache, and Aladhan all failed — last-resort Supabase SCB fallback
+        let fallbackSucceeded = false;
+        try {
+          console.log('[PrayerFallback] Supabase fallback attempted');
+          const fallback = await getPrayerMonthFromSupabaseFallback({
+            latitude:  loc.latitude,
+            longitude: loc.longitude,
+            date:      new Date(),
+          });
+          if (fallback) {
+            console.log(`[PrayerFallback] Supabase fallback succeeded: ${fallback.locationName} (${fallback.matchType})`);
+            dispatch({ type: 'SET_PRAYER_TIMES',   payload: fallback.todayT });
+            dispatch({ type: 'SET_TOMORROW_TIMES', payload: fallback.tomT });
+            if (fallback.hijri) dispatch({ type: 'SET_HIJRI', payload: fallback.hijri });
+            dispatch({ type: 'SET_ERROR',          payload: null });
+            await setCached(loc, method, school, fallback.todayT, fallback.tomT, fallback.hijri);
+            if (Platform.OS === 'ios') {
+              const h = fallback.hijri;
+              updateWidgetData({
+                city:      loc.city,
+                latitude:  loc.latitude,
+                longitude: loc.longitude,
+                prayers: [
+                  { name: 'Fajr',       time: fallback.todayT.Fajr    ?? '' },
+                  { name: 'Soluppgång', time: fallback.todayT.Sunrise  ?? '' },
+                  { name: 'Dhuhr',      time: fallback.todayT.Dhuhr   ?? '' },
+                  { name: 'Asr',        time: fallback.todayT.Asr     ?? '' },
+                  { name: 'Maghrib',    time: fallback.todayT.Maghrib ?? '' },
+                  { name: 'Isha',       time: fallback.todayT.Isha    ?? '' },
+                ],
+                hijri: {
+                  day:         h ? parseInt(h.day,          10) : 0,
+                  monthNumber: h ? parseInt(h.month.number, 10) : 0,
+                  monthNameEn: h?.month.en ?? '',
+                  year:        h ? parseInt(h.year,         10) : 0,
+                },
+                date:      new Date().toISOString().slice(0, 10),
+                timestamp: Date.now() / 1000,
+              }).catch(() => {});
+            }
+            fallbackSucceeded = true;
+          }
+        } catch (fbErr) {
+          console.warn('[PrayerFallback] Supabase fallback failed:', fbErr instanceof Error ? fbErr.message : 'unknown');
+        }
+        if (!fallbackSucceeded) {
+          dispatch({ type: 'SET_ERROR', payload: 'offline' });
+        }
+      }
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
     }
   }
 
-  // ── Bakgrundsplatstask: start/stop baserat på autoLocation ──
+  // ── Bakgrundsplatstask: start/stop + mirror settings to App Group ──
+  // App Group copies let the native layer (LocationBackgroundManager +
+  // NativeNotificationScheduler) read settings without the JS runtime.
   useEffect(() => {
+    if (Platform.OS === 'ios') {
+      setAutoLocation(state.settings.autoLocation).catch(() => {});
+      // Also read the pre-prayer reminder offset (stored separately from main settings)
+      AsyncStorage.getItem('hidayah_prayer_reminder_offset').then(raw => {
+        const offset = raw ? parseInt(raw, 10) : 0;
+        return setNativeSettings({
+          notifications:           state.settings.notifications,
+          calculationMethod:       state.settings.calculationMethod,
+          school:                  state.settings.school,
+          dhikrReminder:           state.settings.dhikrReminder,
+          prePrayerReminderOffset: isNaN(offset) ? 0 : offset,
+        });
+      }).catch(() => {});
+    }
     if (state.settings.autoLocation) {
       startBackgroundLocationUpdates().catch(() => {});
     } else {
       stopBackgroundLocationUpdates().catch(() => {});
     }
-  }, [state.settings.autoLocation]); // eslint-disable-line
+  }, [ // eslint-disable-line
+    state.settings.autoLocation,
+    state.settings.notifications,
+    state.settings.calculationMethod,
+    state.settings.school,
+    state.settings.dhikrReminder,
+  ]);
 
   // ── Hämta GPS + uppdatera plats ──
   // Begär foreground, sedan background (för widget). Kallar loadPrayers automatiskt

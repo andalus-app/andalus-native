@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { supabase } from '../lib/supabase';
+import { getNotificationScheduleState } from '../modules/WidgetData';
 
 // Lazy-load expo-notifications so a missing native module (e.g. in Expo Go or
 // before a native rebuild) never crashes the app — all functions degrade to no-ops.
@@ -56,6 +57,29 @@ export async function requestNotificationPermission(): Promise<boolean> {
   } catch { return false; }
 }
 
+// ── Stable prayer notification identifiers (shared with NativeNotificationScheduler.swift) ──
+// Both JS and native cancel only these before rescheduling, preventing duplicates.
+export const PRAYER_NOTIFICATION_IDS: string[] = (() => {
+  const slots   = ['today', 'tomorrow'];
+  const prayers = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
+  return slots.flatMap(s => prayers.map(p => `${ID_PREFIX}${s}-${p}`));
+})();
+
+function timeToMin(t: string | undefined): number {
+  if (!t) return -1;
+  const [h, m] = t.split(':').map(Number);
+  return isNaN(h) || isNaN(m) ? -1 : h * 60 + m;
+}
+
+function scheduleStateUnchanged(
+  todayTimes: Record<string, string>,
+  existing: Awaited<ReturnType<typeof getNotificationScheduleState>>,
+): boolean {
+  if (!existing?.todayT) return false;
+  const prayers = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
+  return prayers.every(p => Math.abs(timeToMin(todayTimes[p]) - timeToMin(existing.todayT![p])) < 1);
+}
+
 // ── Schedule today + tomorrow ────────────────────────────────────────────────
 export async function schedulePrayerNotifications(
   todayTimes:    Record<string, string>,
@@ -70,6 +94,14 @@ export async function schedulePrayerNotifications(
     // Never auto-request here — onboarding/settings is responsible for that.
     const { status } = await N.getPermissionsAsync();
     if (status !== 'granted') return;
+
+    // Skip rescheduling if the existing schedule state (written by JS or native)
+    // already reflects these exact times — avoids a redundant cancel+reschedule
+    // cycle that would briefly clear notifications before restoring them.
+    if (Platform.OS === 'ios') {
+      const existing = await getNotificationScheduleState().catch(() => null);
+      if (existing && scheduleStateUnchanged(todayTimes, existing)) return;
+    }
 
     await cancelPrayerNotifications();
 

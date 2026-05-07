@@ -125,6 +125,10 @@ Rule:
 
 * Use Aladhan
 * Default method: Muslim World League
+* Source priority: daily cache → yearly cache (andalus_yearly_cache_v3) → Aladhan live → Supabase SCB polygon fallback → offline error
+* Supabase fallback (`services/supabasePrayerFallback.ts`) is last-resort only — never called during a successful app startup
+* Supabase fallback uses RPC `get_prayer_month_by_position` with SCB polygon resolution (avoids wrong nearest-centroid city matches)
+* Fallback cache key: `andalus_supabase_prayer_fallback_v1`
 
 ### Notifications
 

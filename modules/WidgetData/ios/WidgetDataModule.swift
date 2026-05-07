@@ -57,5 +57,172 @@ public class WidgetDataModule: Module {
             WidgetCenter.shared.reloadAllTimelines()
             promise.resolve(nil)
         }
+
+        // setAutoLocation(enabled: Bool) → void
+        // Mirrors the JS autoLocation setting to App Group so the native
+        // LocationBackgroundManager can respect it without the JS runtime.
+        AsyncFunction("setAutoLocation") { (enabled: Bool, promise: Promise) in
+            guard let defaults = UserDefaults(suiteName: self.appGroupID) else {
+                promise.resolve(nil); return
+            }
+            defaults.set(enabled, forKey: "andalus_autoLocation")
+            defaults.synchronize()
+            NSLog("[WidgetData] andalus_autoLocation = %@", enabled ? "true" : "false")
+            promise.resolve(nil)
+        }
+
+        // getBackgroundLocationUpdate() → { latitude, longitude, detectedAt } | null
+        // Returns non-nil only when the native location monitor detected a new position
+        // and the JS layer hasn't handled it yet (needsPrayerRefresh == true).
+        AsyncFunction("getBackgroundLocationUpdate") { (promise: Promise) in
+            guard let defaults = UserDefaults(suiteName: self.appGroupID) else {
+                promise.resolve(nil); return
+            }
+            guard defaults.bool(forKey: "needsPrayerRefresh") else {
+                promise.resolve(nil); return
+            }
+            let lat = defaults.double(forKey: "prayer_lat")
+            let lng = defaults.double(forKey: "prayer_lng")
+            guard lat != 0, lng != 0 else {
+                promise.resolve(nil); return
+            }
+            let detectedAt = defaults.double(forKey: "backgroundLocationDetectedAt")
+            promise.resolve([
+                "latitude":   lat,
+                "longitude":  lng,
+                "detectedAt": detectedAt,
+            ] as [String: Any])
+        }
+
+        // clearNeedsPrayerRefresh() → void
+        // Called by JS after a successful full prayer-time refresh. No-op if
+        // the flag was never set (safe to call unconditionally on each refresh).
+        AsyncFunction("clearNeedsPrayerRefresh") { (promise: Promise) in
+            guard let defaults = UserDefaults(suiteName: self.appGroupID) else {
+                promise.resolve(nil); return
+            }
+            let wasSet = defaults.bool(forKey: "needsPrayerRefresh")
+            defaults.removeObject(forKey: "needsPrayerRefresh")
+            defaults.removeObject(forKey: "backgroundLocationDetectedAt")
+            if wasSet {
+                defaults.synchronize()
+                NSLog("[WidgetData] needsPrayerRefresh cleared after successful refresh")
+            }
+            promise.resolve(nil)
+        }
+
+        // setNativeSettings(settings: Object) → void
+        // Mirrors notification-relevant JS settings to App Group so the native
+        // NativeNotificationScheduler can read them without the JS runtime.
+        AsyncFunction("setNativeSettings") { (settings: [String: Any], promise: Promise) in
+            guard let defaults = UserDefaults(suiteName: self.appGroupID) else {
+                promise.resolve(nil); return
+            }
+            if let data = try? JSONSerialization.data(withJSONObject: settings) {
+                defaults.set(data, forKey: "andalus_settings_native")
+                defaults.synchronize()
+                NSLog("[WidgetData] andalus_settings_native updated")
+            }
+            promise.resolve(nil)
+        }
+
+        // updateLocationIndexEntry(entry: Object) → void
+        // Reads the existing location index from App Group, upserts the given entry
+        // (matched by cityKey), and writes back. Idempotent — safe to call on every
+        // city resolve.
+        AsyncFunction("updateLocationIndexEntry") { (entry: [String: Any], promise: Promise) in
+            guard let defaults = UserDefaults(suiteName: self.appGroupID) else {
+                promise.resolve(nil); return
+            }
+            guard let cityKey = entry["cityKey"] as? String, !cityKey.isEmpty else {
+                promise.resolve(nil); return
+            }
+
+            // Decode existing index; start with empty array on missing or corrupt data.
+            var entries: [[String: Any]] = []
+            if let existing = defaults.data(forKey: "andalus_location_index"),
+               let decoded  = try? JSONSerialization.jsonObject(with: existing) as? [[String: Any]] {
+                entries = decoded.filter { ($0["cityKey"] as? String) != cityKey }
+            }
+            entries.append(entry)
+
+            if let data = try? JSONSerialization.data(withJSONObject: entries) {
+                defaults.set(data, forKey: "andalus_location_index")
+                defaults.synchronize()
+                NSLog("[WidgetData] location index updated: %@ (%d entries)", cityKey, entries.count)
+            }
+            promise.resolve(nil)
+        }
+
+        // upsertCityPrayerCache(cache: Object) → void
+        // Reads andalus_multi_city_cache (dict of cityKey → cache), upserts the entry
+        // for the given city, and writes back. Entries for old days are pruned to keep
+        // the cache lean (only last 7 days per city).
+        AsyncFunction("upsertCityPrayerCache") { (cache: [String: Any], promise: Promise) in
+            guard let defaults = UserDefaults(suiteName: self.appGroupID) else {
+                promise.resolve(nil); return
+            }
+            guard let cityKey = cache["cityKey"] as? String, !cityKey.isEmpty else {
+                promise.resolve(nil); return
+            }
+
+            var dict: [String: Any] = [:]
+            if let existing = defaults.data(forKey: "andalus_multi_city_cache"),
+               let decoded  = try? JSONSerialization.jsonObject(with: existing) as? [String: Any] {
+                dict = decoded
+            }
+            dict[cityKey] = cache
+
+            // Prune entries not updated in > 7 days to bound cache size.
+            let cutoff = Date().timeIntervalSince1970 - 7 * 86_400
+            dict = dict.filter { (_, v) in
+                guard let entry = v as? [String: Any],
+                      let ts    = entry["updatedAt"] as? Double else { return false }
+                return ts >= cutoff
+            }
+
+            if let data = try? JSONSerialization.data(withJSONObject: dict) {
+                defaults.set(data, forKey: "andalus_multi_city_cache")
+                defaults.synchronize()
+                NSLog("[WidgetData] multi-city cache upserted: %@ (%d cities)", cityKey, dict.count)
+            }
+            promise.resolve(nil)
+        }
+
+        // setNotificationScheduleState(state: Object) → void
+        // Writes the JS notification schedule metadata to App Group so the native
+        // scheduler can read it and skip rescheduling when times are unchanged.
+        AsyncFunction("setNotificationScheduleState") { (state: [String: Any], promise: Promise) in
+            guard let defaults = UserDefaults(suiteName: self.appGroupID) else {
+                promise.resolve(nil); return
+            }
+            if let data = try? JSONSerialization.data(withJSONObject: state) {
+                defaults.set(data, forKey: "andalus_notification_schedule_state")
+                defaults.synchronize()
+                NSLog("[WidgetData] notification schedule state updated (owner=%@)",
+                      (state["owner"] as? String) ?? "?")
+            }
+            promise.resolve(nil)
+        }
+
+        // getNotificationScheduleState() → Object | null
+        AsyncFunction("getNotificationScheduleState") { (promise: Promise) in
+            guard let defaults = UserDefaults(suiteName: self.appGroupID),
+                  let data     = defaults.data(forKey: "andalus_notification_schedule_state"),
+                  let obj      = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            else { promise.resolve(nil); return }
+            promise.resolve(obj)
+        }
+
+        // getMultiCityCache() → Object (dict of cityKey → cache entry)
+        // Used by nativeCacheWarmup.ts to check which cities are already fresh
+        // before deciding whether to fetch from the network.
+        AsyncFunction("getMultiCityCache") { (promise: Promise) in
+            guard let defaults = UserDefaults(suiteName: self.appGroupID),
+                  let data     = defaults.data(forKey: "andalus_multi_city_cache"),
+                  let obj      = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            else { promise.resolve([:] as [String: Any]); return }
+            promise.resolve(obj)
+        }
     }
 }

@@ -36,6 +36,7 @@ private struct StoredData: Decodable {
     let longitude: Double?
     let prayers:   [StoredPrayer]
     let date:      String    // "yyyy-MM-dd" in UTC (JS toISOString)
+    let timestamp: Double?   // Unix seconds — absent in older payloads; nil hides the timestamp label
 }
 
 // MARK: - Domain model
@@ -47,11 +48,12 @@ struct Prayer: Identifiable {
 }
 
 struct PrayerEntry: TimelineEntry {
-    let date:       Date
-    let current:    Prayer
-    let next:       Prayer
-    let allPrayers: [Prayer]
-    let city:       String
+    let date:          Date
+    let current:       Prayer
+    let next:          Prayer
+    let allPrayers:    [Prayer]
+    let city:          String
+    let lastUpdatedAt: Date?   // when widget data was last written; nil hides the timestamp
 
     static func placeholder(at now: Date = .now) -> PrayerEntry {
         let offsets: [(String, Double)] = [
@@ -61,7 +63,7 @@ struct PrayerEntry: TimelineEntry {
         ]
         let all = offsets.map { Prayer(name: $0.0, time: now.addingTimeInterval($0.1)) }
         return PrayerEntry(date: now, current: all[2], next: all[3],
-                           allPrayers: all, city: "Stockholm")
+                           allPrayers: all, city: "Stockholm", lastUpdatedAt: nil)
     }
 }
 
@@ -207,16 +209,16 @@ private func currentAndNext(prayers: [Prayer], at now: Date) -> (Prayer, Prayer)
     return (current, next)
 }
 
-private func buildEntries(prayers: [Prayer], city: String) -> [PrayerEntry] {
+private func buildEntries(prayers: [Prayer], city: String, lastUpdatedAt: Date? = nil) -> [PrayerEntry] {
     let now = Date()
     var entries: [PrayerEntry] = []
     let (cur0, nxt0) = currentAndNext(prayers: prayers, at: now)
     entries.append(PrayerEntry(date: now, current: cur0, next: nxt0,
-                               allPrayers: prayers, city: city))
+                               allPrayers: prayers, city: city, lastUpdatedAt: lastUpdatedAt))
     for prayer in prayers where prayer.time > now {
         let (cur, nxt) = currentAndNext(prayers: prayers, at: prayer.time)
         entries.append(PrayerEntry(date: prayer.time, current: cur, next: nxt,
-                                   allPrayers: prayers, city: city))
+                                   allPrayers: prayers, city: city, lastUpdatedAt: lastUpdatedAt))
     }
     return entries
 }
@@ -234,8 +236,10 @@ struct PrayerProvider: TimelineProvider {
             if !prayers.isEmpty {
                 let now = Date()
                 let (cur, nxt) = currentAndNext(prayers: prayers, at: now)
+                let lastUpdatedAt = stored.timestamp.map { Date(timeIntervalSince1970: $0) }
                 completion(PrayerEntry(date: now, current: cur, next: nxt,
-                                       allPrayers: prayers, city: stored.city))
+                                       allPrayers: prayers, city: stored.city,
+                                       lastUpdatedAt: lastUpdatedAt))
                 return
             }
         }
@@ -247,17 +251,42 @@ struct PrayerProvider: TimelineProvider {
 
         let midnight = Calendar.current.startOfDay(for: Date()).addingTimeInterval(86_400 + 60)
 
-        // ── Path 1: App Groups has fresh data for today ───────────────────────
-        if let stored = readAppGroupData() {
+        // If the native background location monitor detected a new position, the stored
+        // prayer data belongs to the old location. Bypass Path-1 so Path-2 fetches fresh
+        // prayer times using the updated prayer_lat/prayer_lng coordinates.
+        // needsPrayerRefresh is cleared by the JS layer after a successful full refresh.
+        let locationChanged = UserDefaults(suiteName: kAppGroup)?
+            .bool(forKey: "needsPrayerRefresh") ?? false
+
+        // ── Path 1: App Groups has fresh data for today AND location has not changed ──
+        if !locationChanged, let stored = readAppGroupData() {
             let prayers = parsePrayers(stored.prayers)
             if !prayers.isEmpty {
-                let entries = buildEntries(prayers: prayers, city: stored.city)
+                let lastUpdatedAt = stored.timestamp.map { Date(timeIntervalSince1970: $0) }
+                let entries = buildEntries(prayers: prayers, city: stored.city,
+                                           lastUpdatedAt: lastUpdatedAt)
                 completion(Timeline(entries: entries, policy: .after(midnight)))
                 return
             }
         }
 
-        // ── Path 2: Stale / missing → fetch from aladhan.com with stored location
+        // ── Path 2: Stale / missing / location changed → fetch from aladhan.com ──
+        //
+        // fetchFromAPI is in-memory only — it does NOT write to App Group or UserDefaults.
+        // The fetched prayer times live only in the PrayerEntry timeline entries until
+        // WidgetKit discards them. Permanent App Group writes happen only when the JS
+        // layer completes a full refresh on app open (updateWidgetData in AppContext).
+        //
+        // When locationChanged == true (needsPrayerRefresh set by native background
+        // monitor), prayer times are fetched for the updated prayer_lat/prayer_lng
+        // coordinates. City name comes from the stored prayer_city key, which may be
+        // the previous city until the app-open refresh resolves the new city via
+        // reverse geocoding.
+        //
+        // lastUpdatedAt is intentionally nil when locationChanged, because the city
+        // name is potentially stale. Hiding "Uppdaterad HH:mm" avoids implying a
+        // complete data refresh when only prayer times were re-fetched for new coords.
+        // The label reappears (with correct city) after the app-open full refresh.
         let (lat, lng, city) = readStoredLocation()
         fetchFromAPI(lat: lat, lng: lng) { prayers in
             guard !prayers.isEmpty else {
@@ -267,7 +296,11 @@ struct PrayerProvider: TimelineProvider {
                 completion(timeline)
                 return
             }
-            let entries = buildEntries(prayers: prayers, city: city)
+            // Show "Uppdaterad HH:mm" only when this is a normal stale-date refresh
+            // (city name is correct). When triggered by a location change, hide the
+            // timestamp to avoid claiming a complete refresh with a potentially stale city.
+            let updatedAt: Date? = locationChanged ? nil : Date()
+            let entries = buildEntries(prayers: prayers, city: city, lastUpdatedAt: updatedAt)
             completion(Timeline(entries: entries, policy: .after(midnight)))
         }
     }
@@ -508,10 +541,6 @@ struct MediumWidgetView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
                 .padding(.top, 4)
-            Text("Startar \(timeFmt.string(from: p.time))")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(.white.opacity(0.70))
-                .padding(.top, 3)
         case .shuruq(let t):
             Text("Tid kvar till Shuruq")
                 .font(.system(size: 10, weight: .semibold))
@@ -522,10 +551,6 @@ struct MediumWidgetView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
                 .padding(.top, 7)
-            Text("Startar \(timeFmt.string(from: t))")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(.white.opacity(0.70))
-                .padding(.top, 3)
         case .halvaNatten(let t):
             Text("Tid kvar till halva natten")
                 .font(.system(size: 10, weight: .semibold))
@@ -538,10 +563,6 @@ struct MediumWidgetView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
                 .padding(.top, 7)
-            Text("Startar \(timeFmt.string(from: t))")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(.white.opacity(0.70))
-                .padding(.top, 3)
         }
     }
 
@@ -578,10 +599,20 @@ struct MediumWidgetView: View {
             }
 
             // ── 3. FOOTER ─────────────────────────────────────────────────────
-            Text("\(entry.city) • \(mediumDateFmt.string(from: entry.date))")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(.white.opacity(0.55))
-                .padding(.top, 6)
+            HStack(alignment: .center) {
+                Text("\(entry.city) • \(mediumDateFmt.string(from: entry.date))")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(.white.opacity(0.55))
+                    .lineLimit(1)
+                if let ts = entry.lastUpdatedAt {
+                    Spacer(minLength: 4)
+                    Text("Uppdaterad \(timeFmt.string(from: ts))")
+                        .font(.system(size: 9, weight: .regular))
+                        .foregroundColor(.white.opacity(0.28))
+                        .lineLimit(1)
+                }
+            }
+            .padding(.top, 6)
         }
         .padding(EdgeInsets(top: 16, leading: 14, bottom: 14, trailing: 14))
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -623,10 +654,6 @@ struct LargeFocusWidgetView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
                 .padding(.top, 5)
-            Text("Startar \(timeFmt.string(from: p.time))")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.white.opacity(0.65))
-                .padding(.top, 4)
                 .padding(.bottom, 16)
         case .shuruq(let t):
             Text("Tid kvar till Shuruq")
@@ -638,10 +665,6 @@ struct LargeFocusWidgetView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
                 .padding(.top, 10)
-            Text("Startar \(timeFmt.string(from: t))")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.white.opacity(0.65))
-                .padding(.top, 4)
                 .padding(.bottom, 16)
         case .halvaNatten(let t):
             Text("Tid kvar till halva natten")
@@ -653,10 +676,6 @@ struct LargeFocusWidgetView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
                 .padding(.top, 10)
-            Text("Startar \(timeFmt.string(from: t))")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.white.opacity(0.65))
-                .padding(.top, 4)
                 .padding(.bottom, 16)
         }
     }
@@ -710,9 +729,17 @@ struct LargeFocusWidgetView: View {
                     .foregroundColor(.white.opacity(0.55))
                     .lineLimit(1)
                 Spacer()
-                Text(largeDateFmt.string(from: entry.date))
-                    .font(.system(size: 12, weight: .regular))
-                    .foregroundColor(.white.opacity(0.45))
+                if let ts = entry.lastUpdatedAt {
+                    Text("\(largeDateFmt.string(from: entry.date)) · Uppdaterad \(timeFmt.string(from: ts))")
+                        .font(.system(size: 10, weight: .regular))
+                        .foregroundColor(.white.opacity(0.40))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                } else {
+                    Text(largeDateFmt.string(from: entry.date))
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundColor(.white.opacity(0.45))
+                }
             }
         }
         .padding(EdgeInsets(top: 16, leading: 18, bottom: 14, trailing: 18))
@@ -770,9 +797,17 @@ struct LargeOverviewWidgetView: View {
                     .foregroundColor(.white.opacity(0.55))
                     .lineLimit(1)
                 Spacer()
-                Text(largeDateFmt.string(from: entry.date))
-                    .font(.system(size: 12, weight: .regular))
-                    .foregroundColor(.white.opacity(0.45))
+                if let ts = entry.lastUpdatedAt {
+                    Text("\(largeDateFmt.string(from: entry.date)) · Uppdaterad \(timeFmt.string(from: ts))")
+                        .font(.system(size: 10, weight: .regular))
+                        .foregroundColor(.white.opacity(0.40))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                } else {
+                    Text(largeDateFmt.string(from: entry.date))
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundColor(.white.opacity(0.45))
+                }
             }
             .padding(.bottom, 16)
 

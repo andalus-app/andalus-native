@@ -5,22 +5,17 @@ import { Platform } from 'react-native';
 import { fetchPrayerTimes, fetchTomorrowPrayerTimes, calcMidnight } from './prayerApi';
 import { schedulePrayerNotifications, refreshPrePrayerReminderNotifications } from './notifications';
 import { nativeReverseGeocode } from './geocoding';
-import { updateWidgetData } from '../modules/WidgetData';
+import {
+  updateWidgetData,
+  upsertCityPrayerCache,
+  setNotificationScheduleState,
+  type NotificationScheduleState,
+} from '../modules/WidgetData';
+import { getEffectivePrayerCity } from './monthlyCache';
 
 export const BACKGROUND_LOCATION_TASK = 'HIDAYAH_BACKGROUND_LOCATION';
 
-// Must match distanceInterval below so the secondary check is consistent.
-const MIN_MOVE_METERS = 1000;
-
-function distanceMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371000;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
+const CACHE_KEY = 'andalus_prayer_cache';
 
 function getTodayStr(): string {
   const n = new Date();
@@ -29,6 +24,27 @@ function getTodayStr(): string {
     String(n.getMonth() + 1).padStart(2, '0') + '-' +
     n.getFullYear()
   );
+}
+
+// Returns the largest absolute difference (minutes) across the main prayers
+// between two timing objects. Used to skip notification rescheduling when
+// the user only moved a few hundred metres and prayer times didn't change.
+function maxAbsPrayerDiffMinutes(
+  prev: Record<string, string>,
+  next: Record<string, string>,
+): number {
+  const keys = ['Fajr', 'Sunrise', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
+  let max = 0;
+  for (const k of keys) {
+    const p = prev[k]; const n = next[k];
+    if (!p || !n) continue;
+    const [ph, pm] = p.split(':').map(Number);
+    const [nh, nm] = n.split(':').map(Number);
+    if (isNaN(ph) || isNaN(pm) || isNaN(nh) || isNaN(nm)) continue;
+    const diff = Math.abs((ph * 60 + pm) - (nh * 60 + nm));
+    if (diff > max) max = diff;
+  }
+  return max;
 }
 
 // Must be at module root — expo-task-manager requirement.
@@ -50,13 +66,12 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }: TaskMan
     const method: number = settings.calculationMethod ?? 3;
     const school: number = settings.school ?? 0;
 
-    // Skip if the device hasn't moved meaningfully since the last processed location.
-    // If no location is stored yet (first run / cache cleared), process unconditionally.
-    const stored = await AsyncStorage.getItem('andalus_location');
-    if (stored) {
-      const storedLoc = JSON.parse(stored) as { lat: number; lng: number };
-      if (distanceMeters(storedLoc.lat, storedLoc.lng, coords.latitude, coords.longitude) < MIN_MOVE_METERS) return;
-    }
+    // Read previous prayer cache before fetching — used to decide whether
+    // notification rescheduling is needed after this update.
+    const prevCacheRaw = await AsyncStorage.getItem(CACHE_KEY).catch(() => null);
+    const prevTodayT: Record<string, string> | null = prevCacheRaw
+      ? (JSON.parse(prevCacheRaw).todayT ?? null)
+      : null;
 
     const geo = await nativeReverseGeocode(coords.latitude, coords.longitude);
     const city = geo.subLocality && geo.city && geo.subLocality !== geo.city
@@ -90,7 +105,7 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }: TaskMan
     // Persist prayer cache so the app shows correct times immediately on next open
     // without waiting for a foreground network fetch.
     const cacheKey = coords.latitude.toFixed(4) + ',' + coords.longitude.toFixed(4) + ',' + method + ',' + school;
-    await AsyncStorage.setItem('andalus_prayer_cache', JSON.stringify({
+    await AsyncStorage.setItem(CACHE_KEY, JSON.stringify({
       key:    cacheKey,
       date:   getTodayStr(),
       todayT,
@@ -99,8 +114,8 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }: TaskMan
     }));
 
     // Write to the iOS widget App Group — same data shape used by AppContext.
-    // This is the step that actually makes the widget show the new city without
-    // requiring the user to open the app.
+    // This is the step that makes the widget show the new city without the user
+    // opening the app (when the JS runtime is alive via background location mode).
     if (Platform.OS === 'ios') {
       const h = todayRes.hijri;
       await updateWidgetData({
@@ -126,9 +141,61 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }: TaskMan
       }).catch(() => {});
     }
 
-    // Reschedule prayer notifications for the new city/times.
-    await schedulePrayerNotifications(todayT, tomT, city);
-    await refreshPrePrayerReminderNotifications();
+    // Mirror prayer times to App Group multi-city cache so the native notification
+    // scheduler can reschedule in the background if the app is later killed.
+    if (Platform.OS === 'ios') {
+      const effectiveCity    = getEffectivePrayerCity(city);
+      const settingsRaw2     = await AsyncStorage.getItem('andalus_settings').catch(() => null);
+      const settings2        = settingsRaw2 ? JSON.parse(settingsRaw2) : {};
+      const method2: number  = settings2.calculationMethod ?? 3;
+      const school2: number  = settings2.school ?? 0;
+      const cityKey          = `${effectiveCity.toLowerCase()}_${method2}_${school2}`;
+      const todayDate        = new Date();
+      const tomorrowDate     = new Date(Date.now() + 86_400_000);
+      const reminderRaw      = await AsyncStorage.getItem('hidayah_prayer_reminder_offset').catch(() => null);
+      const reminderOffset   = reminderRaw ? parseInt(reminderRaw, 10) : 0;
+
+      await upsertCityPrayerCache({
+        cityKey,
+        displayName:  effectiveCity,
+        lat:          coords.latitude,
+        lng:          coords.longitude,
+        date:         todayDate.toISOString().slice(0, 10),
+        tomorrowDate: tomorrowDate.toISOString().slice(0, 10),
+        method:       method2,
+        school:       school2,
+        todayT,
+        tomT: tomT ?? null,
+        updatedAt:    Date.now() / 1000,
+      }).catch(() => {});
+
+      const scheduleState: NotificationScheduleState = {
+        version:         1,
+        owner:           'js',
+        source:          'js_background',
+        cityKey,
+        displayName:     effectiveCity,
+        lat:             coords.latitude,
+        lng:             coords.longitude,
+        date:            todayDate.toISOString().slice(0, 10),
+        method:          method2,
+        school:          school2,
+        todayT,
+        tomT:            tomT ?? undefined,
+        dhikrEnabled:    settings2.dhikrReminder ?? false,
+        prePrayerOffset: isNaN(reminderOffset) ? 0 : reminderOffset,
+        updatedAt:       Date.now() / 1000,
+      };
+      await setNotificationScheduleState(scheduleState).catch(() => {});
+    }
+
+    // Only reschedule notifications if prayer times actually changed by >= 1 minute.
+    // Skips unnecessary churn when the device moved a short distance within the same city.
+    const timesChangedByMinute = !prevTodayT || maxAbsPrayerDiffMinutes(prevTodayT, todayT) >= 1;
+    if (timesChangedByMinute) {
+      await schedulePrayerNotifications(todayT, tomT, city);
+      await refreshPrePrayerReminderNotifications();
+    }
   } catch {}
 });
 
@@ -136,6 +203,10 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }: TaskMan
  * Start background location updates. No-op if:
  * - Background permission is not "granted" (iOS requires Always)
  * - Updates are already running
+ *
+ * distanceInterval: 500 m — avoids firing on GPS noise or short movements that
+ * don't change prayer times. The native significant-location layer handles
+ * city-to-city wakeups when the JS runtime is not alive.
  *
  * Use Location.hasStartedLocationUpdatesAsync (not TaskManager.isTaskRegisteredAsync)
  * because isTaskRegisteredAsync reflects JS task registration, not whether
@@ -150,20 +221,8 @@ export async function startBackgroundLocationUpdates(): Promise<void> {
 
     await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, {
       accuracy: Location.Accuracy.Balanced,
-      // Fire only after the device has moved at least 1 km — avoids waking the
-      // JS engine for tiny drifts while the user is stationary.
-      distanceInterval:        1000,
-      // Batch iOS updates: defer delivery until 1 km has accumulated OR 12 minutes
-      // have passed, whichever comes first. Reduces wake-ups while travelling.
-      deferredUpdatesDistance: 1000,
-      deferredUpdatesInterval: 12 * 60 * 1000,
-      // Never let iOS pause updates automatically. When set to true, iOS can
-      // silently stop delivering location events (e.g. when a user is on public
-      // transport), causing the widget to stay on the departure city indefinitely.
+      distanceInterval: 500,
       pausesUpdatesAutomatically: false,
-      // ActivityType.Other is safer than OtherNavigation — OtherNavigation hints
-      // to CoreLocation that the user is in a navigation app, which can trigger
-      // different power-saving heuristics.
       activityType: Location.ActivityType.Other,
       showsBackgroundLocationIndicator: false,
       foregroundService: {

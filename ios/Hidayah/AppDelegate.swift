@@ -29,6 +29,11 @@ public class AppDelegate: ExpoAppDelegate {
       launchOptions: launchOptions)
 #endif
 
+    // Start native significant-location-change monitoring. Cell-tower based,
+    // low power, survives app termination — iOS relaunches the app in the
+    // background when the device moves significantly, no JS runtime needed.
+    LocationBackgroundManager.shared.setup()
+
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
