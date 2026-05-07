@@ -3,7 +3,7 @@ import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { fetchPrayerTimes, fetchTomorrowPrayerTimes, calcMidnight } from './prayerApi';
-import { schedulePrayerNotifications, refreshPrePrayerReminderNotifications } from './notifications';
+import { schedulePrayerNotifications, refreshPrePrayerReminderNotifications, getNotificationDisplayName } from './notifications';
 import { nativeReverseGeocode } from './geocoding';
 import {
   updateWidgetData,
@@ -178,21 +178,22 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }: TaskMan
       }).catch(() => {});
 
       const scheduleState: NotificationScheduleState = {
-        version:         1,
-        owner:           'js',
-        source:          'js_background',
+        version:                  1,
+        owner:                    'js',
+        source:                   'js_background',
         cityKey,
-        displayName:     effectiveCity,
-        lat:             coords.latitude,
-        lng:             coords.longitude,
-        date:            todayDate.toISOString().slice(0, 10),
-        method:          method2,
-        school:          school2,
+        displayName:              effectiveCity,
+        notificationDisplayName:  getNotificationDisplayName(effectiveCity),
+        lat:                      coords.latitude,
+        lng:                      coords.longitude,
+        date:                     todayDate.toISOString().slice(0, 10),
+        method:                   method2,
+        school:                   school2,
         todayT,
-        tomT:            tomT ?? undefined,
-        dhikrEnabled:    settings2.dhikrReminder ?? false,
-        prePrayerOffset: isNaN(reminderOffset) ? 0 : reminderOffset,
-        updatedAt:       Date.now() / 1000,
+        tomT:                     tomT ?? undefined,
+        dhikrEnabled:             settings2.dhikrReminder ?? false,
+        prePrayerOffset:          isNaN(reminderOffset) ? 0 : reminderOffset,
+        updatedAt:                Date.now() / 1000,
       };
       await setNotificationScheduleState(scheduleState).catch(() => {});
     }

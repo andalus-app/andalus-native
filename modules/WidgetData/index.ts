@@ -149,21 +149,27 @@ export async function upsertCityPrayerCache(cache: NativePrayerCache): Promise<v
 
 /** Shared notification schedule metadata written by both JS and Native. */
 export interface NotificationScheduleState {
-  version:         number;
-  owner:           'js' | 'native';
-  source:          'app_open' | 'js_background' | 'native_significant_location';
-  cityKey:         string;
-  displayName:     string;
-  lat:             number;
-  lng:             number;
-  date:            string;
-  method:          number;
-  school:          number;
-  todayT?:         Record<string, string>;
-  tomT?:           Record<string, string>;
-  dhikrEnabled:    boolean;
-  prePrayerOffset: number;   // 0 = off; matches hidayah_prayer_reminder_offset
-  updatedAt:       number;   // Unix seconds
+  version:                  number;
+  owner:                    'js' | 'native';
+  source:                   'app_open' | 'js_background' | 'native_significant_location';
+  cityKey:                  string;
+  /** Effective prayer/display location. Used for UI, widget, cache lookup,
+   *  schedule metadata and debugging. Never use this alone for notification bodies. */
+  displayName:              string;
+  /** Human-friendly label used ONLY in notification body text.
+   *  Derived from displayName: "Kista, Stockholm" → "Stockholm".
+   *  Optional so old native-written state (without this field) is still valid. */
+  notificationDisplayName?: string;
+  lat:                      number;
+  lng:                      number;
+  date:                     string;
+  method:                   number;
+  school:                   number;
+  todayT?:                  Record<string, string>;
+  tomT?:                    Record<string, string>;
+  dhikrEnabled:             boolean;
+  prePrayerOffset:          number;   // 0 = off; matches hidayah_prayer_reminder_offset
+  updatedAt:                number;   // Unix seconds
 }
 
 /**

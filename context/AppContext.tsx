@@ -6,7 +6,7 @@ import { fetchPrayerTimes, fetchTomorrowPrayerTimes, calcMidnight, reverseGeocod
 import { startBackgroundLocationUpdates, stopBackgroundLocationUpdates } from '../services/backgroundLocation';
 import { warmupNativeCache } from '../services/nativeCacheWarmup';
 import { buildYearlyCache, getPrayerTimesWithFallback } from '../services/monthlyCache';
-import { schedulePrayerNotifications, cancelPrayerNotifications, scheduleDhikrReminder, cancelDhikrReminder, scheduleFridayDuaReminder, cancelFridayDuaReminder, refreshPrePrayerReminderNotifications } from '../services/notifications';
+import { schedulePrayerNotifications, cancelPrayerNotifications, scheduleDhikrReminder, cancelDhikrReminder, scheduleFridayDuaReminder, cancelFridayDuaReminder, refreshPrePrayerReminderNotifications, getNotificationDisplayName } from '../services/notifications';
 import {
   updateWidgetData,
   setAutoLocation,
@@ -330,21 +330,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         AsyncStorage.getItem('hidayah_prayer_reminder_offset').then(raw => {
           const offset = raw ? parseInt(raw, 10) : 0;
           const scheduleState: NotificationScheduleState = {
-            version:         1,
-            owner:           'js',
-            source:          'app_open',
+            version:                  1,
+            owner:                    'js',
+            source:                   'app_open',
             cityKey,
-            displayName:     effectiveCity,
-            lat:             loc.latitude,
-            lng:             loc.longitude,
-            date:            todayDate.toISOString().slice(0, 10),
+            displayName:              effectiveCity,
+            notificationDisplayName:  getNotificationDisplayName(effectiveCity),
+            lat:                      loc.latitude,
+            lng:                      loc.longitude,
+            date:                     todayDate.toISOString().slice(0, 10),
             method,
             school,
             todayT,
-            tomT:            tomT ?? undefined,
-            dhikrEnabled:    state.settings.dhikrReminder,
-            prePrayerOffset: isNaN(offset) ? 0 : offset,
-            updatedAt:       Date.now() / 1000,
+            tomT:                     tomT ?? undefined,
+            dhikrEnabled:             state.settings.dhikrReminder,
+            prePrayerOffset:          isNaN(offset) ? 0 : offset,
+            updatedAt:                Date.now() / 1000,
           };
           return setNotificationScheduleState(scheduleState);
         }).catch(() => {});

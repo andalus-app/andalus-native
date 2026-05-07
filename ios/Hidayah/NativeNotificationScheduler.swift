@@ -253,7 +253,11 @@ struct NotificationScheduleState: Codable {
     var owner:                   String   // "js" | "native"
     var source:                  String   // "app_open" | "js_background" | "native_significant_location"
     var cityKey:                 String
+    /// Effective prayer/display location (used for UI, widget, cache lookup, debugging).
     var displayName:             String
+    /// Human-friendly label used ONLY in notification body text.
+    /// "Kista, Stockholm" → "Stockholm". Nil in old state: fall back to displayName.
+    var notificationDisplayName: String?
     var lat:                     Double
     var lng:                     Double
     var date:                    String
@@ -439,8 +443,16 @@ final class NativeNotificationScheduler {
         guard let s = existing else {
             NSLog("[NativeNotif] No existing state — will schedule"); return true
         }
-        if s.cityKey != nearest.cacheKey {
-            NSLog("[NativeNotif] City changed: %@ → %@", s.cityKey, nearest.cacheKey); return true
+        // Notification label changed — body text would differ.
+        // Compare notificationDisplayName; fall back to displayName for old state that
+        // predates the field. For native bundled cities notifLabel == displayName, so
+        // this also catches city changes (e.g. Stockholm → Järfälla).
+        // Within-metro moves (Kista → Spånga, both → "Stockholm") are handled by the
+        // prayer-time check below rather than triggering an early reschedule here.
+        let existingNotifLabel = s.notificationDisplayName ?? s.displayName
+        if existingNotifLabel != nearest.displayName {
+            NSLog("[NativeNotif] Notification label changed: %@ → %@",
+                  existingNotifLabel, nearest.displayName); return true
         }
         if s.date != resolved.todayDate {
             NSLog("[NativeNotif] Date changed: %@ → %@", s.date, resolved.todayDate); return true
@@ -483,7 +495,11 @@ final class NativeNotificationScheduler {
         let cal    = Calendar.current
         let todayBase    = cal.startOfDay(for: now)
         let tomorrowBase = cal.date(byAdding: .day, value: 1, to: todayBase)!
-        let city = nearest.displayName
+        // displayName = effective prayer city (used for prayer times, cache, metadata).
+        // notifLabel  = label shown in notification body only; for native bundled cities
+        //               these are standalone names (no comma), so they are the same value.
+        let city      = nearest.displayName
+        let notifLabel = city  // native fallback cities have no "locality, municipality" form
 
         // Remove stable prayer + dhikr identifiers synchronously (no need for async).
         var toRemove = kPrayerIdentifiers
@@ -495,12 +511,12 @@ final class NativeNotificationScheduler {
             ("Maghrib", "maghrib"), ("Isha", "isha"),
         ]
 
-        // Today's main prayers
+        // Today's main prayers — trigger time from effective city cache; label from notifLabel
         for (apiKey, idKey) in prayerMap {
             guard let t = resolved.todayT[apiKey], !t.isEmpty,
                   let fire = parseTime(t, base: todayBase), fire > now else { continue }
             add(center, id: "andalus-prayer-today-\(idKey)",
-                title: "Det är dags för \(apiKey)", body: "i \(city)", at: fire)
+                title: "Det är dags för \(apiKey)", body: "i \(notifLabel)", at: fire)
         }
 
         // Tomorrow's main prayers
@@ -509,7 +525,7 @@ final class NativeNotificationScheduler {
                 guard let t = tomT[apiKey], !t.isEmpty,
                       let fire = parseTime(t, base: tomorrowBase) else { continue }
                 add(center, id: "andalus-prayer-tomorrow-\(idKey)",
-                    title: "Det är dags för \(apiKey)", body: "i \(city)", at: fire)
+                    title: "Det är dags för \(apiKey)", body: "i \(notifLabel)", at: fire)
             }
         }
 
@@ -547,21 +563,22 @@ final class NativeNotificationScheduler {
 
         // Write schedule state
         let state = NotificationScheduleState(
-            version:         1,
-            owner:           "native",
-            source:          "native_significant_location",
-            cityKey:         nearest.cacheKey,
-            displayName:     city,
-            lat:             nearest.lat,
-            lng:             nearest.lng,
-            date:            resolved.todayDate,
-            method:          settings.calculationMethod,
-            school:          settings.school,
-            todayT:          resolved.todayT,
-            tomT:            resolved.tomT,
-            dhikrEnabled:    settings.dhikrReminder,
-            prePrayerOffset: offset,
-            updatedAt:       Date().timeIntervalSince1970
+            version:                 1,
+            owner:                   "native",
+            source:                  "native_significant_location",
+            cityKey:                 nearest.cacheKey,
+            displayName:             city,
+            notificationDisplayName: notifLabel,
+            lat:                     nearest.lat,
+            lng:                     nearest.lng,
+            date:                    resolved.todayDate,
+            method:                  settings.calculationMethod,
+            school:                  settings.school,
+            todayT:                  resolved.todayT,
+            tomT:                    resolved.tomT,
+            dhikrEnabled:            settings.dhikrReminder,
+            prePrayerOffset:         offset,
+            updatedAt:               Date().timeIntervalSince1970
         )
         writeScheduleState(state, defaults: defaults)
         NSLog("[NativeNotif] Scheduled for %@ (%@)", city, resolved.todayDate)

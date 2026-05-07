@@ -71,6 +71,27 @@ function timeToMin(t: string | undefined): number {
   return isNaN(h) || isNaN(m) ? -1 : h * 60 + m;
 }
 
+/**
+ * Returns the human-friendly city label used only in notification bodies.
+ * If the displayName is "{locality}, {municipality}", returns "{municipality}".
+ * Otherwise returns the displayName unchanged.
+ *
+ * Examples:
+ *   "Kista, Stockholm"    → "Stockholm"
+ *   "Spånga, Stockholm"   → "Stockholm"
+ *   "Drottningholm, Ekerö"→ "Ekerö"
+ *   "Järfälla"            → "Järfälla"
+ *   "Mölndal"             → "Mölndal"
+ *
+ * IMPORTANT: never use this for prayer time calculation, cache keys,
+ * locationKey, schedule trigger times, widget data, or app UI.
+ */
+export function getNotificationDisplayName(displayName: string): string {
+  const trimmed  = displayName.trim();
+  const commaIdx = trimmed.indexOf(',');
+  return commaIdx === -1 ? trimmed : trimmed.slice(commaIdx + 1).trim();
+}
+
 function scheduleStateUnchanged(
   todayTimes:    Record<string, string>,
   tomorrowTimes: Record<string, string> | null,
@@ -80,11 +101,18 @@ function scheduleStateUnchanged(
 ): boolean {
   if (!existing?.todayT) return false;
 
-  // Notification body uses cityName — reschedule when location label changes
-  if (cityName !== existing.displayName) return false;
+  // Notification body label changed — reschedule so body text stays accurate.
+  // Compare the derived notification labels, not raw displayNames, so that moves
+  // within the same municipality (e.g. Kista → Spånga, both → "Stockholm") do
+  // not trigger an unnecessary reschedule when prayer times are also unchanged.
+  // Fall back to deriving the label from displayName when notificationDisplayName
+  // is absent (old native-written state without the field).
+  const currentNotifLabel  = getNotificationDisplayName(cityName);
+  const existingNotifLabel = existing.notificationDisplayName
+    ?? getNotificationDisplayName(existing.displayName ?? '');
+  if (currentNotifLabel !== existingNotifLabel) return false;
 
-  // Calculation method or school changed — prayer times may look the same by
-  // coincidence but the underlying schedule is different
+  // Calculation method or school changed
   if (context?.method !== undefined && context.method !== existing.method) return false;
   if (context?.school !== undefined && context.school !== existing.school) return false;
 
@@ -138,12 +166,13 @@ export async function schedulePrayerNotifications(
       const fire = new Date(base);
       fire.setHours(hh, mm, 0, 0);
       if (fire <= now) return;
-      const name = PRAYERS[key];
+      const name      = PRAYERS[key];
+      const notifCity = getNotificationDisplayName(cityName);
       await N!.scheduleNotificationAsync({
         identifier: `${ID_PREFIX}${slot}-${key.toLowerCase()}`,
         content: {
           title: `Det är dags för ${name}`,
-          body:  `i ${cityName}`,
+          body:  `i ${notifCity}`,
           sound: true,
           data:  { screen: 'prayer' },
         },
