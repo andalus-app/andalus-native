@@ -1,3 +1,4 @@
+# Monthly prayer times maintenance workflow
 name: Prayer Times Maintenance
 
 on:
