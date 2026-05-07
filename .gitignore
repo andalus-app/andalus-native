@@ -51,3 +51,8 @@ scripts/prayer-import/*.log
 Tatorter_2023.gpkg
 *.gpkg
 scripts/source-data/
+scripts/prayer-import/.env
+scripts/prayer-import/.venv/
+Tatorter_2023.gpkg
+*.gpkg
+prayer_import.log
