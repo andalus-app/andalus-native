@@ -10,6 +10,7 @@ on:
 
 jobs:
   maintain-prayer-times:
+    name: Maintain prayer times
     runs-on: ubuntu-latest
     timeout-minutes: 360
 
@@ -20,10 +21,10 @@ jobs:
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      ALADHAN_BASE_URL: https://api.aladhan.com/v1/calendar
-      PROFILE_KEY: aladhan_mwl_shafi_sweden_angle_based
-      REQUEST_SLEEP_SECONDS: 1.5
-      MAX_RETRIES: 4
+      ALADHAN_BASE_URL: "https://api.aladhan.com/v1/calendar"
+      PROFILE_KEY: "aladhan_mwl_shafi_sweden_angle_based"
+      REQUEST_SLEEP_SECONDS: "1.5"
+      MAX_RETRIES: "4"
 
     steps:
       - name: Checkout repository
