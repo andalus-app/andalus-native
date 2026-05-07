@@ -968,19 +968,6 @@ struct HidayahOverviewWidget: Widget {
 
 #if os(iOS)
 
-// Compact countdown string: "1t, 45m", "59m", "4m", "50s", "0s".
-// iOS lock screen widgets (.accessoryRectangular) do not expose a reliable
-// awake vs dimmed state, so this compact format is used at all times.
-private func compactCountdown(from now: Date, to target: Date) -> String {
-    let secs = max(0, Int(target.timeIntervalSince(now)))
-    if secs < 60 { return "\(secs)s" }
-    let mins = secs / 60
-    if mins < 60 { return "\(mins)m" }
-    let hours = mins / 60
-    let rem   = mins % 60
-    if rem == 0 { return "\(hours)t" }
-    return "\(hours)t, \(rem)m"
-}
 
 struct LockScreenFocusView: View {
     let entry: PrayerEntry
@@ -1007,48 +994,51 @@ struct LockScreenFocusView: View {
                     .minimumScaleFactor(0.85)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            Text(timeFmt.string(from: p.time))
+            Text(p.time, style: .timer)
                 .font(.system(size: 22, weight: .bold).monospacedDigit())
                 .foregroundStyle(.primary)
                 .lineLimit(1)
+                .minimumScaleFactor(0.75)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            Text(compactCountdown(from: entry.date, to: p.time))
-                .font(.system(size: 13, weight: .medium).monospacedDigit())
+            Text("Går in \(timeFmt.string(from: p.time))")
+                .font(.system(size: 12, weight: .medium).monospacedDigit())
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
         case .shuruq(let t):
             Text("Shuruq")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.primary)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            Text(timeFmt.string(from: t))
+            Text(t, style: .timer)
                 .font(.system(size: 22, weight: .bold).monospacedDigit())
                 .foregroundStyle(.primary)
                 .lineLimit(1)
+                .minimumScaleFactor(0.75)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            Text(compactCountdown(from: entry.date, to: t))
-                .font(.system(size: 13, weight: .medium).monospacedDigit())
+            Text("Går in \(timeFmt.string(from: t))")
+                .font(.system(size: 12, weight: .medium).monospacedDigit())
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
         case .halvaNatten(let t):
             Text("Halva natten")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.primary)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            Text(timeFmt.string(from: t))
+            Text(t, style: .timer)
                 .font(.system(size: 22, weight: .bold).monospacedDigit())
                 .foregroundStyle(.primary)
                 .lineLimit(1)
+                .minimumScaleFactor(0.75)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            Text(compactCountdown(from: entry.date, to: t))
-                .font(.system(size: 13, weight: .medium).monospacedDigit())
+            Text("Går in \(timeFmt.string(from: t))")
+                .font(.system(size: 12, weight: .medium).monospacedDigit())
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
