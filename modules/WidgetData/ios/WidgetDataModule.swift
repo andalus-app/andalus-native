@@ -7,8 +7,21 @@ import WidgetKit
 
 public class WidgetDataModule: Module {
 
-    private let appGroupID    = "group.com.anonymous.Hidayah"
-    private let widgetDataKey = "andalus_widget_data"
+    private let appGroupID             = "group.com.anonymous.Hidayah"
+    private let widgetDataKey          = "andalus_widget_data"
+    private let effectiveScheduleKey   = "andalus_current_effective_prayer_schedule"
+    private let visitedLocationsKey    = "andalus_visited_prayer_locations"
+    private let kMaxVisitedEntries     = 100
+    private let kDedupeProximityKm     = 0.5
+
+    private func haversineKm(lat1: Double, lng1: Double, lat2: Double, lng2: Double) -> Double {
+        let R  = 6371.0
+        let φ1 = lat1 * .pi / 180, φ2 = lat2 * .pi / 180
+        let Δφ = (lat2 - lat1) * .pi / 180
+        let Δλ = (lng2 - lng1) * .pi / 180
+        let a  = sin(Δφ/2) * sin(Δφ/2) + cos(φ1) * cos(φ2) * sin(Δλ/2) * sin(Δλ/2)
+        return R * 2 * atan2(sqrt(a), sqrt(1 - a))
+    }
 
     public func definition() -> ModuleDefinition {
 
@@ -223,6 +236,98 @@ public class WidgetDataModule: Module {
                   let obj      = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
             else { promise.resolve([:] as [String: Any]); return }
             promise.resolve(obj)
+        }
+
+        // setEffectivePrayerSchedule(schedule: Object) → void
+        // Writes the precise JS-resolved prayer schedule to App Group so the native
+        // notification scheduler reads this BEFORE falling back to fallback-city
+        // resolution. This ensures suburb-level precision (e.g. Kista Asr 17:01) is
+        // preserved when a significant-location-change fires without JS being alive.
+        AsyncFunction("setEffectivePrayerSchedule") { (schedule: [String: Any], promise: Promise) in
+            guard let defaults = UserDefaults(suiteName: self.appGroupID) else {
+                promise.resolve(nil); return
+            }
+            if let data = try? JSONSerialization.data(withJSONObject: schedule) {
+                defaults.set(data, forKey: self.effectiveScheduleKey)
+                defaults.synchronize()
+                NSLog("[WidgetData] effective prayer schedule updated: displayName=%@ notifLabel=%@ Asr=%@ source=%@",
+                      (schedule["displayName"] as? String) ?? "?",
+                      (schedule["notificationDisplayName"] as? String) ?? "?",
+                      ((schedule["todayTimes"] as? [String: Any])?["Asr"] as? String) ?? "?",
+                      (schedule["source"] as? String) ?? "?")
+            }
+            promise.resolve(nil)
+        }
+
+        // upsertVisitedPrayerLocation(entry: Object) → void
+        // Reads andalus_visited_prayer_locations (array of visited place entries),
+        // upserts the given entry (matched by locationKey, then displayName, then
+        // proximity < 0.5 km to avoid GPS-drift duplicates), and writes back.
+        // LRU eviction keeps at most 100 entries (sorted by lastUsedAt descending).
+        // Native NativeNotificationScheduler reads this cache FIRST in trySchedule(),
+        // before the effective schedule, so suburb-precise times win within 2.0 km.
+        AsyncFunction("upsertVisitedPrayerLocation") { (entry: [String: Any], promise: Promise) in
+            guard let defaults = UserDefaults(suiteName: self.appGroupID) else {
+                promise.resolve(nil); return
+            }
+            guard let locationKey = entry["locationKey"] as? String, !locationKey.isEmpty else {
+                promise.resolve(nil); return
+            }
+            guard let lat = entry["lat"] as? Double, let lng = entry["lng"] as? Double,
+                  lat != 0 || lng != 0 else {
+                promise.resolve(nil); return
+            }
+            guard let todayTimes = entry["todayTimes"] as? [String: Any], !todayTimes.isEmpty else {
+                promise.resolve(nil); return
+            }
+
+            var entries: [[String: Any]] = []
+            if let existing = defaults.data(forKey: self.visitedLocationsKey),
+               let decoded  = try? JSONSerialization.jsonObject(with: existing) as? [[String: Any]] {
+                entries = decoded
+            }
+
+            let displayName = entry["displayName"] as? String ?? ""
+
+            // Match priority: locationKey → displayName → proximity (< 0.5 km)
+            var matchIdx: Int? = nil
+            if matchIdx == nil {
+                matchIdx = entries.firstIndex { ($0["locationKey"] as? String) == locationKey }
+            }
+            if matchIdx == nil, !displayName.isEmpty {
+                matchIdx = entries.firstIndex { ($0["displayName"] as? String) == displayName }
+            }
+            if matchIdx == nil {
+                matchIdx = entries.firstIndex { e in
+                    guard let eLat = e["lat"] as? Double, let eLng = e["lng"] as? Double else { return false }
+                    return self.haversineKm(lat1: lat, lng1: lng, lat2: eLat, lng2: eLng) < self.kDedupeProximityKm
+                }
+            }
+
+            if let idx = matchIdx {
+                entries[idx] = entry
+                NSLog("[WidgetData] visited places: updated locationKey=%@ (%d entries total)", locationKey, entries.count)
+            } else {
+                entries.append(entry)
+                NSLog("[WidgetData] visited places: inserted locationKey=%@ (%d entries total)", locationKey, entries.count)
+            }
+
+            // LRU eviction: keep newest 100 by lastUsedAt
+            if entries.count > self.kMaxVisitedEntries {
+                entries.sort { ($0["lastUsedAt"] as? Double ?? 0) > ($1["lastUsedAt"] as? Double ?? 0) }
+                entries = Array(entries.prefix(self.kMaxVisitedEntries))
+                NSLog("[WidgetData] visited places: evicted LRU entries, kept %d", self.kMaxVisitedEntries)
+            }
+
+            if let data = try? JSONSerialization.data(withJSONObject: entries) {
+                defaults.set(data, forKey: self.visitedLocationsKey)
+                defaults.synchronize()
+                NSLog("[WidgetData] visited places cache written: locationKey=%@ displayName=%@ Asr=%@ (%d entries)",
+                      locationKey, displayName,
+                      (todayTimes["Asr"] as? String) ?? "?",
+                      entries.count)
+            }
+            promise.resolve(nil)
         }
     }
 }

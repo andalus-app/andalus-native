@@ -58,39 +58,59 @@ final class LocationBackgroundManager: NSObject, CLLocationManagerDelegate {
     /// Call once from AppDelegate.application(_:didFinishLaunchingWithOptions:).
     /// Safe on every launch — startMonitoringSignificantLocationChanges() is
     /// idempotent and required on background relaunches triggered by location events.
+    ///
+    /// NOTE: If the app is force-quit by the user, iOS will NOT relaunch it for
+    /// significant-location-change events. Background relaunch only works when the
+    /// app was closed normally (home button / swipe up without force-quit).
     func setup() {
-        switch manager.authorizationStatus {
+        let status = manager.authorizationStatus
+        NSLog("[LocationBG] setup: authorizationStatus=%ld", status.rawValue)
+        switch status {
         case .authorizedAlways:
             manager.startMonitoringSignificantLocationChanges()
-            NSLog("[LocationBG] Significant location monitoring started")
+            NSLog("[LocationBG] setup: significant location monitoring started (authorizedAlways) ✓")
         case .notDetermined:
-            // Authorization will be requested by the JS layer (expo-location).
-            // We'll start monitoring once the user grants Always in the delegate below.
-            NSLog("[LocationBG] Authorization not determined — will start after grant")
-        default:
-            NSLog("[LocationBG] Authorization not Always — monitoring not started")
+            NSLog("[LocationBG] setup: authorization not determined — monitoring deferred until JS requests Always permission")
+        case .authorizedWhenInUse:
+            NSLog("[LocationBG] setup: authorizedWhenInUse — Always permission required for background monitoring; app will not be relaunched for location events")
+        case .denied:
+            NSLog("[LocationBG] setup: location permission denied — monitoring not started")
+        case .restricted:
+            NSLog("[LocationBG] setup: location permission restricted — monitoring not started")
+        @unknown default:
+            NSLog("[LocationBG] setup: unknown authorization status (%ld) — monitoring not started", status.rawValue)
         }
     }
 
     // MARK: - CLLocationManagerDelegate
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        switch manager.authorizationStatus {
+        let status = manager.authorizationStatus
+        NSLog("[LocationBG] authorization changed: status=%ld", status.rawValue)
+        switch status {
         case .authorizedAlways:
             manager.startMonitoringSignificantLocationChanges()
-            NSLog("[LocationBG] Authorization changed to Always — monitoring started")
+            NSLog("[LocationBG] authorization changed to Always — monitoring started ✓")
         default:
             manager.stopMonitoringSignificantLocationChanges()
-            NSLog("[LocationBG] Authorization changed — monitoring stopped")
+            NSLog("[LocationBG] authorization no longer Always (status=%ld) — monitoring stopped", status.rawValue)
         }
     }
 
     func locationManager(_ manager: CLLocationManager,
                          didUpdateLocations locations: [CLLocation]) {
-        guard let loc = locations.last else { return }
+        guard let loc = locations.last else {
+            NSLog("[LocationBG] didUpdateLocations: empty locations array — early return")
+            return
+        }
+
+        let lat = loc.coordinate.latitude
+        let lng = loc.coordinate.longitude
+        NSLog("[LocationBG] didUpdateLocations fired: lat=%.4f lng=%.4f hAcc=%.0fm speed=%.1f",
+              lat, lng, loc.horizontalAccuracy, loc.speed)
 
         guard let defaults = UserDefaults(suiteName: appGroup) else {
-            NSLog("[LocationBG] ERROR: App Group not accessible")
+            NSLog("[LocationBG] ERROR: App Group '%@' not accessible — early return", appGroup)
             return
         }
 
@@ -98,14 +118,14 @@ final class LocationBackgroundManager: NSObject, CLLocationManagerDelegate {
         // default to false — do not modify App Group data until the user has opened the
         // app and the setting has been written. This prevents unexpected city/prayer
         // overwrites on a fresh install before the user configures the app.
-        let autoLocation = defaults.object(forKey: "andalus_autoLocation") as? Bool ?? false
+        let autoLocationObj = defaults.object(forKey: "andalus_autoLocation")
+        let autoLocation = autoLocationObj as? Bool ?? false
         guard autoLocation else {
-            NSLog("[LocationBG] autoLocation not enabled — skipping background location update")
+            NSLog("[LocationBG] autoLocation not enabled (key=%@ value=%@) — early return",
+                  autoLocationObj == nil ? "missing" : "present",
+                  autoLocationObj == nil ? "nil (defaults false)" : "\(autoLocation)")
             return
         }
-
-        let lat = loc.coordinate.latitude
-        let lng = loc.coordinate.longitude
 
         // Write new coordinates so the widget's Path-2 API fallback uses the new
         // location when today's prayer data becomes stale (e.g. after midnight).

@@ -57,12 +57,40 @@ let kPrePrayerPrefix         = "hidayah-pre-prayer-"
 
 // MARK: - App Group keys
 
-private let kAppGroup            = "group.com.anonymous.Hidayah"
-private let kSettingsKey         = "andalus_settings_native"
-private let kLocationIndexKey    = "andalus_location_index"
-private let kMultiCityCacheKey   = "andalus_multi_city_cache"
-private let kScheduleStateKey    = "andalus_notification_schedule_state"
+private let kAppGroup                    = "group.com.anonymous.Hidayah"
+private let kSettingsKey                 = "andalus_settings_native"
+private let kLocationIndexKey            = "andalus_location_index"
+private let kMultiCityCacheKey           = "andalus_multi_city_cache"
+private let kScheduleStateKey            = "andalus_notification_schedule_state"
+private let kWidgetDataKey               = "andalus_widget_data"
+/// Precise effective schedule written by JS after every successful prayer fetch.
+/// Native reads this before falling back to city resolution, so Kista/suburb
+/// precise times are always used when JS has already resolved them.
+private let kEffectiveScheduleKey        = "andalus_current_effective_prayer_schedule"
+/// Visited prayer locations cache written by JS after every precise prayer fetch.
+/// Each entry holds suburb-level prayer times for a place the user has visited.
+/// Native reads this FIRST in trySchedule() — before the effective schedule —
+/// so a 2.0 km radius match beats a 25 km effective-schedule reuse.
+private let kVisitedPrayerLocationsKey   = "andalus_visited_prayer_locations"
 
+// Priority 1 — visited places cache: 5.0 km match radius.
+// Nearby Stockholm-area localities (Kista, Spånga, Järfälla, Solna …) are
+// 5–15 km apart. Using 5.0 km lets native find the suburb the user is actually
+// in (e.g. Spånga at 0.5 km) while still rejecting distant neighbours (e.g.
+// Kista at 6 km). The nearest valid candidate within the radius always wins —
+// not the most-recently-used or the first in the stored array.
+private let kMaxVisitedPlaceDistanceKm: Double = 5.0
+
+// Priority 2 — current effective schedule: up to 25 km reuse.
+// Within a metro area the effective JS-resolved schedule (e.g. Kista) is still
+// more precise than the bundled fallback cities, so it wins up to 25 km.
+// Maximum distance (km) from the JS-precise schedule coordinates at which native
+// will reuse that schedule. Within this radius the precise schedule is authoritative
+// (e.g. Kista is within 25 km of its own coordinates). If the new location is farther
+// than this, the user has moved significantly and native falls back to city resolution.
+private let kMaxPreciseScheduleReuseKm: Double = 25.0
+
+// Priority 3 — bundled fallback city: 100 km safety limit.
 // Maximum distance (km) at which a bundled fallback city is considered reliable.
 // If the nearest resolved city exceeds this, native will NOT schedule notifications
 // (uncertain data), will set needsPrayerRefresh so JS refreshes on next app open,
@@ -108,6 +136,7 @@ private let bundledLocations: [StaticCity] = [
     StaticCity(name: "järfälla",        displayName: "Järfälla",        lat: 59.4131, lng: 17.8340),
     StaticCity(name: "sollentuna",      displayName: "Sollentuna",      lat: 59.4282, lng: 17.9508),
     StaticCity(name: "solna",           displayName: "Solna",           lat: 59.3597, lng: 18.0009),
+    StaticCity(name: "spånga",          displayName: "Spånga",          lat: 59.3911, lng: 17.9230),
     // ── Norrland ─────────────────────────────────────────────────────────────
     StaticCity(name: "luleå",           displayName: "Luleå",           lat: 65.5848, lng: 22.1567),
     StaticCity(name: "skellefteå",      displayName: "Skellefteå",      lat: 64.7507, lng: 20.9528),
@@ -215,6 +244,26 @@ struct LocationIndexEntry: Codable {
     let school:      Int
 }
 
+/// Visited prayer location entry written by JS after every precise prayer fetch.
+/// The array at kVisitedPrayerLocationsKey holds up to 100 of these.
+/// Fields mirror VisitedPrayerLocation in modules/WidgetData/index.ts.
+private struct VisitedPrayerLocation: Decodable {
+    let locationKey:             String
+    let displayName:             String
+    let notificationDisplayName: String
+    let lat:                     Double
+    let lng:                     Double
+    let method:                  Int
+    let school:                  Int
+    let date:                    String   // "yyyy-MM-dd"
+    let tomorrowDate:            String   // "yyyy-MM-dd"
+    let todayTimes:              [String: String]
+    let tomorrowTimes:           [String: String]?
+    let updatedAt:               Double
+    let lastUsedAt:              Double
+    let source:                  String
+}
+
 private struct NativeSettings: Decodable {
     let notifications:           Bool
     let calculationMethod:       Int
@@ -223,6 +272,27 @@ private struct NativeSettings: Decodable {
     let prePrayerReminderOffset: Int?   // nil when field absent (old data); treat as 0
 
     var effectivePrePrayerOffset: Int { prePrayerReminderOffset ?? 0 }
+}
+
+/// Precise effective prayer schedule written by JS after every successful fetch.
+/// Native reads this before city resolution so suburb-level times (e.g. Kista,
+/// Asr 17:01) are used instead of municipality-level fallback times (Stockholm,
+/// Asr 17:00). The key is andalus_current_effective_prayer_schedule.
+private struct EffectivePrayerSchedule: Decodable {
+    let displayName:             String    // "Kista, Stockholm" — precise geocoded name
+    let notificationDisplayName: String    // "Stockholm" — body text only
+    let locationKey:             String?   // "stockholm_3_0" — multi-city cache key
+    let lat:                     Double
+    let lng:                     Double
+    let date:                    String    // "yyyy-MM-dd"
+    let tomorrowDate:            String    // "yyyy-MM-dd"
+    let todayTimes:              [String: String]
+    let tomorrowTimes:           [String: String]?
+    let method:                  Int
+    let school:                  Int
+    let highLatitudeRule:        String?
+    let updatedAt:               Double    // Unix seconds
+    let source:                  String    // "js_precise_location" | "js_background"
 }
 
 /// One entry in the multi-city cache dict (andalus_multi_city_cache).
@@ -284,65 +354,302 @@ final class NativeNotificationScheduler {
 
         // 1. Settings
         guard let settings = readSettings(defaults) else {
-            NSLog("[NativeNotif] No settings — skipping"); completion(false); return
+            NSLog("[NativeNotif] No settings — early return (no settings written yet)")
+            completion(false); return
         }
         guard settings.notifications else {
-            NSLog("[NativeNotif] Notifications disabled — skipping"); completion(false); return
+            NSLog("[NativeNotif] Notifications disabled — early return")
+            completion(false); return
         }
 
-        // 2. Nearest city — combine static bundled list with dynamic visited-city index
+        let todayStr    = isoDate(Date())
+        let tomorrowStr = isoDate(Calendar.current.date(byAdding: .day, value: 1, to: Date())!)
+
+        NSLog("[NativeNotif] trySchedule: lat=%.4f lng=%.4f today=%@ method=%d school=%d",
+              lat, lng, todayStr, settings.calculationMethod, settings.school)
+
+        // ── Priority 1: Visited places cache (5.0 km radius, nearest-first) ───────
+        // JS writes this after every precise prayer fetch. Native checks it FIRST
+        // so that a suburb-level match (Spånga, Järfälla, Kista …) always beats
+        // a broad 25 km effective-schedule reuse or a 100 km fallback city lookup.
+        //
+        // Selection rule: collect ALL valid candidates within 5.0 km, sort by
+        // distance ascending, choose the nearest. Never pick by recency or array
+        // order — always pick by Haversine distance.
+        let visitedEntries = readVisitedPrayerLocations(defaults)
+        let visitedCount   = visitedEntries?.count ?? 0
+        NSLog("[NativeNotif] Visited places cache: %d entries", visitedCount)
+
+        if let allVisited = visitedEntries, !allVisited.isEmpty {
+            let methodFiltered = allVisited.filter {
+                $0.method == settings.calculationMethod && $0.school == settings.school
+            }
+            NSLog("[NativeNotif] Visited places after method=%d/school=%d filter: %d entries",
+                  settings.calculationMethod, settings.school, methodFiltered.count)
+
+            // Build distance-tagged list, keep only entries within 5.0 km, sort nearest-first.
+            let candidatesIn5km = methodFiltered
+                .map { (entry: $0, dist: haversineKm(lat1: lat, lng1: lng, lat2: $0.lat, lng2: $0.lng)) }
+                .filter { $0.dist <= kMaxVisitedPlaceDistanceKm }
+                .sorted { $0.dist < $1.dist }
+
+            NSLog("[NativeNotif] Valid visited candidates within %.1f km: %d",
+                  kMaxVisitedPlaceDistanceKm, candidatesIn5km.count)
+            for (i, c) in candidatesIn5km.enumerated() {
+                NSLog("[NativeNotif]   [%d] %@ (%.2f km) date=%@ tomorrowDate=%@",
+                      i, c.entry.displayName, c.dist, c.entry.date, c.entry.tomorrowDate)
+            }
+
+            // Pick the nearest candidate that has resolvable timings.
+            if let best = candidatesIn5km.first(where: {
+                resolveVisitedTimings(from: $0.entry, todayStr: todayStr, tomorrowStr: tomorrowStr) != nil
+                    && !$0.entry.todayTimes.isEmpty
+            }) {
+                let nearestVisited = best.entry
+                let visitedDist    = best.dist
+
+                // resolveVisitedTimings already checked non-nil above; force-unwrap is safe.
+                let resolved = resolveVisitedTimings(from: nearestVisited,
+                                                     todayStr: todayStr, tomorrowStr: tomorrowStr)!
+
+                let visitedCity = ResolvedCity(
+                    displayName: nearestVisited.displayName,
+                    notifLabel:  nearestVisited.notificationDisplayName,
+                    lat:         nearestVisited.lat,
+                    lng:         nearestVisited.lng,
+                    cacheKey:    nearestVisited.locationKey
+                )
+                NSLog("[NativeNotif] Selected nearest valid visited place: %@ (%.2f km) notifLabel=%@ Asr=%@ date=%@",
+                      nearestVisited.displayName, visitedDist,
+                      nearestVisited.notificationDisplayName,
+                      resolved.todayT["Asr"] ?? "?", resolved.todayDate)
+
+                // ── Two independent decisions ────────────────────────────────────
+                // Widget update: triggered by displayName change, prayer-time change,
+                //   or date change — independent of notification rescheduling.
+                // Notification reschedule: triggered by trigger-time change (≥ 1 min),
+                //   notificationDisplayName change, or settings change.
+                // These intentionally differ: a displayName change ("Kista" → "Spånga")
+                // updates the widget but does NOT reschedule notifications if
+                // notificationDisplayName and prayer times are unchanged.
+                let needsWidgetUpdate  = widgetUpdateNeeded(city: visitedCity,
+                                                            resolved: resolved,
+                                                            defaults: defaults)
+                let needsNotifSchedule = rescheduleNeeded(nearest: visitedCity,
+                                                          resolved: resolved,
+                                                          settings: settings,
+                                                          existing: readScheduleState(defaults))
+
+                NSLog("[NativeNotif] source=native_visited_place_cache displayName=%@ notifLabel=%@ Asr=%@",
+                      visitedCity.displayName, visitedCity.notifLabel,
+                      resolved.todayT["Asr"] ?? "?")
+                NSLog("[NativeNotif] needsWidgetUpdate=%@ needsNotifSchedule=%@",
+                      needsWidgetUpdate ? "yes" : "no", needsNotifSchedule ? "yes" : "no")
+
+                if !needsWidgetUpdate && !needsNotifSchedule {
+                    NSLog("[NativeNotif] Visited cache: widget and notifications both unchanged — skipping")
+                    completion(false); return
+                }
+
+                // Widget update is synchronous — perform before async permission check
+                // so widget stays consistent regardless of notification permission state.
+                if needsWidgetUpdate {
+                    writeWidgetDataFromSource(city: visitedCity, resolved: resolved,
+                                             defaults: defaults,
+                                             source: "native_visited_place_cache")
+                    NSLog("[NativeNotif] Widget data updated: city=%@ source=native_visited_place_cache",
+                          visitedCity.displayName)
+                    NSLog("[NativeNotif] WidgetCenter.reloadAllTimelines triggered by LocationBackgroundManager")
+                } else {
+                    NSLog("[NativeNotif] Widget update skipped: displayName=%@ prayer times and date unchanged",
+                          visitedCity.displayName)
+                }
+
+                if needsNotifSchedule {
+                    UNUserNotificationCenter.current().getNotificationSettings { [weak self] ns in
+                        guard let self else { completion(needsWidgetUpdate); return }
+                        guard ns.authorizationStatus == .authorized ||
+                              ns.authorizationStatus == .provisional else {
+                            NSLog("[NativeNotif] Notification permission not granted (%ld) — widget=%@",
+                                  ns.authorizationStatus.rawValue,
+                                  needsWidgetUpdate ? "updated" : "not updated")
+                            completion(needsWidgetUpdate); return
+                        }
+                        self.performSchedule(nearest: visitedCity, resolved: resolved,
+                                             settings: settings, defaults: defaults,
+                                             scheduleSource: "native_visited_place_cache")
+                        NSLog("[NativeNotif] Notifications rescheduled: source=native_visited_place_cache displayName=%@ Asr=%@",
+                              visitedCity.displayName, resolved.todayT["Asr"] ?? "?")
+                        completion(true)
+                    }
+                } else {
+                    NSLog("[NativeNotif] Notification reschedule skipped: notifLabel=%@ trigger times unchanged for source=native_visited_place_cache",
+                          visitedCity.notifLabel)
+                    completion(needsWidgetUpdate)
+                }
+                return
+
+            } else if candidatesIn5km.isEmpty {
+                NSLog("[NativeNotif] No visited places within %.1f km — skipping to effective schedule",
+                      kMaxVisitedPlaceDistanceKm)
+            } else {
+                NSLog("[NativeNotif] All %d visited candidate(s) within %.1f km have stale dates or missing times — skipping to effective schedule",
+                      candidatesIn5km.count, kMaxVisitedPlaceDistanceKm)
+            }
+        } else {
+            NSLog("[NativeNotif] Visited places cache empty or missing — skipping to effective schedule")
+        }
+
+        // ── Priority 2: Precise effective schedule (25 km reuse) ────────────────
+        // JS writes this after every successful prayer fetch with GPS-exact coordinates
+        // and prayer times. This prevents native from falling back to the municipality
+        // fallback (e.g. Stockholm times) when the user is in a suburb (e.g. Kista).
+        // Only reached when no visited place is within 2.0 km.
+        if let precise = readEffectiveSchedule(defaults) {
+            let distKm      = haversineKm(lat1: lat, lng1: lng, lat2: precise.lat, lng2: precise.lng)
+            let validDate   = precise.date == todayStr || precise.tomorrowDate == todayStr
+            let validMethod = precise.method == settings.calculationMethod && precise.school == settings.school
+            let validDist   = distKm <= kMaxPreciseScheduleReuseKm
+
+            NSLog("[NativeNotif] Effective schedule: displayName=%@ notifLabel=%@ date=%@ method=%d school=%d dist=%.1fkm source=%@ — validDate=%@ validMethod=%@ validDist=%@",
+                  precise.displayName, precise.notificationDisplayName, precise.date,
+                  precise.method, precise.school, distKm, precise.source,
+                  validDate ? "yes" : "no", validMethod ? "yes" : "no", validDist ? "yes" : "no")
+
+            if validDate && validMethod && validDist {
+                // Build timings from precise schedule with midnight rollover support.
+                let todayT:       [String: String]
+                let tomT:         [String: String]?
+                let resolvedDate: String
+                let resolvedTom:  String
+                if precise.date == todayStr {
+                    todayT       = precise.todayTimes
+                    tomT         = precise.tomorrowTimes
+                    resolvedDate = precise.date
+                    resolvedTom  = precise.tomorrowDate
+                } else {
+                    // Rollover: tomorrowDate == today; use tomorrowTimes as today's set.
+                    NSLog("[NativeNotif] Effective schedule midnight rollover — using tomorrowTimes as today")
+                    todayT       = precise.tomorrowTimes ?? precise.todayTimes
+                    tomT         = nil
+                    resolvedDate = todayStr
+                    resolvedTom  = tomorrowStr
+                }
+
+                let resolvedCity = ResolvedCity(
+                    displayName: precise.displayName,
+                    notifLabel:  precise.notificationDisplayName,
+                    lat:         precise.lat,
+                    lng:         precise.lng,
+                    cacheKey:    precise.locationKey ?? "\(precise.displayName.lowercased())_\(precise.method)_\(precise.school)"
+                )
+                let resolved = ResolvedTimings(
+                    todayDate:    resolvedDate,
+                    tomorrowDate: resolvedTom,
+                    todayT:       todayT,
+                    tomT:         tomT
+                )
+                NSLog("[NativeNotif] Using effective schedule (native_precise_cache): %@ Asr=%@",
+                      precise.displayName, todayT["Asr"] ?? "?")
+
+                let existing = readScheduleState(defaults)
+                let needsWidget = widgetUpdateNeeded(city: resolvedCity, resolved: resolved, defaults: defaults)
+                if needsWidget {
+                    writeWidgetDataFromSource(city: resolvedCity, resolved: resolved,
+                                             defaults: defaults,
+                                             source: "native_precise_cache")
+                    NSLog("[NativeNotif] Widget data updated: city=%@ source=native_precise_cache",
+                          resolvedCity.displayName)
+                }
+                if !rescheduleNeeded(nearest: resolvedCity, resolved: resolved,
+                                     settings: settings, existing: existing) {
+                    NSLog("[NativeNotif] Effective schedule unchanged — skipping")
+                    completion(needsWidget); return
+                }
+                UNUserNotificationCenter.current().getNotificationSettings { [weak self] ns in
+                    guard let self else { completion(needsWidget); return }
+                    guard ns.authorizationStatus == .authorized ||
+                          ns.authorizationStatus == .provisional else {
+                        NSLog("[NativeNotif] Permission not granted (%ld)", ns.authorizationStatus.rawValue)
+                        completion(needsWidget); return
+                    }
+                    self.performSchedule(nearest: resolvedCity, resolved: resolved,
+                                         settings: settings, defaults: defaults,
+                                         scheduleSource: "native_precise_cache")
+                    completion(true)
+                }
+                return
+            }
+            NSLog("[NativeNotif] Effective schedule not reusable — falling back to city resolution")
+        } else {
+            NSLog("[NativeNotif] No effective schedule — falling back to city resolution")
+        }
+
+        // ── Priority 3: Nearest fallback city (100 km safety limit) ─────────────
+        // Only reached when no valid visited place (2 km) and no valid effective
+        // schedule (25 km) exist. Uses the 110 bundled cities + dynamic index.
         let nearest = resolveNearest(lat: lat, lng: lng, settings: settings, defaults: defaults)
         guard let nearest else {
-            NSLog("[NativeNotif] Cannot resolve nearest city — skipping"); completion(false); return
+            NSLog("[NativeNotif] Cannot resolve nearest city — early return (needsPrayerRefresh set)")
+            markNeedsPrayerRefresh(defaults)
+            completion(false); return
         }
         let nearestKm = haversineKm(lat1: lat, lng1: lng, lat2: nearest.lat, lng2: nearest.lng)
-        NSLog("[NativeNotif] Nearest: %@ (%.1f km) — key: %@",
+        NSLog("[NativeNotif] Fallback city: %@ (%.1f km) key=%@",
               nearest.displayName, nearestKm, nearest.cacheKey)
 
         // Safety: refuse to schedule when the nearest known city is too far away.
-        // Prayer times from a distant city would be wrong. Signal JS to refresh
-        // on next app open and keep any existing notifications intact.
         guard nearestKm <= kMaxFallbackDistanceKm else {
-            NSLog("[NativeNotif] Nearest fallback %@ is %.1f km away — exceeds %.0f km limit, keeping existing notifications",
+            NSLog("[NativeNotif] Fallback %@ too far (%.1f km > %.0f km) — keeping existing notifications; needsPrayerRefresh set",
                   nearest.displayName, nearestKm, kMaxFallbackDistanceKm)
-            markNeedsPrayerRefresh(defaults)
-            completion(false)
-            return
-        }
-
-        // 3. Prayer cache for nearest city
-        let multiCache = readMultiCityCache(defaults)
-        guard let cityCache = multiCache?[nearest.cacheKey] else {
-            NSLog("[NativeNotif] No cache for %@ — setting needsPrayerRefresh", nearest.cacheKey)
             markNeedsPrayerRefresh(defaults)
             completion(false); return
         }
 
-        // Resolve today/tomorrow prayer times with midnight rollover support
+        // Prayer cache for fallback city
+        let multiCache = readMultiCityCache(defaults)
+        guard let cityCache = multiCache?[nearest.cacheKey] else {
+            NSLog("[NativeNotif] No cache for fallback city %@ — needsPrayerRefresh set", nearest.cacheKey)
+            markNeedsPrayerRefresh(defaults)
+            completion(false); return
+        }
+
         guard let resolved = resolveTimings(from: cityCache) else {
-            NSLog("[NativeNotif] Cache stale for %@ (date: %@) — setting needsPrayerRefresh",
+            NSLog("[NativeNotif] Cache stale for fallback city %@ (date: %@) — needsPrayerRefresh set",
                   nearest.cacheKey, cityCache.today)
             markNeedsPrayerRefresh(defaults)
             completion(false); return
         }
 
-        // 4. Skip if nothing changed
+        NSLog("[NativeNotif] Using fallback city schedule (native_fallback_city): %@ Asr=%@",
+              nearest.displayName, resolved.todayT["Asr"] ?? "?")
+
+        let needsWidget = widgetUpdateNeeded(city: nearest, resolved: resolved, defaults: defaults)
+        if needsWidget {
+            writeWidgetDataFromSource(city: nearest, resolved: resolved,
+                                     defaults: defaults,
+                                     source: "native_fallback_city")
+            NSLog("[NativeNotif] Widget data updated: city=%@ source=native_fallback_city",
+                  nearest.displayName)
+        }
+
         let existing = readScheduleState(defaults)
         if !rescheduleNeeded(nearest: nearest, resolved: resolved, settings: settings,
                              existing: existing) {
-            NSLog("[NativeNotif] Schedule unchanged — skipping"); completion(false); return
+            NSLog("[NativeNotif] Fallback city schedule unchanged — skipping")
+            completion(needsWidget); return
         }
 
-        // 5. Permission check then schedule
         UNUserNotificationCenter.current().getNotificationSettings { [weak self] ns in
-            guard let self else { completion(false); return }
+            guard let self else { completion(needsWidget); return }
             guard ns.authorizationStatus == .authorized ||
                   ns.authorizationStatus == .provisional else {
                 NSLog("[NativeNotif] Permission not granted (%ld)", ns.authorizationStatus.rawValue)
-                completion(false); return
+                completion(needsWidget); return
             }
             self.performSchedule(nearest: nearest, resolved: resolved,
-                                 settings: settings, defaults: defaults)
+                                 settings: settings, defaults: defaults,
+                                 scheduleSource: "native_fallback_city")
             completion(true)
         }
     }
@@ -375,6 +682,7 @@ final class NativeNotificationScheduler {
             let dd = haversineKm(lat1: lat, lng1: lng, lat2: d.lat, lng2: d.lng)
             if dd < ds {
                 return ResolvedCity(displayName: d.displayName,
+                                    notifLabel:  d.displayName,
                                     lat: d.lat, lng: d.lng,
                                     cacheKey: d.cityKey)
             }
@@ -382,18 +690,22 @@ final class NativeNotificationScheduler {
         if let d = dynamicBest {
             // Dynamic is only candidate
             return ResolvedCity(displayName: d.displayName,
+                                notifLabel:  d.displayName,
                                 lat: d.lat, lng: d.lng,
                                 cacheKey: d.cityKey)
         }
         guard let s = staticBest else { return nil }
         // Bundled city: construct cache key using user's current method/school
         let cacheKey = "\(s.name)_\(method)_\(school)"
-        return ResolvedCity(displayName: s.displayName, lat: s.lat, lng: s.lng,
+        return ResolvedCity(displayName: s.displayName,
+                            notifLabel:  s.displayName,
+                            lat: s.lat, lng: s.lng,
                             cacheKey: cacheKey)
     }
 
     private struct ResolvedCity {
-        let displayName: String
+        let displayName: String   // effective city name (used for cache lookup, schedule state, logs)
+        let notifLabel:  String   // label shown in notification body only; may differ from displayName
         let lat:         Double
         let lng:         Double
         let cacheKey:    String   // e.g. "stockholm_3_0"
@@ -406,6 +718,28 @@ final class NativeNotificationScheduler {
         let tomorrowDate: String
         let todayT:       [String: String]
         let tomT:         [String: String]?
+    }
+
+    /// Resolves today's and tomorrow's timings from a visited-place entry with rollover.
+    /// Returns nil if the entry is entirely stale (both date and tomorrowDate are in the past).
+    private func resolveVisitedTimings(from entry: VisitedPrayerLocation,
+                                       todayStr: String,
+                                       tomorrowStr: String) -> ResolvedTimings? {
+        if entry.date == todayStr {
+            return ResolvedTimings(todayDate:    entry.date,
+                                   tomorrowDate: entry.tomorrowDate,
+                                   todayT:       entry.todayTimes,
+                                   tomT:         entry.tomorrowTimes)
+        }
+        if entry.tomorrowDate == todayStr, let tomT = entry.tomorrowTimes {
+            NSLog("[NativeNotif] Visited %@ midnight rollover — using tomorrowTimes as today",
+                  entry.displayName)
+            return ResolvedTimings(todayDate:    todayStr,
+                                   tomorrowDate: tomorrowStr,
+                                   todayT:       tomT,
+                                   tomT:         nil)
+        }
+        return nil
     }
 
     /// Returns today's and tomorrow's timings from the cache entry, with rollover:
@@ -443,16 +777,16 @@ final class NativeNotificationScheduler {
         guard let s = existing else {
             NSLog("[NativeNotif] No existing state — will schedule"); return true
         }
-        // Notification label changed — body text would differ.
+        // Notification body label changed — body text would differ.
         // Compare notificationDisplayName; fall back to displayName for old state that
-        // predates the field. For native bundled cities notifLabel == displayName, so
-        // this also catches city changes (e.g. Stockholm → Järfälla).
-        // Within-metro moves (Kista → Spånga, both → "Stockholm") are handled by the
-        // prayer-time check below rather than triggering an early reschedule here.
+        // predates the field. nearest.notifLabel is already the notification-body label
+        // (e.g. "Stockholm" for both precise-schedule "Kista, Stockholm" and fallback
+        // "Stockholm"), so within-metro moves don't trigger an unnecessary reschedule
+        // unless prayer times also changed (checked below).
         let existingNotifLabel = s.notificationDisplayName ?? s.displayName
-        if existingNotifLabel != nearest.displayName {
+        if existingNotifLabel != nearest.notifLabel {
             NSLog("[NativeNotif] Notification label changed: %@ → %@",
-                  existingNotifLabel, nearest.displayName); return true
+                  existingNotifLabel, nearest.notifLabel); return true
         }
         if s.date != resolved.todayDate {
             NSLog("[NativeNotif] Date changed: %@ → %@", s.date, resolved.todayDate); return true
@@ -489,17 +823,19 @@ final class NativeNotificationScheduler {
     private func performSchedule(nearest: ResolvedCity,
                                  resolved: ResolvedTimings,
                                  settings: NativeSettings,
-                                 defaults: UserDefaults) {
+                                 defaults: UserDefaults,
+                                 scheduleSource: String) {
         let center = UNUserNotificationCenter.current()
         let now    = Date()
         let cal    = Calendar.current
         let todayBase    = cal.startOfDay(for: now)
         let tomorrowBase = cal.date(byAdding: .day, value: 1, to: todayBase)!
-        // displayName = effective prayer city (used for prayer times, cache, metadata).
-        // notifLabel  = label shown in notification body only; for native bundled cities
-        //               these are standalone names (no comma), so they are the same value.
-        let city      = nearest.displayName
-        let notifLabel = city  // native fallback cities have no "locality, municipality" form
+        // displayName = precise effective city (used for schedule state, cache keys, logs).
+        // notifLabel  = label shown in notification body only ("Stockholm" even for
+        //               "Kista, Stockholm"). These differ only when using the precise
+        //               schedule; for fallback bundled cities they are the same value.
+        let city       = nearest.displayName
+        let notifLabel = nearest.notifLabel
 
         // Remove stable prayer + dhikr identifiers synchronously (no need for async).
         var toRemove = kPrayerIdentifiers
@@ -565,7 +901,7 @@ final class NativeNotificationScheduler {
         let state = NotificationScheduleState(
             version:                 1,
             owner:                   "native",
-            source:                  "native_significant_location",
+            source:                  scheduleSource,
             cityKey:                 nearest.cacheKey,
             displayName:             city,
             notificationDisplayName: notifLabel,
@@ -581,7 +917,8 @@ final class NativeNotificationScheduler {
             updatedAt:               Date().timeIntervalSince1970
         )
         writeScheduleState(state, defaults: defaults)
-        NSLog("[NativeNotif] Scheduled for %@ (%@)", city, resolved.todayDate)
+        NSLog("[NativeNotif] Scheduled: displayName=%@ notifLabel=%@ Asr=%@ date=%@ source=%@",
+              city, notifLabel, resolved.todayT["Asr"] ?? "?", resolved.todayDate, scheduleSource)
     }
 
     // MARK: - Pre-prayer reminders
@@ -686,6 +1023,117 @@ final class NativeNotificationScheduler {
         return abs((ap[0] * 60 + ap[1]) - (bp[0] * 60 + bp[1]))
     }
 
+    /// Compares the proposed city/timings against the current App Group widget data.
+    /// Returns true if the widget should be updated.
+    ///
+    /// Widget update is decided independently from notification rescheduling:
+    /// a displayName change ("Kista, Stockholm" → "Spånga, Stockholm") triggers
+    /// a widget update even when notificationDisplayName and prayer times are
+    /// identical, because the widget shows displayName to the user.
+    private func widgetUpdateNeeded(city: ResolvedCity,
+                                    resolved: ResolvedTimings,
+                                    defaults: UserDefaults) -> Bool {
+        guard let existingData = defaults.data(forKey: kWidgetDataKey),
+              let existing = try? JSONSerialization.jsonObject(with: existingData) as? [String: Any]
+        else {
+            NSLog("[NativeNotif] widgetUpdateNeeded: no existing widget data → update needed")
+            return true
+        }
+
+        // displayName / city changed
+        let existingCity = existing["city"] as? String ?? ""
+        if existingCity != city.displayName {
+            NSLog("[NativeNotif] widgetUpdateNeeded: city changed '%@' → '%@'",
+                  existingCity, city.displayName)
+            return true
+        }
+
+        // Date changed
+        let existingDate = existing["date"] as? String ?? ""
+        if existingDate != resolved.todayDate {
+            NSLog("[NativeNotif] widgetUpdateNeeded: date changed '%@' → '%@'",
+                  existingDate, resolved.todayDate)
+            return true
+        }
+
+        // Prayer time changed (≥ 1 min diff)
+        let existingPrayers = existing["prayers"] as? [[String: String]] ?? []
+        var existingMap: [String: String] = [:]
+        for p in existingPrayers {
+            if let name = p["name"], let time = p["time"] { existingMap[name] = time }
+        }
+        let pairings: [(api: String, widget: String)] = [
+            ("Fajr",     "Fajr"),
+            ("Sunrise",  "Soluppgång"),
+            ("Dhuhr",    "Dhuhr"),
+            ("Asr",      "Asr"),
+            ("Maghrib",  "Maghrib"),
+            ("Isha",     "Isha"),
+        ]
+        for pair in pairings {
+            let selected = resolved.todayT[pair.api]
+            let current  = existingMap[pair.widget]
+            if absDiffMin(current, selected) >= 1 {
+                NSLog("[NativeNotif] widgetUpdateNeeded: %@ time changed '%@' → '%@'",
+                      pair.widget, current ?? "nil", selected ?? "nil")
+                return true
+            }
+        }
+
+        NSLog("[NativeNotif] widgetUpdateNeeded: city=%@ date=%@ prayer times all unchanged → skip",
+              city.displayName, resolved.todayDate)
+        return false
+    }
+
+    /// Writes the widget App Group data from the chosen native source so the widget
+    /// shows the correct city name and prayer times after WidgetCenter reload.
+    /// Called only for the visited-cache path — effective-schedule and fallback-city
+    /// paths leave widget updates to JS.
+    private func writeWidgetDataFromSource(city: ResolvedCity,
+                                           resolved: ResolvedTimings,
+                                           defaults: UserDefaults,
+                                           source: String) {
+        var widgetData: [String: Any] = [:]
+        if let existingData = defaults.data(forKey: kWidgetDataKey),
+           let decoded = try? JSONSerialization.jsonObject(with: existingData) as? [String: Any] {
+            widgetData = decoded  // preserve hijri and other fields JS wrote
+        }
+
+        widgetData["city"]      = city.displayName
+        widgetData["latitude"]  = city.lat
+        widgetData["longitude"] = city.lng
+        widgetData["date"]      = resolved.todayDate
+        widgetData["timestamp"] = Date().timeIntervalSince1970
+
+        let prayerMap: [(api: String, widget: String)] = [
+            ("Fajr",     "Fajr"),
+            ("Sunrise",  "Soluppgång"),
+            ("Dhuhr",    "Dhuhr"),
+            ("Asr",      "Asr"),
+            ("Maghrib",  "Maghrib"),
+            ("Isha",     "Isha"),
+        ]
+        let prayers: [[String: String]] = prayerMap.compactMap { pair in
+            guard let time = resolved.todayT[pair.api], !time.isEmpty else { return nil }
+            return ["name": pair.widget, "time": time]
+        }
+        widgetData["prayers"] = prayers
+
+        if let data = try? JSONSerialization.data(withJSONObject: widgetData) {
+            defaults.set(data, forKey: kWidgetDataKey)
+            NSLog("[NativeNotif] Widget data blob updated: city=%@ source=%@ Asr=%@",
+                  city.displayName, source, resolved.todayT["Asr"] ?? "?")
+        }
+
+        defaults.set(city.displayName, forKey: "prayer_city")
+        defaults.set(city.lat,         forKey: "prayer_lat")
+        defaults.set(city.lng,         forKey: "prayer_lng")
+        defaults.synchronize()
+
+        NSLog("[NativeNotif] Widget individual keys: prayer_city=%@ prayer_lat=%.4f prayer_lng=%.4f source=%@",
+              city.displayName, city.lat, city.lng, source)
+    }
+
     private func markNeedsPrayerRefresh(_ defaults: UserDefaults) {
         defaults.set(true, forKey: "needsPrayerRefresh")
         defaults.set(Date().timeIntervalSince1970, forKey: "backgroundLocationDetectedAt")
@@ -693,6 +1141,16 @@ final class NativeNotificationScheduler {
     }
 
     // MARK: - App Group reads / writes
+
+    private func readVisitedPrayerLocations(_ defaults: UserDefaults) -> [VisitedPrayerLocation]? {
+        guard let d = defaults.data(forKey: kVisitedPrayerLocationsKey) else { return nil }
+        return try? JSONDecoder().decode([VisitedPrayerLocation].self, from: d)
+    }
+
+    private func readEffectiveSchedule(_ defaults: UserDefaults) -> EffectivePrayerSchedule? {
+        guard let d = defaults.data(forKey: kEffectiveScheduleKey) else { return nil }
+        return try? JSONDecoder().decode(EffectivePrayerSchedule.self, from: d)
+    }
 
     private func readSettings(_ defaults: UserDefaults) -> NativeSettings? {
         guard let d = defaults.data(forKey: kSettingsKey) else { return nil }

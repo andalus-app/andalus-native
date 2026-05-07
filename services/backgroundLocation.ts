@@ -10,13 +10,26 @@ import {
   upsertCityPrayerCache,
   setNotificationScheduleState,
   getNotificationScheduleState,
+  setEffectivePrayerSchedule,
+  upsertVisitedPrayerLocation,
   type NotificationScheduleState,
+  type EffectivePrayerSchedule,
 } from '../modules/WidgetData';
 import { getEffectivePrayerCity } from './monthlyCache';
 
 export const BACKGROUND_LOCATION_TASK = 'HIDAYAH_BACKGROUND_LOCATION';
 
 const CACHE_KEY = 'andalus_prayer_cache';
+
+function makeLocationKey(displayName: string): string {
+  return displayName
+    .toLowerCase()
+    .replace(/å/g, 'a')
+    .replace(/ä/g, 'a')
+    .replace(/ö/g, 'o')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
 
 function getTodayStr(): string {
   const n = new Date();
@@ -196,6 +209,47 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }: TaskMan
         updatedAt:                Date.now() / 1000,
       };
       await setNotificationScheduleState(scheduleState).catch(() => {});
+
+      // Write precise effective schedule so native background scheduler prefers
+      // these exact times over the nearest-fallback-city lookup. This is the
+      // JS-background path so city is already "Kista, Stockholm" (suburb + city).
+      await setEffectivePrayerSchedule({
+        displayName:             city,
+        notificationDisplayName: getNotificationDisplayName(city),
+        locationKey:             cityKey,
+        lat:                     coords.latitude,
+        lng:                     coords.longitude,
+        date:                    todayDate.toISOString().slice(0, 10),
+        tomorrowDate:            tomorrowDate.toISOString().slice(0, 10),
+        todayTimes:              todayT,
+        tomorrowTimes:           tomT ?? null,
+        method:                  method2,
+        school:                  school2,
+        updatedAt:               Date.now() / 1000,
+        source:                  'js_background',
+      } as EffectivePrayerSchedule).catch(() => {});
+
+      // Write this precise resolved place into the visited places cache so
+      // native can match it by 2.0 km radius during significant-location-change
+      // events. `city` is the full geocoded name (suburb + city when applicable).
+      if (city) {
+        await upsertVisitedPrayerLocation({
+          locationKey:             makeLocationKey(city),
+          displayName:             city,
+          notificationDisplayName: getNotificationDisplayName(city),
+          lat:                     coords.latitude,
+          lng:                     coords.longitude,
+          method:                  method2,
+          school:                  school2,
+          date:                    todayDate.toISOString().slice(0, 10),
+          tomorrowDate:            tomorrowDate.toISOString().slice(0, 10),
+          todayTimes:              todayT,
+          tomorrowTimes:           tomT ?? null,
+          updatedAt:               Date.now() / 1000,
+          lastUsedAt:              Date.now() / 1000,
+          source:                  'js_background',
+        }).catch(() => {});
+      }
     }
 
     // Reschedule notifications if prayer times changed OR the city name (display label)

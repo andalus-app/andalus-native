@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useReducer, useEffect, useMemo, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
-import { Platform } from 'react-native';
+import { Platform, AppState } from 'react-native';
 import { fetchPrayerTimes, fetchTomorrowPrayerTimes, calcMidnight, reverseGeocode } from '../services/prayerApi';
 import { startBackgroundLocationUpdates, stopBackgroundLocationUpdates } from '../services/backgroundLocation';
 import { warmupNativeCache } from '../services/nativeCacheWarmup';
@@ -17,7 +17,10 @@ import {
   upsertCityPrayerCache,
   setNotificationScheduleState,
   getNotificationScheduleState,
+  setEffectivePrayerSchedule,
+  upsertVisitedPrayerLocation,
   type NotificationScheduleState,
+  type EffectivePrayerSchedule,
 } from '../modules/WidgetData';
 import { getEffectivePrayerCity } from '../services/monthlyCache';
 import { getPrayerMonthFromSupabaseFallback } from '../services/supabasePrayerFallback';
@@ -42,6 +45,16 @@ export const CALC_METHODS = {
 
 const STORAGE_KEY = 'andalus_app_state';
 const CACHE_KEY   = 'andalus_prayer_cache';
+
+function makeLocationKey(displayName: string): string {
+  return displayName
+    .toLowerCase()
+    .replace(/å/g, 'a')
+    .replace(/ä/g, 'a')
+    .replace(/ö/g, 'o')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
 
 function getTodayStr() {
   const n = new Date();
@@ -131,6 +144,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // Set when native background location detected a move while app was closed.
   // Cleared only after a successful loadPrayers() call — never cleared on error.
   const pendingBgClearRef  = useRef(false);
+  // Refs for the AppState foreground-refresh listener — must not read state inside
+  // a long-lived callback (stale closure). These refs are kept in sync below.
+  const appStateRef        = useRef(AppState.currentState);
+  const autoLocationRef    = useRef(DEFAULT_SETTINGS.autoLocation);
 
   // ── Ladda sparad state vid start ──
   // Reads STORAGE_KEY and CACHE_KEY in parallel so prayer times can be hydrated
@@ -206,6 +223,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       settings: state.settings,
     })).catch(() => {});
   }, [state.location, state.settings]);
+
+  // Keep autoLocationRef in sync so the AppState listener can read it without
+  // a stale closure (CLAUDE.md: never rely on state inside long-lived callbacks).
+  useEffect(() => {
+    autoLocationRef.current = state.settings.autoLocation;
+  }, [state.settings.autoLocation]); // eslint-disable-line
+
+  // ── Foreground refresh — global lifecycle, not tied to any tab ──
+  // The Prayer Times tab has its own AppState listener, but it is NOT mounted
+  // until the user navigates to it (app starts at /(tabs)/home via redirect).
+  // This listener ensures the home screen location/prayer data updates whenever
+  // the app returns to the foreground, regardless of which tab is active.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', nextState => {
+      if (appStateRef.current.match(/inactive|background/) && nextState === 'active') {
+        if (autoLocationRef.current) refreshLocation().catch(() => {});
+      }
+      appStateRef.current = nextState;
+    });
+    return () => sub.remove();
+  }, []); // eslint-disable-line
 
   // ── Hämta bönetider automatiskt när location/method/school ändras ──
   // EXAKT samma useEffect-mönster som PWA:n: [location, calculationMethod, school]
@@ -316,6 +354,52 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           todayT,
           tomT: tomT ?? null,
           updatedAt: Date.now() / 1000,
+        }).catch(() => {});
+
+        // Write the precise effective schedule so the native scheduler reads this
+        // BEFORE falling back to the nearest-fallback-city lookup. This prevents
+        // Stockholm's geographic prayer times from overriding Kista's precise times
+        // when a significant-location-change fires while the app is closed.
+        // displayName is the full geocoded name ("Kista, Stockholm" when suburb is set);
+        // notificationDisplayName is the body-text label ("Stockholm").
+        const fullDisplayName = (loc.suburb && loc.suburb !== loc.city)
+          ? `${loc.suburb}, ${loc.city}`
+          : loc.city;
+        setEffectivePrayerSchedule({
+          displayName:             fullDisplayName,
+          notificationDisplayName: getNotificationDisplayName(fullDisplayName),
+          locationKey:             cityKey,
+          lat:                     loc.latitude,
+          lng:                     loc.longitude,
+          date:                    todayDate.toISOString().slice(0, 10),
+          tomorrowDate:            tomorrowDate.toISOString().slice(0, 10),
+          todayTimes:              todayT,
+          tomorrowTimes:           tomT ?? null,
+          method,
+          school,
+          updatedAt:               Date.now() / 1000,
+          source:                  'js_precise_location',
+        } as EffectivePrayerSchedule).catch(() => {});
+
+        // Write this precise resolved place into the visited places cache so
+        // native can match it by 2.0 km radius during significant-location-change
+        // events. This gives suburb-precise prayer times (e.g. Spånga, Järfälla)
+        // even when the phone is locked and JS is not alive.
+        upsertVisitedPrayerLocation({
+          locationKey:             makeLocationKey(fullDisplayName),
+          displayName:             fullDisplayName,
+          notificationDisplayName: getNotificationDisplayName(fullDisplayName),
+          lat:                     loc.latitude,
+          lng:                     loc.longitude,
+          method,
+          school,
+          date:                    todayDate.toISOString().slice(0, 10),
+          tomorrowDate:            tomorrowDate.toISOString().slice(0, 10),
+          todayTimes:              todayT,
+          tomorrowTimes:           tomT ?? null,
+          updatedAt:               Date.now() / 1000,
+          lastUsedAt:              Date.now() / 1000,
+          source:                  'js_precise_location',
         }).catch(() => {});
 
         // Warmup all 25 bundled fallback cities in the native cache so native

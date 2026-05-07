@@ -511,9 +511,17 @@ export async function savePushToken(attempt = 1): Promise<void> {
   try {
     const token = await registerForPushNotificationsAsync();
 
-    // Check if this exact token is already saved to avoid unnecessary upserts
+    const liveNotifPref = await AsyncStorage.getItem(LIVE_NOTIF_ENABLED_KEY);
+    const liveNotif = liveNotifPref === 'true';
+
+    // Cache key encodes both token and live_notif so a preference change forces
+    // a re-upsert even when the push token itself hasn't rotated.
+    const cacheValue = `${token}|live=${liveNotif}`;
     const saved = await AsyncStorage.getItem(PUSH_TOKEN_STORAGE_KEY);
-    if (saved === token) return;
+    if (saved === cacheValue) {
+      console.log('[savePushToken] token + live_notif unchanged — skipping upsert');
+      return;
+    }
 
     // user_id is the primary key — use registered user ID if available,
     // otherwise fall back to device ID (generated once and persisted).
@@ -530,9 +538,6 @@ export async function savePushToken(attempt = 1): Promise<void> {
     // was previously registered anonymously, user has now logged in with a real ID).
     await supabase.from('push_tokens').delete().eq('token', token).neq('user_id', userId);
 
-    const liveNotifPref = await AsyncStorage.getItem(LIVE_NOTIF_ENABLED_KEY);
-    const liveNotif = liveNotifPref === 'true';
-
     // Read announcement preference so new/rotated tokens preserve the user's choice.
     // Without this, fresh rows default to null which the edge function treats as "allowed".
     let announcementNotif = true;
@@ -541,6 +546,7 @@ export async function savePushToken(attempt = 1): Promise<void> {
       if (settingsPref) announcementNotif = JSON.parse(settingsPref)?.announcementNotifications ?? true;
     } catch {}
 
+    console.log('[savePushToken] upserting: live_notif=%s userId=%s', liveNotif, userId);
     const { error } = await supabase
       .from('push_tokens')
       .upsert(
@@ -553,8 +559,8 @@ export async function savePushToken(attempt = 1): Promise<void> {
       return;
     }
 
-    await AsyncStorage.setItem(PUSH_TOKEN_STORAGE_KEY, token);
-    console.log('[savePushToken] token saved:', token);
+    await AsyncStorage.setItem(PUSH_TOKEN_STORAGE_KEY, cacheValue);
+    console.log('[savePushToken] token saved: live_notif=%s token=%s', liveNotif, token);
   } catch (e) {
     if (isTransientPushError(e) && attempt <= PUSH_TOKEN_RETRY_DELAYS_MS.length) {
       // Expo server is temporarily unavailable — retry after backoff delay.

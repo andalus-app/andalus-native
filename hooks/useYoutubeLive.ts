@@ -133,12 +133,19 @@ export function useYoutubeLive() {
       const liveNotifPref   = await AsyncStorage.getItem(LIVE_NOTIF_ENABLED_KEY);
       const liveNotifEnabled = liveNotifPref === 'true';
 
+      console.log('[useYoutubeLive] fetch result: status=%s videoId=%s liveNotifEnabled=%s',
+        result?.status ?? 'null', result?.videoId ?? 'null', liveNotifEnabled);
+
       // ── Live stream notification ─────────────────────────────────────────────
       // Push is sent server-side by the Edge Function (Expo Push API → APNs/FCM),
       // which reaches ALL registered devices even when the app is killed.
       // We only track the notifiedVideoIdRef here to stay in sync — no local
       // notification is fired from the client to avoid duplicates (client + server
       // would both fire for the device that triggered the Edge Function refresh).
+      if (result?.status === 'live') {
+        console.log('[useYoutubeLive] LIVE detected: videoId=%s notifEnabled=%s alreadyNotified=%s',
+          result.videoId, liveNotifEnabled, result.videoId === notifiedVideoIdRef.current);
+      }
       if (
         liveNotifEnabled &&
         result?.status === 'live' &&
@@ -146,7 +153,10 @@ export function useYoutubeLive() {
       ) {
         notifiedVideoIdRef.current = result.videoId;
         AsyncStorage.setItem(NOTIFIED_KEY, result.videoId); // fire-and-forget persist
+        console.log('[useYoutubeLive] notifiedVideoIdRef updated — push will come from Edge Function');
         // sendLiveNotification intentionally NOT called here — Edge Function handles push
+      } else if (result?.status === 'live' && !liveNotifEnabled) {
+        console.log('[useYoutubeLive] LIVE but notification setting is OFF — push skipped on client');
       }
 
       // Cache thumbnail locally so subsequent renders load from disk instantly

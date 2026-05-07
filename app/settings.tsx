@@ -557,13 +557,27 @@ export default function SettingsScreen() {
               }
               await AsyncStorage.setItem(LIVE_NOTIF_ENABLED_KEY, v ? 'true' : 'false');
               setLiveNotifEnabled(v);
-              // Sync preference to push_tokens so the Edge Function respects this choice
-              const liveUserId = Storage.getItem('islamnu_user_id') ?? Storage.getItem('islamnu_device_id');
+              console.log('[LiveNotif] preference changed:', v);
+              // Sync preference to push_tokens so the Edge Function respects this choice.
+              // Must use AsyncStorage (not Storage cache) because savePushToken() writes
+              // islamnu_device_id directly to AsyncStorage after initStorage() runs, so the
+              // Storage cache may be stale (null) for anonymous users on first install.
+              const [liveUserIdA, liveDeviceIdA] = await Promise.all([
+                AsyncStorage.getItem('islamnu_user_id'),
+                AsyncStorage.getItem('islamnu_device_id'),
+              ]);
+              const liveUserId = liveUserIdA ?? liveDeviceIdA;
+              console.log('[LiveNotif] syncing live_notif=%s to Supabase for userId=%s', v, liveUserId ?? 'null');
               if (liveUserId) {
                 supabase.from('push_tokens')
                   .update({ live_notif: v })
                   .eq('user_id', liveUserId)
-                  .then(() => {});
+                  .then(({ error }) => {
+                    if (error) console.warn('[LiveNotif] Supabase sync error:', error.message);
+                    else console.log('[LiveNotif] Supabase live_notif synced ok');
+                  });
+              } else {
+                console.warn('[LiveNotif] no userId found — Supabase live_notif not synced');
               }
             }}
             trackColor={{false:T.border,true:T.accent}} thumbColor="#fff" ios_backgroundColor={T.border}/>}/>
@@ -694,7 +708,7 @@ export default function SettingsScreen() {
         <View style={{backgroundColor:T.card,borderRadius:14,borderWidth:0.5,borderColor:T.border,padding:16}}>
           <Text style={{fontSize:15,fontWeight:'700',color:T.text}}>Hidayah</Text>
           <Text style={{fontSize:13,color:T.textMuted,marginTop:2}}>Bönetider och Qibla-kompass</Text>
-          <Text style={{fontSize:12,color:T.textMuted,marginTop:6,opacity:0.7}}>Version 1.4.3</Text>
+          <Text style={{fontSize:12,color:T.textMuted,marginTop:6,opacity:0.7}}>Version 1.4.4</Text>
           <Text style={{fontSize:11,color:T.textMuted,marginTop:2,opacity:0.55}}>
             © {new Date().getFullYear()} Fatih Köker. Alla rättigheter förbehållna.
           </Text>

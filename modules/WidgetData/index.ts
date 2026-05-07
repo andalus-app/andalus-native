@@ -151,7 +151,7 @@ export async function upsertCityPrayerCache(cache: NativePrayerCache): Promise<v
 export interface NotificationScheduleState {
   version:                  number;
   owner:                    'js' | 'native';
-  source:                   'app_open' | 'js_background' | 'native_significant_location';
+  source:                   'app_open' | 'js_background' | 'native_significant_location' | 'native_precise_cache' | 'native_fallback_city' | 'native_visited_place_cache';
   cityKey:                  string;
   /** Effective prayer/display location. Used for UI, widget, cache lookup,
    *  schedule metadata and debugging. Never use this alone for notification bodies. */
@@ -201,4 +201,89 @@ export async function getNotificationScheduleState(): Promise<NotificationSchedu
 export async function getMultiCityCache(): Promise<Record<string, unknown>> {
   if (!NativeModule) return {};
   return NativeModule.getMultiCityCache() ?? {};
+}
+
+/**
+ * Precise effective prayer schedule written by JS to App Group after every
+ * successful prayer fetch. Native reads this FIRST in trySchedule() before
+ * falling back to fallback-city resolution. This ensures suburb-level prayer
+ * times (e.g. Kista Asr 17:01) are used instead of the nearest bundled
+ * municipality times (Stockholm Asr 17:00) when a background location event
+ * fires and the user is still near the last JS-resolved location.
+ */
+export interface EffectivePrayerSchedule {
+  /** Full precise geocoded name — "Kista, Stockholm" or "Stockholm". */
+  displayName:             string;
+  /** Label shown in notification body only — "Stockholm" for all Stockholm-area suburbs. */
+  notificationDisplayName: string;
+  /** Multi-city cache key — e.g. "stockholm_3_0". Optional for legacy compat. */
+  locationKey?:            string;
+  lat:                     number;
+  lng:                     number;
+  /** "yyyy-MM-dd" — today's date when the schedule was fetched. */
+  date:                    string;
+  /** "yyyy-MM-dd" — tomorrow's date. */
+  tomorrowDate:            string;
+  todayTimes:              Record<string, string>;
+  tomorrowTimes:           Record<string, string> | null;
+  method:                  number;
+  school:                  number;
+  highLatitudeRule?:       string;
+  updatedAt:               number;   // Unix seconds
+  source:                  'js_precise_location' | 'js_background';
+}
+
+/**
+ * Writes the precise effective prayer schedule to App Group
+ * (key: andalus_current_effective_prayer_schedule).
+ * Call after every successful prayer fetch in AppContext and backgroundLocation.
+ */
+export async function setEffectivePrayerSchedule(
+  schedule: EffectivePrayerSchedule,
+): Promise<void> {
+  if (!NativeModule) return;
+  return NativeModule.setEffectivePrayerSchedule(schedule);
+}
+
+/**
+ * One entry in the visited prayer locations cache (andalus_visited_prayer_locations).
+ * Written by JS after every precise prayer fetch so native can match coordinates to
+ * previously-visited places with suburb-level accuracy (e.g. "Spånga, Stockholm").
+ */
+export interface VisitedPrayerLocation {
+  /** Slug derived from displayName — "Spånga, Stockholm" → "spanga_stockholm". */
+  locationKey:             string;
+  /** Full geocoded name — "Spånga, Stockholm" or "Järfälla". */
+  displayName:             string;
+  /** Notification body label — "Stockholm" for all Stockholm-area suburbs. */
+  notificationDisplayName: string;
+  lat:                     number;
+  lng:                     number;
+  method:                  number;
+  school:                  number;
+  /** "yyyy-MM-dd" — today's date when the entry was written. */
+  date:                    string;
+  /** "yyyy-MM-dd" — tomorrow's date. */
+  tomorrowDate:            string;
+  todayTimes:              Record<string, string>;
+  tomorrowTimes:           Record<string, string> | null;
+  /** Unix seconds — when this entry was written. */
+  updatedAt:               number;
+  /** Unix seconds — updated on every write; used for LRU eviction at 100 entries. */
+  lastUsedAt:              number;
+  source:                  'js_precise_location' | 'js_background';
+}
+
+/**
+ * Upserts a visited prayer location entry in the App Group cache
+ * (key: andalus_visited_prayer_locations, max 100 entries, LRU eviction).
+ *
+ * Matching order: locationKey → displayName → proximity (< 0.5 km).
+ * The native significant-location scheduler reads this FIRST (before the
+ * effective schedule) so that a 2.0 km radius match gives suburb-precise
+ * prayer times even when the phone is locked.
+ */
+export async function upsertVisitedPrayerLocation(entry: VisitedPrayerLocation): Promise<void> {
+  if (!NativeModule) return;
+  return NativeModule.upsertVisitedPrayerLocation(entry);
 }
