@@ -492,7 +492,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       schedulePrayerNotifications(
         state.prayerTimes,
         state.tomorrowTimes,
-        state.location.city,
+        getEffectivePrayerCity(state.location.city),
+        { method: state.settings.calculationMethod, school: state.settings.school },
       ).catch(() => {});
     }
     // Dhikr reminder: 1 hour before Maghrib — independent of the main prayer toggle

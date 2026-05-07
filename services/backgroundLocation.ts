@@ -9,6 +9,7 @@ import {
   updateWidgetData,
   upsertCityPrayerCache,
   setNotificationScheduleState,
+  getNotificationScheduleState,
   type NotificationScheduleState,
 } from '../modules/WidgetData';
 import { getEffectivePrayerCity } from './monthlyCache';
@@ -71,6 +72,13 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }: TaskMan
     const prevCacheRaw = await AsyncStorage.getItem(CACHE_KEY).catch(() => null);
     const prevTodayT: Record<string, string> | null = prevCacheRaw
       ? (JSON.parse(prevCacheRaw).todayT ?? null)
+      : null;
+
+    // Read the current schedule state so we can detect a city-name change even
+    // when prayer times are similar (e.g. native used "Stockholm", JS resolves
+    // the precise suburb as "Kista, Stockholm").
+    const prevScheduleDisplayName = Platform.OS === 'ios'
+      ? await getNotificationScheduleState().then(s => s?.displayName ?? null).catch(() => null)
       : null;
 
     const geo = await nativeReverseGeocode(coords.latitude, coords.longitude);
@@ -189,11 +197,13 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }: TaskMan
       await setNotificationScheduleState(scheduleState).catch(() => {});
     }
 
-    // Only reschedule notifications if prayer times actually changed by >= 1 minute.
-    // Skips unnecessary churn when the device moved a short distance within the same city.
-    const timesChangedByMinute = !prevTodayT || maxAbsPrayerDiffMinutes(prevTodayT, todayT) >= 1;
-    if (timesChangedByMinute) {
-      await schedulePrayerNotifications(todayT, tomT, city);
+    // Reschedule notifications if prayer times changed OR the city name (display label)
+    // changed — the label appears in every notification body and must stay accurate.
+    const effectiveCityForNotif = getEffectivePrayerCity(city);
+    const timesChangedByMinute  = !prevTodayT || maxAbsPrayerDiffMinutes(prevTodayT, todayT) >= 1;
+    const cityNameChanged        = prevScheduleDisplayName !== null && effectiveCityForNotif !== prevScheduleDisplayName;
+    if (timesChangedByMinute || cityNameChanged) {
+      await schedulePrayerNotifications(todayT, tomT, effectiveCityForNotif, { method, school });
       await refreshPrePrayerReminderNotifications();
     }
   } catch {}

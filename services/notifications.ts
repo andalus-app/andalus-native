@@ -72,12 +72,33 @@ function timeToMin(t: string | undefined): number {
 }
 
 function scheduleStateUnchanged(
-  todayTimes: Record<string, string>,
-  existing: Awaited<ReturnType<typeof getNotificationScheduleState>>,
+  todayTimes:    Record<string, string>,
+  tomorrowTimes: Record<string, string> | null,
+  cityName:      string,
+  existing:      Awaited<ReturnType<typeof getNotificationScheduleState>>,
+  context?:      { method?: number; school?: number },
 ): boolean {
   if (!existing?.todayT) return false;
+
+  // Notification body uses cityName — reschedule when location label changes
+  if (cityName !== existing.displayName) return false;
+
+  // Calculation method or school changed — prayer times may look the same by
+  // coincidence but the underlying schedule is different
+  if (context?.method !== undefined && context.method !== existing.method) return false;
+  if (context?.school !== undefined && context.school !== existing.school) return false;
+
   const prayers = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
-  return prayers.every(p => Math.abs(timeToMin(todayTimes[p]) - timeToMin(existing.todayT![p])) < 1);
+
+  // Today's times changed by >= 1 minute
+  if (!prayers.every(p => Math.abs(timeToMin(todayTimes[p]) - timeToMin(existing.todayT![p])) < 1)) return false;
+
+  // Tomorrow's times changed by >= 1 minute
+  if (tomorrowTimes && existing.tomT) {
+    if (!prayers.every(p => Math.abs(timeToMin(tomorrowTimes[p]) - timeToMin(existing.tomT![p])) < 1)) return false;
+  }
+
+  return true;
 }
 
 // ── Schedule today + tomorrow ────────────────────────────────────────────────
@@ -85,6 +106,7 @@ export async function schedulePrayerNotifications(
   todayTimes:    Record<string, string>,
   tomorrowTimes: Record<string, string> | null,
   cityName:      string,
+  context?:      { method?: number; school?: number },
 ): Promise<void> {
   if (!N) return;
   try {
@@ -100,7 +122,7 @@ export async function schedulePrayerNotifications(
     // cycle that would briefly clear notifications before restoring them.
     if (Platform.OS === 'ios') {
       const existing = await getNotificationScheduleState().catch(() => null);
-      if (existing && scheduleStateUnchanged(todayTimes, existing)) return;
+      if (existing && scheduleStateUnchanged(todayTimes, tomorrowTimes, cityName, existing, context)) return;
     }
 
     await cancelPrayerNotifications();

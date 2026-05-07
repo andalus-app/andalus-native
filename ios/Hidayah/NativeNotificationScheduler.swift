@@ -11,11 +11,15 @@
 //
 // ── Location resolution ──────────────────────────────────────────────────────
 // Uses a two-tier location index:
-//   Tier 1: bundledLocations (~25 major Swedish cities, always available)
+//   Tier 1: bundledLocations (110 Swedish cities, always available)
 //   Tier 2: andalus_location_index (cities user has visited, dynamic)
 // Combined, they cover the most common travel scenarios in Sweden.
-// For a user living in Spånga (Stockholm municipality) traveling from Uppsala:
-//   Tier 1 has Stockholm at 59.3293°N → resolved as nearest to Spånga coordinates.
+// For a user in Haparanda: Tier 1 has Haparanda at 65.8355°N → exact match.
+// For a user in Spånga (Stockholm municipality): nearest bundled is Stockholm.
+//
+// MAX-DISTANCE SAFETY: if the nearest resolved city is > kMaxFallbackDistanceKm
+// away the scheduler refuses to schedule uncertain data, sets needsPrayerRefresh,
+// and leaves existing notifications untouched.
 //
 // ── Prayer cache ─────────────────────────────────────────────────────────────
 // Reads from andalus_multi_city_cache (dict of cityKey → city cache).
@@ -59,10 +63,16 @@ private let kLocationIndexKey    = "andalus_location_index"
 private let kMultiCityCacheKey   = "andalus_multi_city_cache"
 private let kScheduleStateKey    = "andalus_notification_schedule_state"
 
+// Maximum distance (km) at which a bundled fallback city is considered reliable.
+// If the nearest resolved city exceeds this, native will NOT schedule notifications
+// (uncertain data), will set needsPrayerRefresh so JS refreshes on next app open,
+// and will leave existing notifications untouched.
+private let kMaxFallbackDistanceKm: Double = 100.0
+
 // MARK: - Static fallback location index
 // Always available regardless of which cities the user has opened the app in.
-// Covers major Swedish cities so native can resolve e.g. Spånga → Stockholm
-// without the user having previously opened the app in Stockholm.
+// Covers 110 Swedish cities so native can resolve locations across all of Sweden
+// without the user having previously opened the app in that area.
 
 private struct StaticCity {
     let name:        String  // normalized lowercase — matches JS getEffectivePrayerCity().toLowerCase()
@@ -72,31 +82,126 @@ private struct StaticCity {
 }
 
 private let bundledLocations: [StaticCity] = [
-    StaticCity(name: "stockholm",    displayName: "Stockholm",    lat: 59.3293, lng: 18.0686),
-    StaticCity(name: "göteborg",     displayName: "Göteborg",     lat: 57.7089, lng: 11.9746),
-    StaticCity(name: "malmö",        displayName: "Malmö",        lat: 55.6050, lng: 13.0038),
-    StaticCity(name: "uppsala",      displayName: "Uppsala",      lat: 59.8586, lng: 17.6389),
-    StaticCity(name: "västerås",     displayName: "Västerås",     lat: 59.6162, lng: 16.5528),
-    StaticCity(name: "örebro",       displayName: "Örebro",       lat: 59.2753, lng: 15.2134),
-    StaticCity(name: "linköping",    displayName: "Linköping",    lat: 58.4108, lng: 15.6214),
-    StaticCity(name: "helsingborg",  displayName: "Helsingborg",  lat: 56.0467, lng: 12.6945),
-    StaticCity(name: "jönköping",    displayName: "Jönköping",    lat: 57.7826, lng: 14.1618),
-    StaticCity(name: "norrköping",   displayName: "Norrköping",   lat: 58.5877, lng: 16.1924),
-    StaticCity(name: "lund",         displayName: "Lund",         lat: 55.7047, lng: 13.1910),
-    StaticCity(name: "umeå",         displayName: "Umeå",         lat: 63.8258, lng: 20.2630),
-    StaticCity(name: "gävle",        displayName: "Gävle",        lat: 60.6749, lng: 17.1413),
-    StaticCity(name: "borås",        displayName: "Borås",        lat: 57.7210, lng: 12.9401),
-    StaticCity(name: "södertälje",   displayName: "Södertälje",   lat: 59.1955, lng: 17.6253),
-    StaticCity(name: "eskilstuna",   displayName: "Eskilstuna",   lat: 59.3666, lng: 16.5077),
-    StaticCity(name: "karlstad",     displayName: "Karlstad",     lat: 59.3793, lng: 13.5036),
-    StaticCity(name: "växjö",        displayName: "Växjö",        lat: 56.8777, lng: 14.8091),
-    StaticCity(name: "halmstad",     displayName: "Halmstad",     lat: 56.6745, lng: 12.8577),
-    StaticCity(name: "sundsvall",    displayName: "Sundsvall",    lat: 62.3908, lng: 17.3069),
-    StaticCity(name: "huddinge",     displayName: "Huddinge",     lat: 59.2366, lng: 17.9810),
-    StaticCity(name: "botkyrka",     displayName: "Botkyrka",     lat: 59.2005, lng: 17.8280),
-    StaticCity(name: "järfälla",     displayName: "Järfälla",     lat: 59.4131, lng: 17.8340),
-    StaticCity(name: "sollentuna",   displayName: "Sollentuna",   lat: 59.4282, lng: 17.9508),
-    StaticCity(name: "solna",        displayName: "Solna",        lat: 59.3597, lng: 18.0009),
+    // ── Original 25 ──────────────────────────────────────────────────────────
+    StaticCity(name: "stockholm",       displayName: "Stockholm",       lat: 59.3293, lng: 18.0686),
+    StaticCity(name: "göteborg",        displayName: "Göteborg",        lat: 57.7089, lng: 11.9746),
+    StaticCity(name: "malmö",           displayName: "Malmö",           lat: 55.6050, lng: 13.0038),
+    StaticCity(name: "uppsala",         displayName: "Uppsala",         lat: 59.8586, lng: 17.6389),
+    StaticCity(name: "västerås",        displayName: "Västerås",        lat: 59.6162, lng: 16.5528),
+    StaticCity(name: "örebro",          displayName: "Örebro",          lat: 59.2753, lng: 15.2134),
+    StaticCity(name: "linköping",       displayName: "Linköping",       lat: 58.4108, lng: 15.6214),
+    StaticCity(name: "helsingborg",     displayName: "Helsingborg",     lat: 56.0467, lng: 12.6945),
+    StaticCity(name: "jönköping",       displayName: "Jönköping",       lat: 57.7826, lng: 14.1618),
+    StaticCity(name: "norrköping",      displayName: "Norrköping",      lat: 58.5877, lng: 16.1924),
+    StaticCity(name: "lund",            displayName: "Lund",            lat: 55.7047, lng: 13.1910),
+    StaticCity(name: "umeå",            displayName: "Umeå",            lat: 63.8258, lng: 20.2630),
+    StaticCity(name: "gävle",           displayName: "Gävle",           lat: 60.6749, lng: 17.1413),
+    StaticCity(name: "borås",           displayName: "Borås",           lat: 57.7210, lng: 12.9401),
+    StaticCity(name: "södertälje",      displayName: "Södertälje",      lat: 59.1955, lng: 17.6253),
+    StaticCity(name: "eskilstuna",      displayName: "Eskilstuna",      lat: 59.3666, lng: 16.5077),
+    StaticCity(name: "karlstad",        displayName: "Karlstad",        lat: 59.3793, lng: 13.5036),
+    StaticCity(name: "växjö",           displayName: "Växjö",           lat: 56.8777, lng: 14.8091),
+    StaticCity(name: "halmstad",        displayName: "Halmstad",        lat: 56.6745, lng: 12.8577),
+    StaticCity(name: "sundsvall",       displayName: "Sundsvall",       lat: 62.3908, lng: 17.3069),
+    StaticCity(name: "huddinge",        displayName: "Huddinge",        lat: 59.2366, lng: 17.9810),
+    StaticCity(name: "botkyrka",        displayName: "Botkyrka",        lat: 59.2005, lng: 17.8280),
+    StaticCity(name: "järfälla",        displayName: "Järfälla",        lat: 59.4131, lng: 17.8340),
+    StaticCity(name: "sollentuna",      displayName: "Sollentuna",      lat: 59.4282, lng: 17.9508),
+    StaticCity(name: "solna",           displayName: "Solna",           lat: 59.3597, lng: 18.0009),
+    // ── Norrland ─────────────────────────────────────────────────────────────
+    StaticCity(name: "luleå",           displayName: "Luleå",           lat: 65.5848, lng: 22.1567),
+    StaticCity(name: "skellefteå",      displayName: "Skellefteå",      lat: 64.7507, lng: 20.9528),
+    StaticCity(name: "piteå",           displayName: "Piteå",           lat: 65.3172, lng: 21.4794),
+    StaticCity(name: "boden",           displayName: "Boden",           lat: 65.8252, lng: 21.6886),
+    StaticCity(name: "kiruna",          displayName: "Kiruna",          lat: 67.8558, lng: 20.2253),
+    StaticCity(name: "gällivare",       displayName: "Gällivare",       lat: 67.1339, lng: 20.6528),
+    StaticCity(name: "kalix",           displayName: "Kalix",           lat: 65.8558, lng: 23.1430),
+    StaticCity(name: "haparanda",       displayName: "Haparanda",       lat: 65.8355, lng: 24.1368),
+    StaticCity(name: "östersund",       displayName: "Östersund",       lat: 63.1792, lng: 14.6357),
+    StaticCity(name: "örnsköldsvik",    displayName: "Örnsköldsvik",    lat: 63.2909, lng: 18.7153),
+    // ── Dalarna / Gävleborg / södra Norrland ─────────────────────────────────
+    StaticCity(name: "falun",           displayName: "Falun",           lat: 60.6065, lng: 15.6355),
+    StaticCity(name: "borlänge",        displayName: "Borlänge",        lat: 60.4858, lng: 15.4360),
+    StaticCity(name: "mora",            displayName: "Mora",            lat: 61.0070, lng: 14.5430),
+    StaticCity(name: "ludvika",         displayName: "Ludvika",         lat: 60.1496, lng: 15.1878),
+    StaticCity(name: "avesta",          displayName: "Avesta",          lat: 60.1455, lng: 16.1679),
+    StaticCity(name: "hudiksvall",      displayName: "Hudiksvall",      lat: 61.7289, lng: 17.1049),
+    StaticCity(name: "bollnäs",         displayName: "Bollnäs",         lat: 61.3482, lng: 16.3946),
+    StaticCity(name: "söderhamn",       displayName: "Söderhamn",       lat: 61.3037, lng: 17.0592),
+    StaticCity(name: "sandviken",       displayName: "Sandviken",       lat: 60.6216, lng: 16.7755),
+    StaticCity(name: "nynäshamn",       displayName: "Nynäshamn",       lat: 58.9034, lng: 17.9479),
+    // ── Stockholmsregionen ────────────────────────────────────────────────────
+    StaticCity(name: "täby",            displayName: "Täby",            lat: 59.4439, lng: 18.0687),
+    StaticCity(name: "nacka",           displayName: "Nacka",           lat: 59.3105, lng: 18.1637),
+    StaticCity(name: "haninge",         displayName: "Haninge",         lat: 59.1687, lng: 18.1374),
+    StaticCity(name: "tyresö",          displayName: "Tyresö",          lat: 59.2433, lng: 18.2290),
+    StaticCity(name: "upplands-väsby",  displayName: "Upplands Väsby",  lat: 59.5184, lng: 17.9113),
+    StaticCity(name: "märsta",          displayName: "Märsta",          lat: 59.6216, lng: 17.8548),
+    StaticCity(name: "vallentuna",      displayName: "Vallentuna",      lat: 59.5344, lng: 18.0776),
+    StaticCity(name: "åkersberga",      displayName: "Åkersberga",      lat: 59.4794, lng: 18.2997),
+    StaticCity(name: "norrtälje",       displayName: "Norrtälje",       lat: 59.7570, lng: 18.7049),
+    StaticCity(name: "enköping",        displayName: "Enköping",        lat: 59.6361, lng: 17.0777),
+    // ── Sörmland / Östergötland / norra Småland ───────────────────────────────
+    StaticCity(name: "strängnäs",       displayName: "Strängnäs",       lat: 59.3774, lng: 17.0312),
+    StaticCity(name: "katrineholm",     displayName: "Katrineholm",     lat: 58.9959, lng: 16.2072),
+    StaticCity(name: "nyköping",        displayName: "Nyköping",        lat: 58.7528, lng: 17.0079),
+    StaticCity(name: "motala",          displayName: "Motala",          lat: 58.5371, lng: 15.0365),
+    StaticCity(name: "mjölby",          displayName: "Mjölby",          lat: 58.3259, lng: 15.1236),
+    StaticCity(name: "finspång",        displayName: "Finspång",        lat: 58.7058, lng: 15.7674),
+    StaticCity(name: "tranås",          displayName: "Tranås",          lat: 58.0372, lng: 14.9782),
+    StaticCity(name: "värnamo",         displayName: "Värnamo",         lat: 57.1860, lng: 14.0400),
+    StaticCity(name: "nässjö",          displayName: "Nässjö",          lat: 57.6531, lng: 14.6968),
+    StaticCity(name: "eksjö",           displayName: "Eksjö",           lat: 57.6664, lng: 14.9721),
+    // ── Kalmar / Gotland / Blekinge / norra Skåne ────────────────────────────
+    StaticCity(name: "kalmar",          displayName: "Kalmar",          lat: 56.6634, lng: 16.3568),
+    StaticCity(name: "oskarshamn",      displayName: "Oskarshamn",      lat: 57.2646, lng: 16.4484),
+    StaticCity(name: "västervik",       displayName: "Västervik",       lat: 57.7584, lng: 16.6373),
+    StaticCity(name: "visby",           displayName: "Visby",           lat: 57.6348, lng: 18.2948),
+    StaticCity(name: "karlskrona",      displayName: "Karlskrona",      lat: 56.1612, lng: 15.5869),
+    StaticCity(name: "ronneby",         displayName: "Ronneby",         lat: 56.2094, lng: 15.2760),
+    StaticCity(name: "karlshamn",       displayName: "Karlshamn",       lat: 56.1703, lng: 14.8619),
+    StaticCity(name: "kristianstad",    displayName: "Kristianstad",    lat: 56.0294, lng: 14.1567),
+    StaticCity(name: "hässleholm",      displayName: "Hässleholm",      lat: 56.1589, lng: 13.7668),
+    StaticCity(name: "ängelholm",       displayName: "Ängelholm",       lat: 56.2428, lng: 12.8622),
+    // ── Skåne / Halland / södra Götaland ─────────────────────────────────────
+    StaticCity(name: "landskrona",      displayName: "Landskrona",      lat: 55.8708, lng: 12.8302),
+    StaticCity(name: "trelleborg",      displayName: "Trelleborg",      lat: 55.3751, lng: 13.1569),
+    StaticCity(name: "ystad",           displayName: "Ystad",           lat: 55.4295, lng: 13.8204),
+    StaticCity(name: "simrishamn",      displayName: "Simrishamn",      lat: 55.5565, lng: 14.3504),
+    StaticCity(name: "varberg",         displayName: "Varberg",         lat: 57.1056, lng: 12.2508),
+    StaticCity(name: "falkenberg",      displayName: "Falkenberg",      lat: 56.9055, lng: 12.4912),
+    StaticCity(name: "kungsbacka",      displayName: "Kungsbacka",      lat: 57.4875, lng: 12.0762),
+    StaticCity(name: "alingsås",        displayName: "Alingsås",        lat: 57.9300, lng: 12.5334),
+    StaticCity(name: "lerum",           displayName: "Lerum",           lat: 57.7705, lng: 12.2690),
+    StaticCity(name: "kungälv",         displayName: "Kungälv",         lat: 57.8706, lng: 11.9805),
+    // ── Västra Götaland / Värmland / Västmanland ──────────────────────────────
+    StaticCity(name: "trollhättan",     displayName: "Trollhättan",     lat: 58.2837, lng: 12.2886),
+    StaticCity(name: "uddevalla",       displayName: "Uddevalla",       lat: 58.3498, lng: 11.9356),
+    StaticCity(name: "vänersborg",      displayName: "Vänersborg",      lat: 58.3807, lng: 12.3234),
+    StaticCity(name: "skövde",          displayName: "Skövde",          lat: 58.3903, lng: 13.8461),
+    StaticCity(name: "lidköping",       displayName: "Lidköping",       lat: 58.5052, lng: 13.1577),
+    StaticCity(name: "mariestad",       displayName: "Mariestad",       lat: 58.7097, lng: 13.8237),
+    StaticCity(name: "kristinehamn",    displayName: "Kristinehamn",    lat: 59.3098, lng: 14.1081),
+    StaticCity(name: "arvika",          displayName: "Arvika",          lat: 59.6553, lng: 12.5852),
+    StaticCity(name: "köping",          displayName: "Köping",          lat: 59.5140, lng: 15.9926),
+    StaticCity(name: "sala",            displayName: "Sala",            lat: 59.9199, lng: 16.6066),
+    // ── Örebro / norra Dalarna / Ångermanland / inre Norrland ─────────────────
+    StaticCity(name: "fagersta",        displayName: "Fagersta",        lat: 60.0042, lng: 15.7932),
+    StaticCity(name: "arboga",          displayName: "Arboga",          lat: 59.3949, lng: 15.8388),
+    StaticCity(name: "kumla",           displayName: "Kumla",           lat: 59.1277, lng: 15.1434),
+    StaticCity(name: "lindesberg",      displayName: "Lindesberg",      lat: 59.5939, lng: 15.2304),
+    StaticCity(name: "härnösand",       displayName: "Härnösand",       lat: 62.6323, lng: 17.9379),
+    StaticCity(name: "sollefteå",       displayName: "Sollefteå",       lat: 63.1667, lng: 17.2667),
+    StaticCity(name: "lycksele",        displayName: "Lycksele",        lat: 64.5954, lng: 18.6735),
+    StaticCity(name: "vilhelmina",      displayName: "Vilhelmina",      lat: 64.6242, lng: 16.6550),
+    StaticCity(name: "arjeplog",        displayName: "Arjeplog",        lat: 66.0517, lng: 17.8861),
+    StaticCity(name: "jokkmokk",        displayName: "Jokkmokk",        lat: 66.6066, lng: 19.8232),
+    // ── Övriga ───────────────────────────────────────────────────────────────
+    StaticCity(name: "malung",          displayName: "Malung",          lat: 60.6833, lng: 13.7167),
+    StaticCity(name: "sveg",            displayName: "Sveg",            lat: 62.0346, lng: 14.3658),
+    StaticCity(name: "strömstad",       displayName: "Strömstad",       lat: 58.9395, lng: 11.1712),
+    StaticCity(name: "lysekil",         displayName: "Lysekil",         lat: 58.2743, lng: 11.4358),
+    StaticCity(name: "ulricehamn",      displayName: "Ulricehamn",      lat: 57.7916, lng: 13.4142),
 ]
 
 // MARK: - Data models
@@ -186,10 +291,20 @@ final class NativeNotificationScheduler {
         guard let nearest else {
             NSLog("[NativeNotif] Cannot resolve nearest city — skipping"); completion(false); return
         }
+        let nearestKm = haversineKm(lat1: lat, lng1: lng, lat2: nearest.lat, lng2: nearest.lng)
         NSLog("[NativeNotif] Nearest: %@ (%.1f km) — key: %@",
-              nearest.displayName,
-              haversineKm(lat1: lat, lng1: lng, lat2: nearest.lat, lng2: nearest.lng),
-              nearest.cacheKey)
+              nearest.displayName, nearestKm, nearest.cacheKey)
+
+        // Safety: refuse to schedule when the nearest known city is too far away.
+        // Prayer times from a distant city would be wrong. Signal JS to refresh
+        // on next app open and keep any existing notifications intact.
+        guard nearestKm <= kMaxFallbackDistanceKm else {
+            NSLog("[NativeNotif] Nearest fallback %@ is %.1f km away — exceeds %.0f km limit, keeping existing notifications",
+                  nearest.displayName, nearestKm, kMaxFallbackDistanceKm)
+            markNeedsPrayerRefresh(defaults)
+            completion(false)
+            return
+        }
 
         // 3. Prayer cache for nearest city
         let multiCache = readMultiCityCache(defaults)
