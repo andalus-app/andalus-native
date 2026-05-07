@@ -18,10 +18,11 @@ import {
   setNotificationScheduleState,
   getNotificationScheduleState,
   setEffectivePrayerSchedule,
-  upsertVisitedPrayerLocation,
+  getVisitedPrayerLocations,
   type NotificationScheduleState,
   type EffectivePrayerSchedule,
 } from '../modules/WidgetData';
+import { refreshVisitedPlaceMultiDayCache } from '../services/visitedPlacesRefresh';
 import { getEffectivePrayerCity } from '../services/monthlyCache';
 import { getPrayerMonthFromSupabaseFallback } from '../services/supabasePrayerFallback';
 
@@ -203,6 +204,29 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           getBackgroundLocationUpdate()
             .then(bgUpdate => { if (bgUpdate) pendingBgClearRef.current = true; })
             .catch(() => {});
+
+          if (__DEV__) {
+            getVisitedPrayerLocations().then(entries => {
+              if (!entries) { console.log('[VisitedCache] empty / not written yet'); return; }
+              console.log(`[VisitedCache] ${entries.length} entries on app open:`);
+              (entries as Array<Record<string, unknown>>).forEach((e, i) => {
+                const dailyKeys = e.dailyTimesByDate
+                  ? Object.keys(e.dailyTimesByDate as Record<string, unknown>).sort().join(', ')
+                  : 'none';
+                console.log(
+                  `[VisitedCache]   [${i}] locationKey=${e.locationKey}` +
+                  ` displayName=${e.displayName}` +
+                  ` lat=${e.lat} lng=${e.lng}` +
+                  ` method=${e.method} school=${e.school}` +
+                  ` date=${e.date} tomorrowDate=${e.tomorrowDate}` +
+                  ` todayTimesCount=${Object.keys((e.todayTimes as Record<string, unknown>) ?? {}).length}` +
+                  ` dailyTimesByDate=[${dailyKeys}]` +
+                  ` source=${e.source}` +
+                  ` lastUsedAt=${new Date(((e.lastUsedAt as number) ?? 0) * 1000).toISOString()}`,
+                );
+              });
+            }).catch(() => {});
+          }
         }
 
         // Refresh GPS silently in background so home screen and prayer tab both
@@ -381,26 +405,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           source:                  'js_precise_location',
         } as EffectivePrayerSchedule).catch(() => {});
 
-        // Write this precise resolved place into the visited places cache so
-        // native can match it by 2.0 km radius during significant-location-change
-        // events. This gives suburb-precise prayer times (e.g. Spånga, Järfälla)
-        // even when the phone is locked and JS is not alive.
-        upsertVisitedPrayerLocation({
-          locationKey:             makeLocationKey(fullDisplayName),
-          displayName:             fullDisplayName,
-          notificationDisplayName: getNotificationDisplayName(fullDisplayName),
-          lat:                     loc.latitude,
-          lng:                     loc.longitude,
-          method,
-          school,
-          date:                    todayDate.toISOString().slice(0, 10),
-          tomorrowDate:            tomorrowDate.toISOString().slice(0, 10),
-          todayTimes:              todayT,
-          tomorrowTimes:           tomT ?? null,
-          updatedAt:               Date.now() / 1000,
-          lastUsedAt:              Date.now() / 1000,
-          source:                  'js_precise_location',
-        }).catch(() => {});
+        // Write this precise resolved place into the visited places cache with a
+        // 7-day rolling window so native can use it even if the app hasn't been
+        // opened for several days (e.g. Spånga visited 2 days ago still matches).
+        // Fire-and-forget: writes today+tomorrow immediately, then fetches and
+        // adds days 2–6 in the background without blocking the UI.
+        refreshVisitedPlaceMultiDayCache(
+          {
+            locationKey:             makeLocationKey(fullDisplayName),
+            displayName:             fullDisplayName,
+            notificationDisplayName: getNotificationDisplayName(fullDisplayName),
+            lat:                     loc.latitude,
+            lng:                     loc.longitude,
+            method,
+            school,
+            source:                  'js_precise_location',
+          },
+          todayT,
+          tomT ?? null,
+        ).catch(() => {});
 
         // Warmup all 25 bundled fallback cities in the native cache so native
         // can reschedule notifications for any Swedish city even on first visit.

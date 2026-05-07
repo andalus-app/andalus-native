@@ -255,10 +255,13 @@ private struct VisitedPrayerLocation: Decodable {
     let lng:                     Double
     let method:                  Int
     let school:                  Int
-    let date:                    String   // "yyyy-MM-dd"
-    let tomorrowDate:            String   // "yyyy-MM-dd"
-    let todayTimes:              [String: String]
-    let tomorrowTimes:           [String: String]?
+    let date:                    String   // "yyyy-MM-dd" — legacy; kept for backward compat
+    let tomorrowDate:            String   // "yyyy-MM-dd" — legacy; kept for backward compat
+    let todayTimes:              [String: String]    // legacy; kept for backward compat
+    let tomorrowTimes:           [String: String]?   // legacy; kept for backward compat
+    /// Rolling 7-day cache keyed by "yyyy-MM-dd".
+    /// Absent on entries written before this field was introduced (use legacy fields).
+    let dailyTimesByDate:        [String: [String: String]]?
     let updatedAt:               Double
     let lastUsedAt:              Double
     let source:                  String
@@ -381,6 +384,19 @@ final class NativeNotificationScheduler {
         NSLog("[NativeNotif] Visited places cache: %d entries", visitedCount)
 
         if let allVisited = visitedEntries, !allVisited.isEmpty {
+            // Dump every entry before filtering so we can see method/school mismatches
+            NSLog("[NativeNotif] Visited cache full dump (before method filter):")
+            for (i, e) in allVisited.enumerated() {
+                let dist      = haversineKm(lat1: lat, lng1: lng, lat2: e.lat, lng2: e.lng)
+                let dailyDays = e.dailyTimesByDate?.count ?? 0
+                let methodMatch = e.method == settings.calculationMethod && e.school == settings.school
+                NSLog("[NativeNotif]   [%d] locationKey=%@ displayName=%@ lat=%.4f lng=%.4f method=%d school=%d date=%@ tomorrowDate=%@ todayTimesCount=%d dailyDays=%d dist=%.2fkm methodMatch=%@",
+                      i, e.locationKey, e.displayName, e.lat, e.lng,
+                      e.method, e.school, e.date, e.tomorrowDate,
+                      e.todayTimes.count, dailyDays, dist,
+                      methodMatch ? "YES" : "NO")
+            }
+
             let methodFiltered = allVisited.filter {
                 $0.method == settings.calculationMethod && $0.school == settings.school
             }
@@ -388,22 +404,47 @@ final class NativeNotificationScheduler {
                   settings.calculationMethod, settings.school, methodFiltered.count)
 
             // Build distance-tagged list, keep only entries within 5.0 km, sort nearest-first.
-            let candidatesIn5km = methodFiltered
-                .map { (entry: $0, dist: haversineKm(lat1: lat, lng1: lng, lat2: $0.lat, lng2: $0.lng)) }
+            let allWithDistances = methodFiltered.map {
+                (entry: $0, dist: haversineKm(lat1: lat, lng1: lng, lat2: $0.lat, lng2: $0.lng))
+            }
+            // Log ALL method-matched candidates so we can see entries outside the radius
+            for c in allWithDistances {
+                let dailyDays = c.entry.dailyTimesByDate?.count ?? 0
+                NSLog("[NativeNotif]   AllVisited: %@ lat=%.4f lng=%.4f dist=%.2f km date=%@ dailyDays=%d inRadius=%@",
+                      c.entry.displayName, c.entry.lat, c.entry.lng, c.dist, c.entry.date, dailyDays,
+                      c.dist <= kMaxVisitedPlaceDistanceKm ? "yes" : "NO")
+            }
+            let candidatesIn5km = allWithDistances
                 .filter { $0.dist <= kMaxVisitedPlaceDistanceKm }
                 .sorted { $0.dist < $1.dist }
 
-            NSLog("[NativeNotif] Valid visited candidates within %.1f km: %d",
-                  kMaxVisitedPlaceDistanceKm, candidatesIn5km.count)
+            NSLog("[NativeNotif] Valid visited candidates within %.1f km: %d today=%@",
+                  kMaxVisitedPlaceDistanceKm, candidatesIn5km.count, todayStr)
             for (i, c) in candidatesIn5km.enumerated() {
-                NSLog("[NativeNotif]   [%d] %@ (%.2f km) date=%@ tomorrowDate=%@",
-                      i, c.entry.displayName, c.dist, c.entry.date, c.entry.tomorrowDate)
+                let timings = resolveVisitedTimings(from: c.entry, todayStr: todayStr, tomorrowStr: tomorrowStr)
+                let reason: String
+                if timings == nil {
+                    if let daily = c.entry.dailyTimesByDate {
+                        reason = "STALE(dailyTimesByDate=\(daily.count)days,today=\(todayStr)missing)"
+                    } else {
+                        reason = "STALE(date=\(c.entry.date) tom=\(c.entry.tomorrowDate))"
+                    }
+                } else if timings!.todayT.isEmpty {
+                    reason = "EMPTY_TIMES"
+                } else {
+                    let dayCount = c.entry.dailyTimesByDate?.count ?? 0
+                    reason = dayCount > 0 ? "OK(dailyTimesByDate=\(dayCount)days)" : "OK(legacy)"
+                }
+                NSLog("[NativeNotif]   [%d] %@ (%.2f km) status=%@",
+                      i, c.entry.displayName, c.dist, reason)
             }
 
-            // Pick the nearest candidate that has resolvable timings.
+            // Pick the nearest candidate that has resolvable timings with non-empty today times.
             if let best = candidatesIn5km.first(where: {
-                resolveVisitedTimings(from: $0.entry, todayStr: todayStr, tomorrowStr: tomorrowStr) != nil
-                    && !$0.entry.todayTimes.isEmpty
+                if let t = resolveVisitedTimings(from: $0.entry, todayStr: todayStr, tomorrowStr: tomorrowStr) {
+                    return !t.todayT.isEmpty
+                }
+                return false
             }) {
                 let nearestVisited = best.entry
                 let visitedDist    = best.dist
@@ -720,11 +761,34 @@ final class NativeNotificationScheduler {
         let tomT:         [String: String]?
     }
 
-    /// Resolves today's and tomorrow's timings from a visited-place entry with rollover.
-    /// Returns nil if the entry is entirely stale (both date and tomorrowDate are in the past).
+    /// Resolves today's and tomorrow's timings from a visited-place entry.
+    ///
+    /// Resolution order:
+    ///  1. dailyTimesByDate[today]  — valid for up to 7 days after last app open.
+    ///  2. Legacy date/todayTimes   — for entries written before dailyTimesByDate.
+    ///  3. Legacy tomorrowDate rollover — entry written yesterday, tomT is now today.
+    ///
+    /// Returns nil when no valid today timings can be found (entry is stale).
     private func resolveVisitedTimings(from entry: VisitedPrayerLocation,
                                        todayStr: String,
                                        tomorrowStr: String) -> ResolvedTimings? {
+        // ── Priority 1: multi-day cache ──────────────────────────────────────────
+        if let daily = entry.dailyTimesByDate {
+            if let todayT = daily[todayStr], !todayT.isEmpty {
+                let tomT = daily[tomorrowStr]
+                NSLog("[NativeNotif] Visited %@ dailyTimesByDate: today=%@ found days=%d tomorrow=%@",
+                      entry.displayName, todayStr, daily.count,
+                      tomT != nil ? "found" : "missing")
+                return ResolvedTimings(todayDate:    todayStr,
+                                       tomorrowDate: tomorrowStr,
+                                       todayT:       todayT,
+                                       tomT:         tomT)
+            }
+            NSLog("[NativeNotif] Visited %@ stale: dailyTimesByDate present (%d days) but today=%@ missing",
+                  entry.displayName, daily.count, todayStr)
+            return nil   // entry has multi-day dict but today is not in it → stale
+        }
+        // ── Priority 2: legacy fields ────────────────────────────────────────────
         if entry.date == todayStr {
             return ResolvedTimings(todayDate:    entry.date,
                                    tomorrowDate: entry.tomorrowDate,
@@ -732,13 +796,15 @@ final class NativeNotificationScheduler {
                                    tomT:         entry.tomorrowTimes)
         }
         if entry.tomorrowDate == todayStr, let tomT = entry.tomorrowTimes {
-            NSLog("[NativeNotif] Visited %@ midnight rollover — using tomorrowTimes as today",
+            NSLog("[NativeNotif] Visited %@ midnight rollover (legacy) — using tomorrowTimes as today",
                   entry.displayName)
             return ResolvedTimings(todayDate:    todayStr,
                                    tomorrowDate: tomorrowStr,
                                    todayT:       tomT,
                                    tomT:         nil)
         }
+        NSLog("[NativeNotif] Visited %@ stale (legacy): date=%@ tomorrowDate=%@",
+              entry.displayName, entry.date, entry.tomorrowDate)
         return nil
     }
 

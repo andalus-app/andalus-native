@@ -194,6 +194,16 @@ export async function getNotificationScheduleState(): Promise<NotificationSchedu
 }
 
 /**
+ * Reads the full andalus_visited_prayer_locations array from App Group.
+ * Returns null if nothing has been written yet.
+ * Used for debugging — call on app startup to verify the visited cache state.
+ */
+export async function getVisitedPrayerLocations(): Promise<unknown[] | null> {
+  if (!NativeModule) return null;
+  return NativeModule.getVisitedPrayerLocations() ?? null;
+}
+
+/**
  * Reads the full andalus_multi_city_cache from App Group.
  * Returns an empty object if the cache has not been written yet.
  * Used by nativeCacheWarmup to check which cities are already fresh.
@@ -267,6 +277,12 @@ export interface VisitedPrayerLocation {
   tomorrowDate:            string;
   todayTimes:              Record<string, string>;
   tomorrowTimes:           Record<string, string> | null;
+  /**
+   * Rolling 7-day cache keyed by "yyyy-MM-dd".
+   * Native reads dailyTimesByDate[today] first; falls back to date/todayTimes
+   * for entries written before this field was introduced.
+   */
+  dailyTimesByDate?:       Record<string, Record<string, string>>;
   /** Unix seconds — when this entry was written. */
   updatedAt:               number;
   /** Unix seconds — updated on every write; used for LRU eviction at 100 entries. */

@@ -211,16 +211,62 @@ private func currentAndNext(prayers: [Prayer], at now: Date) -> (Prayer, Prayer)
 
 private func buildEntries(prayers: [Prayer], city: String, lastUpdatedAt: Date? = nil) -> [PrayerEntry] {
     let now = Date()
-    var entries: [PrayerEntry] = []
-    let (cur0, nxt0) = currentAndNext(prayers: prayers, at: now)
-    entries.append(PrayerEntry(date: now, current: cur0, next: nxt0,
-                               allPrayers: prayers, city: city, lastUpdatedAt: lastUpdatedAt))
+    var dates = Set<Date>()
+    dates.insert(now)
+
+    // Prayer transition points
     for prayer in prayers where prayer.time > now {
-        let (cur, nxt) = currentAndNext(prayers: prayers, at: prayer.time)
-        entries.append(PrayerEntry(date: prayer.time, current: cur, next: nxt,
-                                   allPrayers: prayers, city: city, lastUpdatedAt: lastUpdatedAt))
+        dates.insert(prayer.time)
     }
-    return entries
+
+    // Halva natten transition — needed so hero state switches when halvaNatten passes
+    let five = prayers.filter { kFivePrayers.contains($0.name) }
+    var halvaNattenTime: Date? = nil
+    if let maghrib = five.first(where: { $0.name == "Maghrib" }),
+       let fajr    = five.first(where: { $0.name == "Fajr" }) {
+        var fajrAdj = fajr.time
+        if fajrAdj <= maghrib.time { fajrAdj = fajrAdj.addingTimeInterval(86_400) }
+        halvaNattenTime = maghrib.time.addingTimeInterval(fajrAdj.timeIntervalSince(maghrib.time) / 2)
+        if let ht = halvaNattenTime, ht > now { dates.insert(ht) }
+    }
+
+    // Coarse near-prayer entries: every minute for last 5 minutes, then at 30/20/10 s
+    let coarseOffsets: [TimeInterval] = [-300, -240, -180, -120, -60, -30, -20, -10]
+    for prayer in prayers where prayer.time > now {
+        for offset in coarseOffsets {
+            let t = prayer.time.addingTimeInterval(offset)
+            if t > now { dates.insert(t) }
+        }
+    }
+    if let ht = halvaNattenTime, ht > now {
+        for offset in coarseOffsets {
+            let t = ht.addingTimeInterval(offset)
+            if t > now { dates.insert(t) }
+        }
+    }
+
+    // Per-second entries for the last 60 s before the next hero event only.
+    // iOS lock screen renders Text(.timer) as "<1 minut" below 60 s — explicit
+    // per-second entries let the view display a static "0:ss" string instead.
+    let nextHeroTime: Date? = {
+        switch computeHeroState(allPrayers: prayers, now: now) {
+        case .prayer(let p):     return p.time
+        case .shuruq(let t):     return t
+        case .halvaNatten(let t): return t
+        }
+    }()
+    if let net = nextHeroTime, net > now {
+        for s in 1...60 {
+            let t = net.addingTimeInterval(-Double(s))
+            if t > now { dates.insert(t) }
+        }
+    }
+
+    return dates.sorted().map { t in
+        let (cur, nxt) = currentAndNext(prayers: prayers, at: t)
+        return PrayerEntry(date: t, current: cur, next: nxt,
+                           allPrayers: prayers, city: city, lastUpdatedAt: lastUpdatedAt)
+    }
 }
 
 // MARK: - Provider
@@ -976,6 +1022,28 @@ struct LockScreenFocusView: View {
         computeHeroState(allPrayers: entry.allPrayers, now: entry.date)
     }
 
+    /// Shows a live `.timer` countdown for ≥ 60 s remaining.
+    /// For < 60 s the lock screen renders Text(.timer) as "<1 minut" in Swedish,
+    /// so we display an explicit "0:ss" string from the per-second entry instead.
+    @ViewBuilder
+    private func lockCountdown(to target: Date) -> some View {
+        let secs = max(0, Int(target.timeIntervalSince(entry.date).rounded()))
+        if secs < 60 {
+            Text(String(format: "0:%02d", secs))
+                .font(.system(size: 22, weight: .bold).monospacedDigit())
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            Text(target, style: .timer)
+                .font(.system(size: 22, weight: .bold).monospacedDigit())
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
     @ViewBuilder
     private var heroSection: some View {
         switch heroState {
@@ -994,12 +1062,7 @@ struct LockScreenFocusView: View {
                     .minimumScaleFactor(0.85)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            Text(p.time, style: .timer)
-                .font(.system(size: 22, weight: .bold).monospacedDigit())
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            lockCountdown(to: p.time)
             Text("Går in \(timeFmt.string(from: p.time))")
                 .font(.system(size: 12, weight: .medium).monospacedDigit())
                 .foregroundStyle(.secondary)
@@ -1007,17 +1070,13 @@ struct LockScreenFocusView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
 
         case .shuruq(let t):
-            Text("Shuruq")
+            Text("Tid kvar till Shuruq")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            Text(t, style: .timer)
-                .font(.system(size: 22, weight: .bold).monospacedDigit())
-                .foregroundStyle(.primary)
-                .lineLimit(1)
                 .minimumScaleFactor(0.75)
                 .frame(maxWidth: .infinity, alignment: .leading)
+            lockCountdown(to: t)
             Text("Går in \(timeFmt.string(from: t))")
                 .font(.system(size: 12, weight: .medium).monospacedDigit())
                 .foregroundStyle(.secondary)
@@ -1025,18 +1084,13 @@ struct LockScreenFocusView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
 
         case .halvaNatten(let t):
-            Text("Halva natten")
+            Text("Tid kvar till halva natten")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
-                .minimumScaleFactor(0.85)
+                .minimumScaleFactor(0.70)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            Text(t, style: .timer)
-                .font(.system(size: 22, weight: .bold).monospacedDigit())
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            lockCountdown(to: t)
             Text("Går in \(timeFmt.string(from: t))")
                 .font(.system(size: 12, weight: .medium).monospacedDigit())
                 .foregroundStyle(.secondary)
@@ -1137,6 +1191,264 @@ struct HidayahLockOverviewWidget: Widget {
     }
 }
 
+// MARK: - Lock Screen Arc widget — prayer timeline visualization
+
+/// Compact countdown: "1t, 4m" / "59m" / "50s" / "0s"
+private func compactCountdown(from now: Date, to target: Date) -> String {
+    let secs = max(0, Int(target.timeIntervalSince(now).rounded()))
+    if secs < 60 { return "\(secs)s" }
+    let totalMins = secs / 60
+    if totalMins < 60 { return "\(totalMins)m" }
+    return "\(totalMins / 60)t, \(totalMins % 60)m"
+}
+
+/// Builds a minute-level + final-60-second timeline for the arc widget.
+/// Generates minute-level entries from now until the next five prayer,
+/// per-second entries for the final 60 seconds, then transition-only entries
+/// for the remaining prayers. This keeps countdown text accurate to ≤1 minute
+/// even when the device is sleeping.
+private func buildLockArcEntries(prayers: [Prayer],
+                                  city: String,
+                                  lastUpdatedAt: Date? = nil) -> [PrayerEntry] {
+    let now  = Date()
+    let five = prayers.filter { kFivePrayers.contains($0.name) }
+    var dates = Set<Date>()
+    dates.insert(now)
+
+    let nextFive = five.first { $0.time > now }
+
+    if let next = nextFive {
+        // Minute-level entries: one entry per minute from now until the next prayer.
+        // WidgetKit picks the latest entry whose .date ≤ current clock time, so each
+        // entry renders the exact remaining minutes at that snapshot.
+        var cursor = now.addingTimeInterval(60)
+        while cursor < next.time {
+            dates.insert(cursor)
+            cursor = cursor.addingTimeInterval(60)
+        }
+        // Per-second entries for the final 60 s so "50s", "49s"… display correctly.
+        for s in 1...60 {
+            let candidate = next.time.addingTimeInterval(-Double(s))
+            if candidate > now { dates.insert(candidate) }
+        }
+        // Transition entry exactly at the prayer time.
+        dates.insert(next.time)
+    }
+
+    // Transition-only entries for all remaining prayers beyond nextFive.
+    // After nextFive fires, WidgetKit will request a fresh timeline, which
+    // will in turn generate new minute-level entries for the following prayer.
+    for prayer in five where prayer.time > (nextFive?.time ?? now) {
+        dates.insert(prayer.time)
+    }
+
+    return dates.sorted().map { t in
+        let (cur, nxt) = currentAndNext(prayers: prayers, at: t)
+        return PrayerEntry(date: t, current: cur, next: nxt,
+                           allPrayers: prayers, city: city, lastUpdatedAt: lastUpdatedAt)
+    }
+}
+
+struct LockArcProvider: TimelineProvider {
+
+    func placeholder(in context: Context) -> PrayerEntry { .placeholder() }
+
+    func getSnapshot(in context: Context,
+                     completion: @escaping (PrayerEntry) -> Void) {
+        if let stored = readAppGroupData() {
+            let prayers = parsePrayers(stored.prayers)
+            if !prayers.isEmpty {
+                let now = Date()
+                let (cur, nxt) = currentAndNext(prayers: prayers, at: now)
+                let lastUpdatedAt = stored.timestamp.map { Date(timeIntervalSince1970: $0) }
+                completion(PrayerEntry(date: now, current: cur, next: nxt,
+                                       allPrayers: prayers, city: stored.city,
+                                       lastUpdatedAt: lastUpdatedAt))
+                return
+            }
+        }
+        completion(.placeholder())
+    }
+
+    func getTimeline(in context: Context,
+                     completion: @escaping (Timeline<PrayerEntry>) -> Void) {
+        let midnight = Calendar.current.startOfDay(for: Date()).addingTimeInterval(86_400 + 60)
+        let locationChanged = UserDefaults(suiteName: kAppGroup)?
+            .bool(forKey: "needsPrayerRefresh") ?? false
+
+        if !locationChanged, let stored = readAppGroupData() {
+            let prayers = parsePrayers(stored.prayers)
+            if !prayers.isEmpty {
+                let lastUpdatedAt = stored.timestamp.map { Date(timeIntervalSince1970: $0) }
+                let entries = buildLockArcEntries(prayers: prayers, city: stored.city,
+                                                   lastUpdatedAt: lastUpdatedAt)
+                completion(Timeline(entries: entries, policy: .after(midnight)))
+                return
+            }
+        }
+
+        let (lat, lng, city) = readStoredLocation()
+        fetchFromAPI(lat: lat, lng: lng) { prayers in
+            guard !prayers.isEmpty else {
+                let timeline = Timeline(entries: [PrayerEntry.placeholder()],
+                                        policy: .after(Date().addingTimeInterval(900)))
+                completion(timeline)
+                return
+            }
+            let updatedAt: Date? = locationChanged ? nil : Date()
+            let entries = buildLockArcEntries(prayers: prayers, city: city,
+                                               lastUpdatedAt: updatedAt)
+            completion(Timeline(entries: entries, policy: .after(midnight)))
+        }
+    }
+}
+
+struct PrayerArcLockScreenView: View {
+    let entry: PrayerEntry
+
+    private var fivePrayers: [Prayer] {
+        entry.allPrayers.filter { kFivePrayers.contains($0.name) }
+    }
+
+    /// The most recent five-prayer whose time has already passed.
+    private var currentFive: Prayer? {
+        fivePrayers.last { $0.time <= entry.date }
+    }
+
+    /// The next upcoming five-prayer.
+    private var nextFive: Prayer? {
+        fivePrayers.first { $0.time > entry.date }
+    }
+
+    /// Index of the node that should be filled (= index of the next prayer, or last).
+    private var activeNodeIndex: Int {
+        fivePrayers.firstIndex { $0.time > entry.date } ?? (fivePrayers.count - 1)
+    }
+
+    private var countdownText: String {
+        guard let next = nextFive else {
+            return fivePrayers.last.map { timeFmt.string(from: $0.time) } ?? "--"
+        }
+        return compactCountdown(from: entry.date, to: next.time)
+    }
+
+    var body: some View {
+        if fivePrayers.isEmpty {
+            Text("--")
+                .font(.system(size: 12))
+                .foregroundStyle(.primary)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            VStack(alignment: .center, spacing: 4) {
+                arcCanvas
+                    .frame(maxWidth: .infinity)
+                    .layoutPriority(1)
+                textRow
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    // MARK: Arc canvas
+
+    private var arcCanvas: some View {
+        Canvas { ctx, size in
+            let active = activeNodeIndex
+            let yBase    = size.height * 0.86
+            let yControl = size.height * 0.04
+            let xPad     = size.width  * 0.03
+            let p0      = CGPoint(x: xPad,              y: yBase)
+            let p1      = CGPoint(x: size.width - xPad, y: yBase)
+            let control = CGPoint(x: size.width * 0.5,  y: yControl)
+
+            // Arc — thin stroke at reduced opacity
+            var arcPath = Path()
+            arcPath.move(to: p0)
+            arcPath.addQuadCurve(to: p1, control: control)
+            var arcCtx = ctx
+            arcCtx.opacity = 0.35
+            arcCtx.stroke(arcPath, with: .foreground,
+                          style: StrokeStyle(lineWidth: 1.2, lineCap: .round))
+
+            // Five prayer nodes at evenly-spaced t values along the bezier
+            let tVals: [CGFloat] = [0.0, 0.25, 0.5, 0.75, 1.0]
+            for (i, t) in tVals.enumerated() {
+                let pt       = bezierPoint(t: t, p0: p0, control: control, p1: p1)
+                let isActive = i == active
+                let isPast   = i < active
+                let r: CGFloat = isActive ? 4.2 : 3.0
+                let rect = CGRect(x: pt.x - r, y: pt.y - r, width: r * 2, height: r * 2)
+                if isActive {
+                    ctx.fill(Path(ellipseIn: rect), with: .foreground)
+                } else {
+                    var nodeCtx = ctx
+                    nodeCtx.opacity = isPast ? 0.18 : 0.45
+                    nodeCtx.stroke(Path(ellipseIn: rect), with: .foreground,
+                                   style: StrokeStyle(lineWidth: 1.0))
+                }
+            }
+        }
+    }
+
+    // MARK: Text row
+
+    private var textRow: some View {
+        HStack(alignment: .center, spacing: 0) {
+            // Previous / current prayer name (left)
+            Text(currentFive?.name ?? "")
+                .font(.system(size: 10, weight: .regular))
+                .foregroundStyle(.primary)
+                .opacity(0.55)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            // Compact countdown (center)
+            Text(countdownText)
+                .font(.system(size: 12, weight: .semibold).monospacedDigit())
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+
+            // Next prayer name (right)
+            Text(nextFive?.name ?? (fivePrayers.last?.name ?? ""))
+                .font(.system(size: 10, weight: .regular))
+                .foregroundStyle(.primary)
+                .opacity(0.55)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+        }
+    }
+
+    // MARK: Helpers
+
+    private func bezierPoint(t: CGFloat,
+                              p0: CGPoint,
+                              control: CGPoint,
+                              p1: CGPoint) -> CGPoint {
+        let u = 1 - t
+        return CGPoint(
+            x: u*u*p0.x + 2*u*t*control.x + t*t*p1.x,
+            y: u*u*p0.y + 2*u*t*control.y + t*t*p1.y
+        )
+    }
+}
+
+/// Lock Screen rectangular — Prayer timeline arc with compact countdown.
+struct HidayahLockArcWidget: Widget {
+    let kind = "HidayahLockArcWidget"
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: kind, provider: LockArcProvider()) { entry in
+            PrayerArcLockScreenView(entry: entry)
+                .containerBackground(for: .widget) { Color.clear }
+        }
+        .configurationDisplayName("Bönebåge")
+        .description("Visar bönetiderna som en tidslinje med nedräkning.")
+        .supportedFamilies([.accessoryRectangular])
+    }
+}
+
 #endif // os(iOS) — closes block opened before LockScreenFocusView
 
 // MARK: - Previews
@@ -1149,4 +1461,5 @@ struct HidayahLockOverviewWidget: Widget {
 #if os(iOS)
 #Preview(as: .accessoryRectangular)  { HidayahLockFocusWidget()     } timeline: { PrayerEntry.placeholder() }
 #Preview(as: .accessoryRectangular)  { HidayahLockOverviewWidget()  } timeline: { PrayerEntry.placeholder() }
+#Preview(as: .accessoryRectangular)  { HidayahLockArcWidget()       } timeline: { PrayerEntry.placeholder() }
 #endif

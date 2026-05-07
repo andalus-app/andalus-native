@@ -17,6 +17,7 @@ struct HidayahWidgetBundle: WidgetBundle {
 #if os(iOS)
         HidayahLockFocusWidget()       // lock screen – countdown timer
         HidayahLockOverviewWidget()    // lock screen – daily overview
+        HidayahLockArcWidget()         // lock screen – prayer arc timeline
 #endif
     }
 }

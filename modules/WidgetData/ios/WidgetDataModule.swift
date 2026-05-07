@@ -227,6 +227,17 @@ public class WidgetDataModule: Module {
             promise.resolve(obj)
         }
 
+        // getVisitedPrayerLocations() → Array | null
+        // Returns the full andalus_visited_prayer_locations array so JS can log
+        // the cache state on app open for debugging.
+        AsyncFunction("getVisitedPrayerLocations") { (promise: Promise) in
+            guard let defaults = UserDefaults(suiteName: self.appGroupID),
+                  let data     = defaults.data(forKey: self.visitedLocationsKey),
+                  let arr      = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
+            else { promise.resolve(nil); return }
+            promise.resolve(arr)
+        }
+
         // getMultiCityCache() → Object (dict of cityKey → cache entry)
         // Used by nativeCacheWarmup.ts to check which cities are already fresh
         // before deciding whether to fetch from the network.
@@ -288,28 +299,86 @@ public class WidgetDataModule: Module {
             }
 
             let displayName = entry["displayName"] as? String ?? ""
+            let entryDate   = entry["date"] as? String ?? "?"
 
-            // Match priority: locationKey → displayName → proximity (< 0.5 km)
-            var matchIdx: Int? = nil
-            if matchIdx == nil {
-                matchIdx = entries.firstIndex { ($0["locationKey"] as? String) == locationKey }
+            NSLog("[WidgetData] upsertVisited: locationKey=%@ displayName=%@ lat=%.4f lng=%.4f date=%@ Asr=%@",
+                  locationKey, displayName, lat, lng, entryDate,
+                  (todayTimes["Asr"] as? String) ?? "?")
+
+            // Dump all existing entries before match so we can see what's already cached
+            for (i, e) in entries.enumerated() {
+                let eLat  = e["lat"]         as? Double ?? 0
+                let eLng  = e["lng"]         as? Double ?? 0
+                let eDist = self.haversineKm(lat1: lat, lng1: lng, lat2: eLat, lng2: eLng)
+                NSLog("[WidgetData]   existingEntry[%d]: locationKey=%@ displayName=%@ lat=%.4f lng=%.4f date=%@ dist=%.2fkm",
+                      i,
+                      e["locationKey"]  as? String ?? "?",
+                      e["displayName"]  as? String ?? "?",
+                      eLat, eLng,
+                      e["date"]         as? String ?? "?",
+                      eDist)
             }
-            if matchIdx == nil, !displayName.isEmpty {
-                matchIdx = entries.firstIndex { ($0["displayName"] as? String) == displayName }
-            }
-            if matchIdx == nil {
-                matchIdx = entries.firstIndex { e in
-                    guard let eLat = e["lat"] as? Double, let eLng = e["lng"] as? Double else { return false }
-                    return self.haversineKm(lat1: lat, lng1: lng, lat2: eLat, lng2: eLng) < self.kDedupeProximityKm
+
+            // Match priority:
+            //   1. locationKey exact match  — strongest identity signal
+            //   2. displayName exact match  — same resolved place, possibly different GPS drift
+            //   3. proximity < 0.5 km       — ONLY for legacy entries that have no locationKey
+            //                                 AND no displayName (e.g. old unnamed entries).
+            //                                 Never overwrite a place with a distinct identity.
+            var matchIdx:    Int?    = nil
+            var matchReason: String  = "none"
+
+            // ── 1. locationKey ────────────────────────────────────────────────────────
+            if let idx = entries.firstIndex(where: { ($0["locationKey"] as? String) == locationKey }) {
+                matchIdx    = idx
+                matchReason = "locationKey"
+
+            // ── 2. displayName ────────────────────────────────────────────────────────
+            } else if !displayName.isEmpty,
+                      let idx = entries.firstIndex(where: { ($0["displayName"] as? String) == displayName }) {
+                matchIdx    = idx
+                matchReason = "displayName"
+
+            // ── 3. Proximity — only for anonymous legacy entries ───────────────────────
+            // An existing entry is only eligible if it has no locationKey AND no displayName,
+            // so that two distinct resolved places (e.g. "Spånga, Stockholm" and
+            // "Barkarby, Järfälla") can never merge via GPS proximity.
+            } else {
+                for (idx, e) in entries.enumerated() {
+                    let eKey     = e["locationKey"] as? String ?? ""
+                    let eDisplay = e["displayName"]  as? String ?? ""
+                    guard eKey.isEmpty && eDisplay.isEmpty else {
+                        // Both old and new entries have clear identities — never proximity-merge.
+                        NSLog("[WidgetData] upsertVisited: SKIP proximity merge: distinct identity old=%@ new=%@",
+                              eDisplay.isEmpty ? eKey : eDisplay,
+                              displayName.isEmpty ? locationKey : displayName)
+                        continue
+                    }
+                    guard let eLat = e["lat"] as? Double, let eLng = e["lng"] as? Double else { continue }
+                    let dist = self.haversineKm(lat1: lat, lng1: lng, lat2: eLat, lng2: eLng)
+                    if dist < self.kDedupeProximityKm {
+                        matchIdx    = idx
+                        matchReason = String(format: "legacyProximity(%.3fkm<%.1fkm)", dist, self.kDedupeProximityKm)
+                        break
+                    }
                 }
             }
 
             if let idx = matchIdx {
+                let old = entries[idx]
+                NSLog("[WidgetData] upsertVisited: UPDATE match=%@ idx=%d oldKey=%@ oldDisplay=%@ oldLat=%.4f oldLng=%.4f oldDate=%@ → newKey=%@ newDisplay=%@ newLat=%.4f newLng=%.4f newDate=%@",
+                      matchReason, idx,
+                      old["locationKey"]  as? String ?? "?",
+                      old["displayName"]  as? String ?? "?",
+                      old["lat"]          as? Double ?? 0,
+                      old["lng"]          as? Double ?? 0,
+                      old["date"]         as? String ?? "?",
+                      locationKey, displayName, lat, lng, entryDate)
                 entries[idx] = entry
-                NSLog("[WidgetData] visited places: updated locationKey=%@ (%d entries total)", locationKey, entries.count)
             } else {
+                NSLog("[WidgetData] upsertVisited: INSERT new visited place locationKey=%@ displayName=%@ lat=%.4f lng=%.4f (cache now has %d entries)",
+                      locationKey, displayName, lat, lng, entries.count + 1)
                 entries.append(entry)
-                NSLog("[WidgetData] visited places: inserted locationKey=%@ (%d entries total)", locationKey, entries.count)
             }
 
             // LRU eviction: keep newest 100 by lastUsedAt

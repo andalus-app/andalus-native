@@ -11,10 +11,10 @@ import {
   setNotificationScheduleState,
   getNotificationScheduleState,
   setEffectivePrayerSchedule,
-  upsertVisitedPrayerLocation,
   type NotificationScheduleState,
   type EffectivePrayerSchedule,
 } from '../modules/WidgetData';
+import { refreshVisitedPlaceMultiDayCache } from './visitedPlacesRefresh';
 import { getEffectivePrayerCity } from './monthlyCache';
 
 export const BACKGROUND_LOCATION_TASK = 'HIDAYAH_BACKGROUND_LOCATION';
@@ -229,26 +229,25 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }: TaskMan
         source:                  'js_background',
       } as EffectivePrayerSchedule).catch(() => {});
 
-      // Write this precise resolved place into the visited places cache so
-      // native can match it by 2.0 km radius during significant-location-change
-      // events. `city` is the full geocoded name (suburb + city when applicable).
+      // Write this precise resolved place into the visited places cache with a
+      // 7-day rolling window so native can use it even if the app hasn't been
+      // opened for several days (e.g. Spånga visited 2 days ago still matches).
+      // Fire-and-forget: writes today+tomorrow immediately, then fetches days 2–6.
       if (city) {
-        await upsertVisitedPrayerLocation({
-          locationKey:             makeLocationKey(city),
-          displayName:             city,
-          notificationDisplayName: getNotificationDisplayName(city),
-          lat:                     coords.latitude,
-          lng:                     coords.longitude,
-          method:                  method2,
-          school:                  school2,
-          date:                    todayDate.toISOString().slice(0, 10),
-          tomorrowDate:            tomorrowDate.toISOString().slice(0, 10),
-          todayTimes:              todayT,
-          tomorrowTimes:           tomT ?? null,
-          updatedAt:               Date.now() / 1000,
-          lastUsedAt:              Date.now() / 1000,
-          source:                  'js_background',
-        }).catch(() => {});
+        refreshVisitedPlaceMultiDayCache(
+          {
+            locationKey:             makeLocationKey(city),
+            displayName:             city,
+            notificationDisplayName: getNotificationDisplayName(city),
+            lat:                     coords.latitude,
+            lng:                     coords.longitude,
+            method:                  method2,
+            school:                  school2,
+            source:                  'js_background',
+          },
+          todayT,
+          tomT ?? null,
+        ).catch(() => {});
       }
     }
 
