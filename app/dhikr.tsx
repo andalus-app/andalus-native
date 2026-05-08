@@ -8,11 +8,12 @@ import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, Stack, useLocalSearchParams } from 'expo-router';
 import BackButton from '../components/BackButton';
-import Svg, { Path, Rect, Polygon } from 'react-native-svg';
+import Svg, { Path, Rect, Polygon, Circle } from 'react-native-svg';
 import { useTheme } from '../context/ThemeContext';
 import { pauseYoutubePlayer } from '../context/YoutubePlayerContext';
 import { DhikrCategoryIcon } from '../components/DhikrCategoryIcon';
 import DhikrWellbeingView from '../components/dhikr/DhikrWellbeingView';
+import HisnulMuslimInfoModal from '../components/dhikr/HisnulMuslimInfoModal';
 import HeartPlasterIcon from '../components/HeartPlasterIcon';
 import {
   GRUPPER,
@@ -1305,6 +1306,8 @@ export default function DhikrScreen() {
     });
   }, []);
 
+  const [showInfo, setShowInfo] = useState(false);
+
   const goToCat   = (g: Grupp, initialOpenIdx?: number) => { setSelGrupp(g); setSelGruppInitialOpenIdx(initialOpenIdx ?? null); };
   const goToDhikr = (d: DhikrPost, sibs: DhikrPost[]) => { setSelDhikr(d); setSiblings(sibs); };
   const closeDhikr = () => { setSelDhikr(null); setSiblings([]); };
@@ -1317,7 +1320,7 @@ export default function DhikrScreen() {
   // Disable the Stack navigator's native edge swipe when a sub-view is open.
   // Without this, iOS's gesture recognizer competes with the internal PanResponder
   // and can navigate back to the "Visa mer" screen instead of closing the sub-view.
-  const hasSubView = !!selGrupp || !!selDhikr;
+  const hasSubView = !!selGrupp || !!selDhikr || showInfo;
 
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
@@ -1328,7 +1331,16 @@ export default function DhikrScreen() {
           <BackButton onPress={() => router.back()} />
           <View>
             <Text style={{ fontSize: 19, fontWeight: '800', color: T.text, letterSpacing: -0.3 }}>Dhikr & Du'a</Text>
-            <Text style={{ fontSize: 11, fontWeight: '500', color: T.textMuted, letterSpacing: 0.1, marginTop: 1 }}>Hisnul Muslim – Muslimens Fästning</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 1 }}>
+              <Text style={{ fontSize: 11, fontWeight: '500', color: T.textMuted, letterSpacing: 0.1 }}>Hisnul Muslim – Muslimens Fästning</Text>
+              <TouchableOpacity onPress={() => setShowInfo(true)} hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}>
+                <Svg width={13} height={13} viewBox="0 0 24 24" fill="none">
+                  <Circle cx={12} cy={12} r={10} stroke={T.textMuted} strokeWidth={1.5} />
+                  <Path d="M12 17V11" stroke={T.textMuted} strokeWidth={1.5} strokeLinecap="round" />
+                  <Circle cx={12} cy={8} r={1} fill={T.textMuted} />
+                </Svg>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
 
@@ -1430,6 +1442,11 @@ export default function DhikrScreen() {
           initialOpenIdx={selGruppInitialOpenIdx ?? undefined}
           favorites={favorites} T={T} isDark={isDark}
         />
+      )}
+
+      {/* ── Hisnul Muslim info modal (absoluteFill, slides over library) ── */}
+      {showInfo && (
+        <HisnulMuslimInfoModal onClose={() => setShowInfo(false)} />
       )}
 
       {/* ── Dhikr detail (absoluteFill, slides over cat) ── */}

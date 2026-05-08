@@ -930,7 +930,7 @@ const KAHF_ID           = 'andalus-kahf-friday';
 const KAHF_ENABLED_KEY  = 'kahfReminderEnabled';
 const KAHF_SCHEDULED_KEY = 'kahfReminderScheduled';
 
-// Schedules a weekly Friday 13:00 notification.
+// Schedules a weekly Friday 14:00 notification.
 // Always checks the real scheduler — never double-schedules.
 export async function scheduleFridayKahfReminder(): Promise<void> {
   if (!N) { console.log('[Kahf] expo-notifications not available'); return; }
@@ -956,14 +956,14 @@ export async function scheduleFridayKahfReminder(): Promise<void> {
       trigger: {
         type:    N.SchedulableTriggerInputTypes.CALENDAR,
         weekday: 6,   // iOS calendar: 1=Sunday … 6=Friday … 7=Saturday
-        hour:    13,
+        hour:    14,
         minute:  0,
         repeats: true,
       } as any,
     });
 
     await AsyncStorage.setItem(KAHF_SCHEDULED_KEY, 'true');
-    console.log('[Kahf] Scheduled — every Friday at 13:00');
+    console.log('[Kahf] Scheduled — every Friday at 14:00');
   } catch (e) {
     console.warn('[Kahf] scheduleFridayKahfReminder error:', e);
   }

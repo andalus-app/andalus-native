@@ -6,6 +6,7 @@ import HidayahLogo from '../../components/HidayahLogo';
 import DagensKoranversCard from '../../components/DagensKoranversCard';
 import NextPrayerCard from '../../components/NextPrayerCard';
 import DagensHadithCard from '../../components/DagensHadithCard';
+import FridayChecklistCards from '../../components/FridayChecklistCards';
 import { useCurrentMinute } from '../../hooks/useCurrentMinute';
 import { getHomeV2State } from '../../services/homeV2TimeEngine';
 import { useApp } from '../../context/AppContext';
@@ -529,12 +530,13 @@ function BookingBellPanel({
 }
 
 const FORTSATT_ITEM_DEFS = {
-  quran:   { title: 'Läs Koranen',         subtitle: 'Öppna Koranen',    icon: 'quran'       as const, route: '/quran'  },
-  rem:     { title: 'Läs åminnelser',       subtitle: 'Hisnul Muslim',   icon: 'dhikr'       as const, route: '/dhikr'  },
-  names:   { title: 'Lär dig Allahs namn', subtitle: 'Asma ul-Husna',  icon: 'allahs-namn' as const, route: '/asmaul' },
-  morning: { title: 'Läs morgon adhkar',    subtitle: 'Morgon dhikr',   icon: 'dhikr'       as const, route: '/dhikr?openGroup=morgon&openSection=0' },
-  evening: { title: 'Läs kvälls adhkar',    subtitle: 'Kvälls dhikr',   icon: 'dhikr'       as const, route: '/dhikr?openGroup=morgon&openSection=1' },
-  umrah:   { title: 'Läs Umrah Guide',      subtitle: 'Förbered din Umrah', icon: 'umrah'   as const, route: '/umrah'  },
+  quran:        { title: 'Läs Koranen',         subtitle: 'Öppna Koranen',                           icon: 'quran'       as const, route: '/quran'  },
+  'friday-quran': { title: 'Läs Sura Al-Kahf',  subtitle: 'Direkt efter Fajr och fram till Maghrib', icon: 'quran'       as const, route: '/quran?page=293' },
+  rem:          { title: 'Läs åminnelser',       subtitle: 'Hisnul Muslim',                           icon: 'dhikr'       as const, route: '/dhikr'  },
+  names:        { title: 'Lär dig Allahs namn', subtitle: 'Asma ul-Husna',                           icon: 'allahs-namn' as const, route: '/asmaul' },
+  morning:      { title: 'Läs morgon adhkar',    subtitle: 'Morgon dhikr',                            icon: 'dhikr'       as const, route: '/dhikr?openGroup=morgon&openSection=0' },
+  evening:      { title: 'Läs kvälls adhkar',    subtitle: 'Kvälls dhikr',                            icon: 'dhikr'       as const, route: '/dhikr?openGroup=morgon&openSection=1' },
+  umrah:        { title: 'Läs Umrah Guide',      subtitle: 'Förbered din Umrah',                      icon: 'umrah'       as const, route: '/umrah'  },
 } as const;
 
 export default function HomeScreen() {
@@ -620,6 +622,26 @@ export default function HomeScreen() {
     return m > 8 || (m === 8 && d >= 25) || m < 4 || (m === 4 && d < 7);
   }, [now]);
 
+  const isFridayWindow = useMemo(() => {
+    if (now.getDay() !== 5) return false;
+    const { fajr, maghrib } = prayerTimesForEngine;
+    if (!fajr || !maghrib) return false;
+    return now >= fajr && now < maghrib;
+  }, [now, prayerTimesForEngine]);
+
+  // 'morning'     = Fajr → Dhuhr          (Al-Kahf secondary)
+  // 'post-dhuhr'  = Dhuhr → 60min before Maghrib (Al-Kahf PRIMARY)
+  // 'pre-maghrib' = 60min before Maghrib   (kvälls adhkar PRIMARY, Al-Kahf secondary)
+  const fridayPeriodKey = useMemo((): string => {
+    if (!isFridayWindow) return 'none';
+    const { dhuhr, maghrib } = prayerTimesForEngine;
+    if (!dhuhr || !maghrib) return 'morning';
+    const preMaghribStart = new Date(maghrib.getTime() - 60 * 60_000);
+    if (now >= preMaghribStart) return 'pre-maghrib';
+    if (now >= dhuhr)           return 'post-dhuhr';
+    return 'morning';
+  }, [isFridayWindow, now, prayerTimesForEngine]);
+
   // Stable string key derived from item IDs — homeV2State.items is a new reference
   // every minute (now dep), but content only changes at prayer-time period boundaries.
   // Keying on the ID string prevents fortsattItems from recomputing every 60 s.
@@ -628,16 +650,20 @@ export default function HomeScreen() {
     const itemIds = homeItemsKey.split(',');
     const mapped = itemIds.flatMap(id => {
       if (id === 'quran' && isUmrahSeason) return [{ id: 'umrah', ...FORTSATT_ITEM_DEFS.umrah }];
+      if (id === 'quran' && isFridayWindow) return [{ id: 'friday-quran', ...FORTSATT_ITEM_DEFS['friday-quran'] }];
       const def = FORTSATT_ITEM_DEFS[id as keyof typeof FORTSATT_ITEM_DEFS];
       return def ? [{ id, ...def }] : [];
     });
-    // Adhkar (morning/evening) is always first so the primary card is always position 0.
+    const isAlKahfPrimary = fridayPeriodKey === 'post-dhuhr';
     return mapped.sort((a, b) => {
-      const aP = a.id === 'morning' || a.id === 'evening' ? 0 : 1;
-      const bP = b.id === 'morning' || b.id === 'evening' ? 0 : 1;
-      return aP - bP;
+      const priority = (id: string) => {
+        if (id === 'morning' || id === 'evening')           return 0;
+        if (id === 'friday-quran' && isAlKahfPrimary)       return 0;
+        return 1;
+      };
+      return priority(a.id) - priority(b.id);
     });
-  }, [homeItemsKey, isUmrahSeason]);
+  }, [homeItemsKey, isUmrahSeason, isFridayWindow, fridayPeriodKey]);
 
   // Stable snap offsets — new array every render would cause the native ScrollView
   // to recalculate snap points every minute. Screenwidth never changes mid-session.
@@ -1089,6 +1115,13 @@ export default function HomeScreen() {
         {/* Dagens Hadith */}
         <DagensHadithCard />
 
+        {/* ── Fredagskort — visas fredag Fajr–Maghrib + Dhul-Hijjah 1–10 ── */}
+        <FridayChecklistCards
+          fajr={prayerTimesForEngine.fajr}
+          maghrib={prayerTimesForEngine.maghrib}
+          now={now}
+        />
+
         {/* ── Fortsätt ── (items ordered by homeV2TimeEngine based on prayer time) */}
         {(() => {
           const GAP = 8;
@@ -1112,7 +1145,8 @@ export default function HomeScreen() {
                   contentContainerStyle={{ paddingLeft: 16, paddingRight: 20, paddingTop: 18, paddingBottom: 22 }}
                 >
                   {fortsattItems.map((item, index) => {
-                    const isPrimary    = item.id === 'morning' || item.id === 'evening';
+                    const isPrimary    = item.id === 'morning' || item.id === 'evening'
+                      || (item.id === 'friday-quran' && fridayPeriodKey === 'post-dhuhr');
                     const showBadge    = isPrimary;
                     const ADHKAR_GOLD  = '#c9a84c';
                     const primBg       = isDark ? 'rgba(201,168,76,0.13)' : 'rgba(36,100,93,0.09)';

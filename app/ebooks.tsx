@@ -6,7 +6,7 @@ import {
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, Stack } from 'expo-router';
 import Pdf from '../components/NativePdf';
 import Svg, { Polygon, Rect, Defs, Pattern } from 'react-native-svg';
 import { useTheme } from '../context/ThemeContext';
@@ -187,8 +187,8 @@ function BookCover({ book, w, h, T }: { book: Book; w: number; h: number; T: any
 
   if (status === 'done' && dataUrl) {
     return (
-      <View style={[{ width: w, height: h, borderRadius: radius, overflow: 'hidden', flexShrink: 0 }, shadow]}>
-        <Image source={{ uri: dataUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+      <View style={[{ width: w, height: h, borderRadius: radius, overflow: 'hidden', flexShrink: 0, backgroundColor: book.coverColor }, shadow]}>
+        <Image source={{ uri: dataUrl }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
       </View>
     );
   }
@@ -471,7 +471,7 @@ function BookDetail({
           </TouchableOpacity>
         </View>
         <View style={{ alignItems: 'center', paddingTop: 24, gap: 16 }}>
-          <BookCover book={book} w={140} h={196} T={T} />
+          <BookCover book={book} w={160} h={160} T={T} />
           <View style={{ alignItems: 'center', paddingHorizontal: 20 }}>
             <Text style={{ fontSize: 22, fontWeight: '700', color: '#fff', textAlign: 'center', lineHeight: 28, marginBottom: 6 }}>{book.title}</Text>
             <Text style={{ fontSize: 15, fontWeight: '600', color: 'rgba(255,255,255,0.95)', marginBottom: 10 }}>{book.author}</Text>
@@ -551,7 +551,7 @@ function BookDetail({
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               {related.map(b => (
                 <TouchableOpacity key={b.id} onPress={() => onSelectRelated(b)} style={{ marginRight: 12 }}>
-                  <BookCover book={b} w={70} h={98} T={T} />
+                  <BookCover book={b} w={70} h={70} T={T} />
                   <Text style={{ width: 70, fontSize: 10, color: T.textMuted, marginTop: 4, lineHeight: 14 }} numberOfLines={2}>{b.title}</Text>
                 </TouchableOpacity>
               ))}
@@ -576,7 +576,7 @@ function BookRow({ book, onSelect, T }: { book: Book; onSelect: () => void; T: a
       backgroundColor: T.card, borderWidth: 1, borderColor: T.border,
       borderRadius: 14, padding: 12, marginBottom: 10,
     }}>
-      <BookCover book={book} w={64} h={90} T={T} />
+      <BookCover book={book} w={70} h={70} T={T} />
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={{ fontSize: 14, fontWeight: '700', color: T.text, marginBottom: 3, lineHeight: 18 }} numberOfLines={2}>{book.title}</Text>
         <Text style={{ fontSize: 12, color: T.textSecondary, marginBottom: 5, fontWeight: '500' }} numberOfLines={1}>{book.author}</Text>
@@ -670,7 +670,7 @@ function Library({ books, onSelect, T }: { books: Book[]; onSelect: (b: Book) =>
               <TouchableOpacity onPress={() => onSelect(b)} style={{
                 width: 130, backgroundColor: T.card, borderWidth: 1, borderColor: T.border, borderRadius: 14, padding: 12, marginRight: 12,
               }}>
-                <BookCover book={b} w={106} h={148} T={T} />
+                <BookCover book={b} w={106} h={106} T={T} />
                 <Text style={{ fontSize: 11, fontWeight: '700', color: T.text, marginTop: 8, lineHeight: 15 }} numberOfLines={2}>{b.title}</Text>
                 <ProgressBar pct={b.progressPercent} T={T} />
                 <Text style={{ fontSize: 10, color: T.accent, marginTop: 3, fontWeight: '700' }}>Sida {b.lastReadPage}</Text>
@@ -693,7 +693,7 @@ function Library({ books, onSelect, T }: { books: Book[]; onSelect: (b: Book) =>
             initialNumToRender={4}
             renderItem={({ item: b }) => (
               <TouchableOpacity onPress={() => onSelect(b)} style={{ marginRight: 12 }}>
-                <BookCover book={b} w={70} h={98} T={T} />
+                <BookCover book={b} w={70} h={70} T={T} />
                 <Text style={{ width: 70, fontSize: 10, color: T.textMuted, marginTop: 4, lineHeight: 14 }} numberOfLines={2}>{b.title}</Text>
               </TouchableOpacity>
             )}
@@ -815,6 +815,7 @@ export default function EbooksScreen() {
 
   return (
     <View style={{ flex: 1 }}>
+      <Stack.Screen options={{ gestureEnabled: view !== 'detail' }} />
       {/* Single global WebView cover renderer — always mounted for queue processing */}
       <CoverRendererWebView />
 

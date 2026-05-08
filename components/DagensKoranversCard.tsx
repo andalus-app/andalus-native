@@ -13,11 +13,41 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Animated, AppState, AppStateStatus, Text, TouchableOpacity, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/context/ThemeContext';
+import { useApp } from '@/context/AppContext';
 import { getDailyQuranVerse } from '@/services/dailyReminder';
 import { prewarmDailyVerseTarget } from '@/services/quranPrewarmService';
 
-const GOLD_DARK = '#cab488';
+const GOLD_DARK   = '#cab488';
+const EID_GOLD    = '#C9AA6A';
+const EID_BG_DARK = '#1B2E20';
+const EID_BG_LIGHT = '#1C3426';
+
 const COLLAPSED_HEIGHT = 78; // 3 lines × lineHeight(24) + 6px buffer
+
+type DhulHijjahPhase = 'none' | 'days1to5' | 'days6to9' | 'days10to13';
+
+const DHUL_HIJJAH_CONTENT: Record<Exclude<DhulHijjahPhase, 'none'>, {
+  title: string; body: string; quote: string; source: string;
+}> = {
+  days1to5: {
+    title:  'Dhul-Hijjah är här',
+    body:   'Tio dagar fyllda av möjligheter till dhikr, dua och goda handlingar. Ta vara på dessa välsignade dagar och kom närmare Allah.',
+    quote:  '"Och bevara Mig i minnet, så skall Jag minnas er; var Mig tacksam och förneka Mig inte!"',
+    source: '[Koranen 2:152]',
+  },
+  days6to9: {
+    title:  'En chans till nystart',
+    body:   'De välsignade dagarna i Dhul-Hijjah har börjat. Oavsett hur året har sett ut finns alltid en väg tillbaka till Allah — steg för steg.',
+    quote:  '"Och bevara Mig i minnet, så skall Jag minnas er; var Mig tacksam och förneka Mig inte!"',
+    source: '[Koranen 2:152]',
+  },
+  days10to13: {
+    title:  'Eid Mubarak från Hidayah 🌙',
+    body:   'En dag fylld av barmhärtighet, gemenskap och tacksamhet. Glöm inte att nämna Allah ofta och sprida glädje till människor omkring dig idag.',
+    quote:  '',
+    source: '',
+  },
+};
 
 function todayStr(): string {
   const d = new Date();
@@ -43,6 +73,7 @@ function AccentDivider({ color, small }: { color: string; small?: boolean }) {
 
 function DagensKoranversCard() {
   const { theme: T, isDark } = useTheme();
+  const { hijriDate } = useApp();
   const router = useRouter();
   const [dateKey, setDateKey] = useState<string>(todayStr);
   const [expanded,   setExpanded]   = useState(false);
@@ -59,6 +90,15 @@ function DagensKoranversCard() {
 
   const verse = useMemo(() => getDailyQuranVerse(new Date()), [dateKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const dhulHijjahPhase = useMemo((): DhulHijjahPhase => {
+    if (!hijriDate || hijriDate.month?.number !== 12) return 'none';
+    const day = parseInt(String(hijriDate.day), 10);
+    if (day >= 1  && day <= 5)  return 'days1to5';
+    if (day >= 6  && day <= 9)  return 'days6to9';
+    if (day >= 10 && day <= 13) return 'days10to13';
+    return 'none';
+  }, [hijriDate]);
+
   // Pre-warm Quran page fonts + data for today's verse so the reader opens
   // instantly. Fires once per day (date-keyed session guard in the service),
   // deferred via InteractionManager so it never blocks the home screen render.
@@ -66,6 +106,8 @@ function DagensKoranversCard() {
     prewarmDailyVerseTarget(verse.verseKey);
   }, [verse.verseKey]);
 
+  const isEidPhase  = dhulHijjahPhase === 'days10to13';
+  const eidBg       = isDark ? EID_BG_DARK : EID_BG_LIGHT;
   const accentColor = isDark ? GOLD_DARK : T.accent;
   const verseColor  = isDark ? '#FFFFFF' : T.text;
   const borderSideColor = isDark ? 'rgba(202,180,136,0.18)' : 'rgba(36,100,93,0.18)';
@@ -140,16 +182,20 @@ function DagensKoranversCard() {
     return () => sub.remove();
   }, [fadeAndUpdate, scheduleMidnight]);
 
+  const override = dhulHijjahPhase !== 'none' ? DHUL_HIJJAH_CONTENT[dhulHijjahPhase] : null;
+
   return (
     <TouchableOpacity
-      activeOpacity={0.75}
-      onPress={() => router.push(`${verse.navigationPath}&nonce=${Date.now()}` as any)}
+      activeOpacity={isEidPhase ? 1 : 0.75}
+      onPress={isEidPhase ? undefined : () => router.push(
+        (override ? `/quran?verseKey=2:152` : verse.navigationPath) + `&nonce=${Date.now()}` as any
+      )}
       style={[
         styles.card,
         {
-          backgroundColor: T.card,
-          borderColor: borderSideColor,
-          borderTopColor: isDark ? 'rgba(201,168,76,0.78)' : T.accent,
+          backgroundColor: isEidPhase ? eidBg : T.card,
+          borderColor: isEidPhase ? 'rgba(201,170,106,0.28)' : borderSideColor,
+          borderTopColor: isEidPhase ? EID_GOLD : (isDark ? 'rgba(201,168,76,0.78)' : T.accent),
           borderTopWidth: 1,
           shadowColor: '#000',
           shadowOffset: { width: 0, height: 3 },
@@ -159,59 +205,88 @@ function DagensKoranversCard() {
       ]}
     >
       <Animated.View style={{ opacity }}>
-        <Text style={[styles.title, { color: accentColor }]}>Dagens Koranvers</Text>
-
-        {/* Hidden full-height measurer — absolutely positioned, no clipping.
-            Reports true line count AND full natural height for the animation. */}
-        <Text
-          style={[styles.swedish, styles.measuringText]}
-          onTextLayout={e => {
-            const lines = e.nativeEvent.lines;
-            setTruncated(lines.length > 3);
-            if (lines.length > 0) {
-              const last = lines[lines.length - 1];
-              const measured = Math.ceil(last.y + last.height);
-              if (measured > COLLAPSED_HEIGHT) setFullHeight(measured);
-            }
-          }}
-          accessible={false}
-        >
-          {verse.swedish}
-        </Text>
-
-        {/* Animated height container — clips text only when truncated */}
-        <Animated.View
-          style={truncated ? [styles.verseContainerTruncated, { height: animHeight }] : undefined}
-        >
-          <Text
-            style={[styles.swedish, { color: verseColor }]}
-            numberOfLines={truncated && !expanded ? 3 : undefined}
-          >
-            {verse.swedish}
-          </Text>
-        </Animated.View>
-
-        {truncated ? (
-          // Large tap zone when the verse text is truncated: covers the Visa mer/Visa
-          // mindre label + AccentDivider + reference text in one target.
-          // stopPropagation ensures the outer TouchableOpacity (navigate to Quran) is
-          // suppressed whenever the user taps anywhere in this bottom section.
-          <TouchableOpacity
-            onPress={e => { e.stopPropagation?.(); toggleExpanded(); }}
-            activeOpacity={0.7}
-            style={styles.expandZone}
-          >
-            <Text style={[styles.visaMerLabel, { color: accentColor }]}>
-              {expanded ? 'Visa mindre' : 'Visa mer'}
-            </Text>
-            <Text style={[styles.reference, { color: verseColor }]}>
-              {verse.surahName} · {verse.displayRef}
-            </Text>
-          </TouchableOpacity>
+        {override ? (
+          isEidPhase ? (
+            <View style={{ alignItems: 'center', paddingVertical: 10 }}>
+              <Text style={[styles.title, { color: EID_GOLD, marginBottom: 12 }]}>
+                {override.title}
+              </Text>
+              <AccentDivider color={EID_GOLD} small />
+              <Text style={[styles.swedish, { color: '#F5F0E8', marginTop: 8 }]}>
+                {override.body}
+              </Text>
+            </View>
+          ) : (
+            <>
+              <Text style={[styles.title, { color: accentColor }]}>{override.title}</Text>
+              <Text style={[styles.swedish, { color: verseColor, marginBottom: 8 }]}>
+                {override.body}
+              </Text>
+              <Text style={[styles.swedish, { color: verseColor, fontStyle: 'italic' }]}>
+                {override.quote}
+              </Text>
+              <Text style={[styles.reference, { color: verseColor, marginTop: 4 }]}>
+                {override.source}
+              </Text>
+            </>
+          )
         ) : (
-          <Text style={[styles.reference, { color: verseColor }]}>
-            {verse.surahName} · {verse.surahNumber}:{verse.ayahNumber}
-          </Text>
+          <>
+            <Text style={[styles.title, { color: accentColor }]}>Dagens Koranvers</Text>
+
+            {/* Hidden full-height measurer — absolutely positioned, no clipping.
+                Reports true line count AND full natural height for the animation. */}
+            <Text
+              style={[styles.swedish, styles.measuringText]}
+              onTextLayout={e => {
+                const lines = e.nativeEvent.lines;
+                setTruncated(lines.length > 3);
+                if (lines.length > 0) {
+                  const last = lines[lines.length - 1];
+                  const measured = Math.ceil(last.y + last.height);
+                  if (measured > COLLAPSED_HEIGHT) setFullHeight(measured);
+                }
+              }}
+              accessible={false}
+            >
+              {verse.swedish}
+            </Text>
+
+            {/* Animated height container — clips text only when truncated */}
+            <Animated.View
+              style={truncated ? [styles.verseContainerTruncated, { height: animHeight }] : undefined}
+            >
+              <Text
+                style={[styles.swedish, { color: verseColor }]}
+                numberOfLines={truncated && !expanded ? 3 : undefined}
+              >
+                {verse.swedish}
+              </Text>
+            </Animated.View>
+
+            {truncated ? (
+              // Large tap zone when the verse text is truncated: covers the Visa mer/Visa
+              // mindre label + AccentDivider + reference text in one target.
+              // stopPropagation ensures the outer TouchableOpacity (navigate to Quran) is
+              // suppressed whenever the user taps anywhere in this bottom section.
+              <TouchableOpacity
+                onPress={e => { e.stopPropagation?.(); toggleExpanded(); }}
+                activeOpacity={0.7}
+                style={styles.expandZone}
+              >
+                <Text style={[styles.visaMerLabel, { color: accentColor }]}>
+                  {expanded ? 'Visa mindre' : 'Visa mer'}
+                </Text>
+                <Text style={[styles.reference, { color: verseColor }]}>
+                  {verse.surahName} · {verse.displayRef}
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <Text style={[styles.reference, { color: verseColor }]}>
+                {verse.surahName} · {verse.surahNumber}:{verse.ayahNumber}
+              </Text>
+            )}
+          </>
         )}
       </Animated.View>
     </TouchableOpacity>

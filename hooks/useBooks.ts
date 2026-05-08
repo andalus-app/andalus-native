@@ -26,13 +26,15 @@ function defaultState(): BookState {
 function mergeBooks(data: BookData[], state: BooksState): Book[] {
   return data.map(b => {
     const s = state[b.id] ?? defaultState();
+    const effectivePageCount = s.pageCount ?? b.pageCount;
     const progress =
-      s.pageCount && s.lastReadPage > 1
-        ? Math.min(Math.round(((s.lastReadPage - 1) / s.pageCount) * 100), 100)
+      effectivePageCount && s.lastReadPage > 1
+        ? Math.min(Math.round(((s.lastReadPage - 1) / effectivePageCount) * 100), 100)
         : 0;
     return {
       ...b,
       ...s,
+      pageCount: effectivePageCount,
       pdfPath: BASE_URL + encodeURIComponent(b.file),
       progressPercent: progress,
     };

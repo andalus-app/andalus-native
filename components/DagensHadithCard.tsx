@@ -16,6 +16,10 @@ import { useTheme } from '@/context/ThemeContext';
 import { useApp } from '@/context/AppContext';
 import { getDailyHadith } from '@/services/dailyReminder';
 
+const EID_HADITH_SVENSKA = 'Profeten ﷺ sade: "Den som vill få sin försörjning ökad och sitt liv förlängt ska vårda sina släktband."';
+const EID_HADITH_KALLA   = 'Sahih ul-Bukhari 5986';
+const EID_HADITH_PATH    = '/hadith/42';
+
 const COLLAPSED_HEIGHT = 63;
 
 function todayStr(): string {
@@ -50,6 +54,16 @@ function DagensHadithCard() {
   const expandedRef = useRef(false);
 
   const hadith = useMemo(() => getDailyHadith(new Date(), hijriDate), [dateKey, hijriDate]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const isEidWindow = useMemo(() => {
+    if (!hijriDate || hijriDate.month?.number !== 12) return false;
+    const day = parseInt(String(hijriDate.day), 10);
+    return day >= 10 && day <= 13;
+  }, [hijriDate]);
+
+  const displayBody   = isEidWindow ? EID_HADITH_SVENSKA : hadith.svenska;
+  const displayKalla  = isEidWindow ? EID_HADITH_KALLA   : hadith.kalla;
+  const displayPath   = isEidWindow ? EID_HADITH_PATH     : hadith.navigationPath;
 
   // Toggle expand/collapse with spring animation
   const toggleExpanded = useCallback(() => {
@@ -124,7 +138,7 @@ function DagensHadithCard() {
   return (
     <TouchableOpacity
       activeOpacity={0.75}
-      onPress={() => router.push(hadith.navigationPath as any)}
+      onPress={() => router.push(displayPath as any)}
       style={[
         styles.card,
         {
@@ -154,7 +168,7 @@ function DagensHadithCard() {
           }}
           accessible={false}
         >
-          {hadith.svenska}
+          {displayBody}
         </Text>
 
         {/* Animated height container — clips text during animation */}
@@ -163,7 +177,7 @@ function DagensHadithCard() {
             style={[styles.swedish, { color: bodyColor }]}
             numberOfLines={truncated && !expanded ? 3 : undefined}
           >
-            {hadith.svenska}
+            {displayBody}
           </Text>
         </Animated.View>
 
@@ -180,12 +194,12 @@ function DagensHadithCard() {
               {expanded ? 'Visa mindre' : 'Visa mer'}
             </Text>
             <Text style={[styles.source, { color: T.textMuted }]}>
-              {hadith.kalla}
+              {displayKalla}
             </Text>
           </TouchableOpacity>
         ) : (
           <Text style={[styles.source, { color: T.textMuted }]}>
-            {hadith.kalla}
+            {displayKalla}
           </Text>
         )}
       </Animated.View>
