@@ -357,11 +357,20 @@ struct PrayerProvider: TimelineProvider {
                 return
             }
             let updatedAt: Date? = locationChanged ? nil : Date()
-            NSLog("[Widget] getTimeline PATH-2: fetched %d prayers city=%@ updatedAt=%@",
-                  prayers.count, city, updatedAt != nil ? "set" : "nil")
+            // When locationChanged, use a short policy so WidgetKit MUST call
+            // getTimeline again within 15 min for every widget kind — even kinds
+            // that were throttled after reloadAllTimelines(). By that point,
+            // native/JS will have resolved the new city and nativeFresh (Path 1)
+            // will pick it up. Without this, throttled widgets stay on the stale
+            // midnight-policy timeline until the next day.
+            let policy: TimelineReloadPolicy = locationChanged
+                ? .after(Date().addingTimeInterval(900))
+                : .after(midnight)
+            NSLog("[Widget] getTimeline PATH-2: fetched %d prayers city=%@ updatedAt=%@ policy=%@",
+                  prayers.count, city, updatedAt != nil ? "set" : "nil",
+                  locationChanged ? "15min" : "midnight")
             let entries = buildEntries(prayers: prayers, city: city, lastUpdatedAt: updatedAt)
-            NSLog("[Widget] getTimeline PATH-2: %d entries policy=midnight", entries.count)
-            completion(Timeline(entries: entries, policy: .after(midnight)))
+            completion(Timeline(entries: entries, policy: policy))
         }
     }
 }
@@ -1330,12 +1339,15 @@ struct LockArcProvider: TimelineProvider {
                 return
             }
             let updatedAt: Date? = locationChanged ? nil : Date()
-            NSLog("[Widget] LockArc getTimeline PATH-2: fetched %d prayers city=%@ updatedAt=%@",
-                  prayers.count, city, updatedAt != nil ? "set" : "nil")
+            let policy: TimelineReloadPolicy = locationChanged
+                ? .after(Date().addingTimeInterval(900))
+                : .after(midnight)
+            NSLog("[Widget] LockArc getTimeline PATH-2: fetched %d prayers city=%@ updatedAt=%@ policy=%@",
+                  prayers.count, city, updatedAt != nil ? "set" : "nil",
+                  locationChanged ? "15min" : "midnight")
             let entries = buildLockArcEntries(prayers: prayers, city: city,
                                               lastUpdatedAt: updatedAt)
-            NSLog("[Widget] LockArc getTimeline PATH-2: %d entries policy=midnight", entries.count)
-            completion(Timeline(entries: entries, policy: .after(midnight)))
+            completion(Timeline(entries: entries, policy: policy))
         }
     }
 }
@@ -1488,6 +1500,588 @@ struct HidayahLockArcWidget: Widget {
 
 #endif // os(iOS) — closes block opened before LockScreenFocusView
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// MARK: - Daily Content Widgets  (Allahs namn · Dagens Koranvers)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// MARK: - App Group reader for daily content
+
+private let kDailyContentKey = "hidayah_daily_content_cache"
+
+private struct DailyCache: Decodable {
+    struct AllahNameData: Decodable {
+        let arabic: String; let transliteration: String
+        let swedish: String; let explanation: String
+    }
+    struct VerseData: Decodable {
+        let swedish: String; let surahName: String
+        let surahNumber: Int; let ayahNumber: Int; let reference: String
+    }
+    struct HadithData: Decodable {
+        let arabic: String; let swedish: String; let source: String
+    }
+    let date: String; let allahName: AllahNameData; let quranVerse: VerseData
+    let hadith: HadithData?
+}
+
+/// Returns today's cached daily content, or nil if the cache is missing or stale.
+private func readDailyCache() -> DailyCache? {
+    guard let d = UserDefaults(suiteName: kAppGroup)?.data(forKey: kDailyContentKey),
+          let c = try? JSONDecoder().decode(DailyCache.self, from: d),
+          c.date == localISODate(.now) else { return nil }
+    return c
+}
+
+/// Next midnight + 1 minute — the daily refresh boundary for both widgets.
+private func dailyMidnight() -> Date {
+    Calendar.current.startOfDay(for: .now).addingTimeInterval(86_400 + 60)
+}
+
+/// Deterministic index into an array of `count` entries for today,
+/// anchored at the given UTC date (same formula as JS rotation services).
+private func epochDayIndex(year: Int, month: Int, day: Int, count: Int) -> Int {
+    var dc = DateComponents()
+    dc.year = year; dc.month = month; dc.day = day; dc.timeZone = TimeZone(identifier: "UTC")
+    let epoch = Calendar(identifier: .gregorian).date(from: dc)!
+    let cal   = Calendar(identifier: .gregorian)
+    let days  = cal.dateComponents([.day], from: cal.startOfDay(for: epoch),
+                                    to: cal.startOfDay(for: .now)).day ?? 0
+    return ((days % count) + count) % count
+}
+
+// MARK: - Allah Name Entry, Provider & Views
+
+struct AllahNameEntry: TimelineEntry {
+    let date: Date
+    let arabic: String; let transliteration: String
+    let swedish: String; let explanation: String
+
+    static let placeholder = AllahNameEntry(
+        date: .now, arabic: "ٱلرَّحْمَـٰنُ",
+        transliteration: "ar-Raḥmān", swedish: "Den Nåderike",
+        explanation: "Allah är barmhärtig mot alla sina skapelser och skänker dem det de behöver."
+    )
+}
+
+struct AllahNameProvider: TimelineProvider {
+    func placeholder(in context: Context) -> AllahNameEntry { .placeholder }
+
+    func getSnapshot(in context: Context, completion: @escaping (AllahNameEntry) -> Void) {
+        completion(buildAllahEntry())
+    }
+
+    func getTimeline(in context: Context, completion: @escaping (Timeline<AllahNameEntry>) -> Void) {
+        completion(Timeline(entries: [buildAllahEntry()], policy: .after(dailyMidnight())))
+    }
+
+    private func buildAllahEntry() -> AllahNameEntry {
+        // Prefer App Group cache (written by JS on app open with exact asmaul_husna.json text)
+        if let c = readDailyCache() {
+            return AllahNameEntry(date: .now,
+                                  arabic: c.allahName.arabic, transliteration: c.allahName.transliteration,
+                                  swedish: c.allahName.swedish, explanation: c.allahName.explanation)
+        }
+        // Fallback: embedded data — same epoch 2025-01-01 as notifications.ts
+        let n = kAllahNames[epochDayIndex(year: 2025, month: 1, day: 1, count: kAllahNames.count)]
+        return AllahNameEntry(date: .now,
+                              arabic: n.arabic, transliteration: n.transliteration,
+                              swedish: n.swedish, explanation: n.explanation)
+    }
+}
+
+private struct AllahNameSmall: View {
+    let entry: AllahNameEntry
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Allahs namn")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(kGold).lineLimit(1)
+            Spacer(minLength: 6)
+            Text(entry.arabic)
+                .font(.system(size: 30, weight: .bold))
+                .foregroundColor(.white).lineLimit(1).minimumScaleFactor(0.6)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+            Text(entry.transliteration)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(kGold.opacity(0.80)).lineLimit(1).padding(.top, 3)
+            Text(entry.swedish)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.white).lineLimit(1).minimumScaleFactor(0.85).padding(.top, 2)
+            Spacer(minLength: 6)
+            Text(entry.explanation)
+                .font(.system(size: 10, weight: .regular))
+                .foregroundColor(.white.opacity(0.45)).lineLimit(2)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+}
+
+private struct AllahNameMedium: View {
+    let entry: AllahNameEntry
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Allahs namn")
+                .font(.system(size: 10, weight: .semibold)).foregroundColor(kGold)
+            HStack(alignment: .center, spacing: 8) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(entry.swedish)
+                        .font(.system(size: 19, weight: .bold)).foregroundColor(.white)
+                        .lineLimit(1).minimumScaleFactor(0.80)
+                    Text(entry.transliteration)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(kGold.opacity(0.85)).lineLimit(1)
+                }
+                Spacer()
+                Text(entry.arabic)
+                    .font(.system(size: 34, weight: .bold)).foregroundColor(.white)
+                    .lineLimit(1).minimumScaleFactor(0.60).multilineTextAlignment(.trailing)
+            }
+            .padding(.top, 7)
+            Spacer(minLength: 8)
+            Text(entry.explanation)
+                .font(.system(size: 11, weight: .regular))
+                .foregroundColor(.white.opacity(0.55))
+                .lineLimit(3).fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(EdgeInsets(top: 14, leading: 14, bottom: 12, trailing: 14))
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+}
+
+private struct AllahNameWidgetView: View {
+    let entry: AllahNameEntry
+    @Environment(\.widgetFamily) private var family
+    var body: some View {
+        switch family {
+        case .systemSmall: AllahNameSmall(entry: entry)
+        default:           AllahNameMedium(entry: entry)
+        }
+    }
+}
+
+struct HidayahAllahNameWidget: Widget {
+    let kind = "HidayahAllahNameWidget"
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: kind, provider: AllahNameProvider()) { entry in
+            AllahNameWidgetView(entry: entry)
+                .containerBackground(
+                    LinearGradient(colors: [kBgTop, kBgBottom],
+                                   startPoint: .topLeading, endPoint: .bottomTrailing),
+                    for: .widget)
+        }
+        .configurationDisplayName("Allahs namn")
+        .description("Lär dig ett av Allahs 99 namn varje dag.")
+        .supportedFamilies([.systemSmall, .systemMedium])
+    }
+}
+
+// MARK: - Quran Verse Entry, Provider & Views
+
+struct QuranVerseEntry: TimelineEntry {
+    let date: Date
+    let swedish: String; let surahName: String
+    let surahNumber: Int; let ayahNumber: Int; let reference: String
+
+    static let placeholder = QuranVerseEntry(
+        date: .now,
+        swedish: "Allah - det finns ingen [sann] gud utom honom, den Levande, den evige Vidmakthållaren.",
+        surahName: "Al-Baqarah", surahNumber: 2, ayahNumber: 255, reference: "2:255"
+    )
+}
+
+struct QuranVerseProvider: TimelineProvider {
+    func placeholder(in context: Context) -> QuranVerseEntry { .placeholder }
+
+    func getSnapshot(in context: Context, completion: @escaping (QuranVerseEntry) -> Void) {
+        completion(buildVerseEntry())
+    }
+
+    func getTimeline(in context: Context, completion: @escaping (Timeline<QuranVerseEntry>) -> Void) {
+        completion(Timeline(entries: [buildVerseEntry()], policy: .after(dailyMidnight())))
+    }
+
+    private func buildVerseEntry() -> QuranVerseEntry {
+        // Prefer App Group cache (written by JS with exact Bernström translation)
+        if let c = readDailyCache() {
+            return QuranVerseEntry(date: .now, swedish: c.quranVerse.swedish,
+                                   surahName: c.quranVerse.surahName,
+                                   surahNumber: c.quranVerse.surahNumber,
+                                   ayahNumber: c.quranVerse.ayahNumber,
+                                   reference: c.quranVerse.reference)
+        }
+        // Fallback: curated verses, epoch 2024-01-01 matching JS dailyReminder.ts
+        let v = kFallbackVerses[epochDayIndex(year: 2024, month: 1, day: 1, count: kFallbackVerses.count)]
+        return QuranVerseEntry(date: .now, swedish: v.swedish, surahName: v.surahName,
+                               surahNumber: v.surahNumber, ayahNumber: v.ayahNumber,
+                               reference: v.reference)
+    }
+}
+
+private struct DailyVerseSmall: View {
+    let entry: QuranVerseEntry
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Dagens vers")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(kGold).lineLimit(1)
+            Spacer(minLength: 6)
+            Text(entry.swedish)
+                .font(.system(size: 11, weight: .regular))
+                .foregroundColor(.white.opacity(0.85))
+                .lineLimit(5).minimumScaleFactor(0.85)
+            Spacer(minLength: 4)
+            Text(entry.reference)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(kGold.opacity(0.80)).lineLimit(1)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+}
+
+private struct DailyVerseMedium: View {
+    let entry: QuranVerseEntry
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Dagens Koranvers")
+                .font(.system(size: 10, weight: .semibold)).foregroundColor(kGold)
+            Spacer(minLength: 8)
+            Text(entry.swedish)
+                .font(.system(size: 12, weight: .regular))
+                .foregroundColor(.white.opacity(0.85))
+                .lineLimit(4).minimumScaleFactor(0.85)
+            Spacer(minLength: 6)
+            HStack(alignment: .center) {
+                Text(entry.surahName)
+                    .font(.system(size: 10, weight: .regular))
+                    .foregroundColor(.white.opacity(0.38)).lineLimit(1)
+                Spacer()
+                Text(entry.reference)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(kGold.opacity(0.80)).lineLimit(1)
+            }
+        }
+        .padding(EdgeInsets(top: 14, leading: 14, bottom: 12, trailing: 14))
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+}
+
+private struct DailyVerseWidgetView: View {
+    let entry: QuranVerseEntry
+    @Environment(\.widgetFamily) private var family
+    var body: some View {
+        switch family {
+        case .systemSmall: DailyVerseSmall(entry: entry)
+        default:           DailyVerseMedium(entry: entry)
+        }
+    }
+}
+
+struct HidayahDailyVerseWidget: Widget {
+    let kind = "HidayahDailyVerseWidget"
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: kind, provider: QuranVerseProvider()) { entry in
+            DailyVerseWidgetView(entry: entry)
+                .containerBackground(
+                    LinearGradient(colors: [kBgTop, kBgBottom],
+                                   startPoint: .topLeading, endPoint: .bottomTrailing),
+                    for: .widget)
+        }
+        .configurationDisplayName("Dagens Koranvers")
+        .description("Läs en ny Koranvers varje dag.")
+        .supportedFamilies([.systemSmall, .systemMedium])
+    }
+}
+
+// MARK: - Embedded Allah Names (99 entries)
+// Source: asmaul_husna.json — same epoch 2025-01-01 UTC as notification service.
+// Used as offline fallback before first app open writes the App Group cache.
+
+private let kAllahNames: [(arabic: String, transliteration: String, swedish: String, explanation: String)] = [
+    ("اللَّهُ", "Allah", "Allah", "Detta är ett av Allahs unika namn som betecknar hans heliga väsen och omfattar alla hans andra vackra och fullkomliga namn och egenskaper. Han är den ende sanne guden, den som dyrkas och som förtjänar att dyrkas av hela skapelsen på grund av sina gudomliga egenskaper."),
+    ("الرَّبُّ", "ar-Rabb", "Herren", "Den som tar hand om och upprätthåller allt och alla. Ar-Rabb tar hand om sina tjänare – det vill säga alla människor och allt annat som Allah har skapat. Han styr allt som sker i världen, både stort och smått. Han ger oss allt vi behöver, både materiellt som mat och husrum, och immateriellt som kärlek och glädje. Han är Skaparen av allt som finns. Han skapade himlen, jorden och allt liv på dem. Han är den sanne Ägaren av allt och har fullständig kontroll över allting."),
+    ("ٱلواحِدُ", "al-Wāḥid", "Den Ende", "Allah är unik. Han har ingen partner eller jämlike. Ingen kan jämföras med honom. Han är unik i sitt väsen, i sina egenskaper och i sina handlingar."),
+    ("ٱلْأَحَدُ", "al-Aḥad", "Den Ende, den Unike", "Allah är fullkomligt unik. Han har ingen partner, jämlike eller motsvarighet. Ingen kan jämföras med honom. Han är enastående i sitt väsen, sina egenskaper och sina handlingar."),
+    ("ٱلرَّحْمَـٰنُ", "ar-Raḥmān", "Den Nåderike", "Allah är barmhärtig mot alla sina skapelser. Han skapade dem och försåg dem med allt de behöver för att leva. Han skänker dem mat, vatten, luft och allt annat som krävs för deras överlevnad."),
+    ("الرَّحِيمُ", "ar-Raḥīm", "Den Barmhärtige", "Allah är nådig mot sina troende tjänare. Han vägleder dem till tron och skänker dem evig belöning i paradiset."),
+    ("الحَيُ", "al-Ḥayy", "Den Levande", "Han är den vars liv är absolut beständigt. Hans existens har varken början eller slut och påverkas inte av någon brist. Han lever ett fullkomligt liv, präglat av perfekta egenskaper. Namnet al-Ḥayy är ett bevis för att endast han är värd att dyrkas."),
+    ("القَيُّومُ", "al-Qayyūm", "Den Självbestående, den evige Vidmakthållaren", "Allah är den absolut oberoende. Han behöver varken något eller någon för att existera. Han är den som skapar, styr och upprätthåller allt i universum. Han förser oss med allt vi behöver för att leva, och vi är i allt helt beroende av honom."),
+    ("ٱلأَوَّلُ", "al-Awwal", "Den Förste", "Allah fanns innan allt annat. Han har alltid funnits och kommer alltid att finnas. Han har ingen början och inget slut. Han är den Evige."),
+    ("ٱلْآخِرُ", "al-Akhir", "Den Siste", "Detta namn hör samman med al-Awwal. Tillsammans uttrycker de att Allah fanns före allt annat och att han består efter allt. Han har ingen början och inget slut. Han är den Evige."),
+    ("ٱلظَّاهِرُ", "adh-Dhāhir", "Den Uppenbare, den Högste", "Allah är den som är över sin skapelse, upphöjd och överlägsen allt. Han är den Uppenbare som ingen kan undgå och den Högste som inget är över."),
+    ("ٱلْبَاطِنُ", "al-Bāṭin", "Den Närmste", "Han är den Närmste som känner till allt. Han är nära sina tjänare och vakar ständigt över dem."),
+    ("ٱلْوَارِثُ", "al-Wārith", "Den Bestående", "Allah är den som består när allt annat har upphört. När skapelsen slutar existera är det endast han som förblir."),
+    ("الْقُدُّوسُ", "al-Quddūs", "Den Helige", "Allah är fullkomlig och fri från alla brister. Han är upphöjd över allt som inte är värdigt honom och bortom allt som människor kan föreställa sig."),
+    ("السُّبُّوحُ", "as-Subbūḥ", "Den som är helt fri från brister, den Ärade", "Allah är fri från alla brister och allt som inte är värdigt honom. Han är fullkomlig och perfekt. Han behöver varken sova eller äta, och han har ingen familj."),
+    ("السَّلاَمُ", "as-Salām", "Den Felfrie, den som skänker frid", "Namnet as-Salām betyder att Allah är fullkomlig och fri från alla brister. Han är perfekt i allt han gör och begår aldrig orättvisa. Han skänker sina tjänare frid och trygghet, både i denna värld och i nästa."),
+    ("الْمُؤْمِنُ", "al-Mu'min", "Den som bekräftar sanningen, den som skänker trygghet", "Allah bekräftade sina budbärares sanning och vittnar om sig själv som den ende sanne Guden. Han uppfyller sitt löfte och skänker de troende säkerhet och frid."),
+    ("الْحَقُ", "al-Ḥaqq", "Den absoluta Sanningen", "Allah är den som är sann i sin essens och i sin existens. Hans religion är sann, hans löften är sanna, och mötet med honom är sanning."),
+    ("الْمُتَكَبِّرُ", "al-Mutakabbir", "Den Upphöjde, den som besitter all storhet", "Han är unik i sin storhet och makt. Allt är under hans kontroll. Hans storhet är ett majestät som endast tillkommer honom och som inte liknar arrogans."),
+    ("الْعَظِيمُ", "al-ʿAdhīm", "Den Väldige", "Allah är den som besitter väldighet i sitt väsen och i sina egenskaper. Hans väsen är större än någon annans."),
+    ("الْكَبِيرُ", "al-Kabīr", "Den Store", "Han är större än allt, och all vördnad tillkommer honom."),
+    ("الْعَلِيُّ", "al-ʿAliyy", "Den Höge", "Allah är högt ovan sin skapelse och besitter all makt. Han är upphöjd i sitt väsen och i sina egenskaper, i sin status och i sin överlägsenhet."),
+    ("الأَعْلَى", "al-Aʿlā", "Den Högste", "Allah är högt ovan sin skapelse och besitter all makt. Han är upphöjd i sin ställning och i sin överlägsenhet."),
+    ("اللَّطِيفُ", "al-Laṭīf", "Den Välvillige", "Allah är den som är god mot sina tjänare och vägleder dem till godhet på sätt de inte fullt ut kan uppfatta. Hans välvilja når de av hans tjänare som han vill, som en särskild barmhärtighet."),
+    ("الحَكِيمُ", "al-Ḥakīm", "Den Allvise", "Han är den som har skapat allt på det mest visa och fullkomliga sättet. Allt i hans skapelse har sin rätta plats och sitt bestämda ändamål."),
+    ("ٱلْوَاسِعُ", "al-Wāsiʿ", "Den Allomfattande", "Han är den som har all kunskap och vars egenskaper är oändliga. Hans makt, herravälde, godhet och generositet är utan gräns."),
+    ("ٱلْعَلِيمُ", "al-ʿAlīm", "Den Allvetande", "Han vet allt som har hänt och allt som kommer att hända. Han behöver aldrig bli informerad om något, för hans kunskap omfattar allt."),
+    ("الْمَلِكُ", "al-Malik", "Konungen", "Allah har full kontroll över allt. Han gör vad han vill och ingen kan hindra honom. Hans befallningar genomförs alltid i hans rike."),
+    ("ٱلْحَمِيدُ", "al-Ḥamīd", "Den Prisvärde", "All lov och pris tillkommer honom. Han är den som förtjänar beröm för sitt väsen, sina namn och egenskaper, och för alla sina handlingar."),
+    ("ٱلْمَجِيدُ", "al-Majīd", "Den Ärofulle", "Allahs egenskaper är fyllda av ära och hans handlingar är goda och ärofulla. Han är Konungen, den ende som är fullkomlig och större än allt annat."),
+    ("الْخَبِيرُ", "al-Khabīr", "Den Underkunnige", "Den som har full kännedom om allt. Han har fullständig kunskap om det fördolda och insikt om alla ting – till och med myrans fotspår i nattens mörker."),
+    ("الْقَوِيُ", "al-Qawiyy", "Den Starke", "Han är den som äger all styrka. Ingens makt kan försvaga honom, och han kan aldrig bli maktlös. All styrka tillhör honom."),
+    ("ٱلْمَتِينُ", "al-Matīn", "Den orubbligt Starke", "Han är den Starke som aldrig tröttas ut av det han gör. Hans styrka är fast, uthållig och oöverträffad."),
+    ("الْعَزِيزُ", "al-ʿAzīz", "Den Mäktige, den Oövervinnlige", "Han är den som råder och som ensam har all makt och majestät. Alla starka är underkastade hans makt."),
+    ("القَاهِرُ", "al-Qāhir", "Den Oemotstånglige", "Han utövar sin absoluta makt över alla sina tjänare, och ingen kan avvärja hans beslut."),
+    ("الْقَهَّارُ", "al-Qahhār", "Den yttersta Härskaren", "Han utövar sin oinskränkta makt över alla sina tjänare och härskar med absolut auktoritet."),
+    ("ٱلْقَادِرُ", "al-Qādir", "Den Mäktige", "Han skapade skapelsen genom sin makt och låter dem leva och dö. Om han vill att något ska ske säger han bara: 'Var!' – och det blir."),
+    ("القَدِيرُ", "al-Qadīr", "Den Allsmäktige", "Han skapade skapelsen genom sin makt och låter dem leva och dö genom den."),
+    ("المُقْتَدِر", "al-Muqtadir", "Den Allrådande", "Han är den som har makt att göra allt han vill. Ingenting kan hindra honom och ingenting kan stå emot hans beslut."),
+    ("الْجَبَّارُ", "al-Jabbār", "Den Oemotståndlige", "Han är den som inte kan hindras och som tvingar sin vilja igenom. Han är också den som lagar det som är sönder och tröstar de sörjande."),
+    ("الْخَالِقُ", "al-Khāliq", "Skaparen", "Han är den som skapar saker från intet på ett sätt som saknar like. Han skapar allt med fullkomlig precision."),
+    ("الخَلَّاقُ", "al-Khallāq", "Den storslagne Skaparen", "Han är den som ständigt skapar, om och om igen, på det mest fulländade sätt. Hans skapande är outtömligt."),
+    ("الْبَارِئُ", "al-Bāriʾ", "Frambringaren", "Han är den som frambringar allt till existens och ger det dess särpräglade natur, på det sätt han har bestämt."),
+    ("الْمُصَوِّرُ", "al-Muṣawwir", "Formgivaren", "Han är den som ger skapelsen dess skepnader och utseenden. Han formar varje varelse på det sätt han vill, i enlighet med sin visdom."),
+    ("الْمُهَيْمِنُ", "al-Muhaymin", "Den Övervakande, den Allhärskande", "Han är den som råder över hela skapelsen. Det han vill sker, och det han inte vill sker inte. Han vakar över skapelsernas handlingar och ord."),
+    ("الحَافِظُ", "al-Ḥāfiḏh", "Bevakaren", "Han är den som skyddar sina tjänare från det som leder till undergång, både i deras tro och i deras världsliga liv."),
+    ("الحَفِيظُ", "al-Ḥafīḏh", "Den ständigt Bevakande", "Han är den som bevarar allt han har skapat och som omfattar allt med sin kunskap. Han vakar över skapelsen i dess helhet."),
+    ("ٱلْوَلِيُّ", "al-Waliyy", "Beskyddaren", "Han är den som tar hand om sin skapelse och skyddar dem. Han stödjer och hjälper dem, och han är nära sina tjänare."),
+    ("المَوْلَى", "al-Mawlā", "Skyddsherren", "Han är den som råder över sin skapelse och beskyddar dem. Han är deras herre, beskyddare och hjälp."),
+    ("النَّصِيرُ", "an-Naṣīr", "Hjälparen", "Han är den som ständigt hjälper sina sändebud, profeter och nära tjänare. De troende har ingen annan hjälpare eller bevarare än Allah."),
+    ("ٱلْوَكِيلُ", "al-Wakīl", "Förvaltaren", "Han är den som ständigt sköter skapelsens angelägenheter och försörjer dem. Han är den som man kan förlita sig på i alla situationer."),
+    ("الكَافِي", "al-Kāfī", "Den Tillräcklige", "Han är den som är helt och fullt tillräcklig för sina tjänare i alla angelägenheter. Han förser dem med allt de behöver, både materiellt och andligt."),
+    ("ٱلصَّمَدُ", "al-Ṣamad", "Den Suveräne, den som skapelsen vänder sig till", "Han är den fullkomlige i all sin kunskap, styrka och makt. Allt i skapelsen vänder sig till honom i behov och nöd."),
+    ("الرَّازِقُ", "ar-Rāziq", "Försörjaren", "Allah är den som garanterar försörjning och skänker sina tjänare det de behöver för att leva."),
+    ("الرَّزَّاقُ", "ar-Razzāq", "Den ständige Försörjaren", "Allah är den som utan avbrott försörjer allt levande. Han ger rikligt, generöst och ständigt – hans försörjning tar aldrig slut."),
+    ("الفَتَّاحُ", "al-Fattāḥ", "Skiljedomaren, den som ger seger", "Han är den som dömer mellan sina tjänare med rättvisa. Han öppnar portarna till sin nåd och öppnar hjärtan, sinnen och ögon för sanningen."),
+    ("المُبِين", "al-Mubīn", "Den Uppenbare, den Klargörande", "Han är den som visar sina tjänare vägen till rätt ledning och klargör för dem vilka vägar som leder till villfarelse."),
+    ("ٱلْهَادِي", "al-Hādī", "Vägledaren", "Han är den som vägleder sina tjänare till det som ger dem lycka, både i detta liv och i nästa. All vägledning är i hans hand."),
+    ("الْحَكَمُ", "al-Ḥakam", "Domaren", "Han är den som ensam dömer bland sina tjänare. Hans domar verkställs alltid och är fulla av visdom och rättvisa."),
+    ("ٱلرَّؤُوفُ", "ar-Ra'ūf", "Den Förbarmande", "Han är den som visar den högsta graden av barmhärtighet. Hans förbarmande är varsamt, djupt och fullkomligt."),
+    ("الوَدُودُ", "al-Wadūd", "Den Kärleksfulle, den Älskade", "Han är den som älskar sina profeter, sändebud och de som följer dem. De troende älskar honom mer än något annat."),
+    ("ٱلْبَرُّ", "al-Barr", "Den Gode", "Han är den som gång på gång skänker sina tjänare alla former av gott, i detta liv och i det nästa. Hans godhet är fullkomlig och hans gåvor har ingen gräns."),
+    ("الْحَلِيمُ", "al-Ḥalīm", "Den Överseende", "Han skyndar inte med att straffa, utan han benådar, förlåter och döljer synder. Han fortsätter att skänka välsignelser och ger sina tjänare en chans att återvända."),
+    ("الْغَفُورُ", "al-Ghafūr", "Den ständigt Förlåtande", "Han är den som gång på gång förlåter sina tjänare och inte ställer dem till svars för deras synder när de söker hans förlåtelse."),
+    ("الْغَفَّارُ", "al-Ghaffār", "Den konstant Förlåtande", "Han är den som förlåter sina tjänare gång på gång, varje gång de återvänder till honom i ånger. Hans förlåtelse tar aldrig slut."),
+    ("العَفُوُ", "al-ʿAfuww", "Benådaren", "Han är den som benådar och helt utplånar synder, så att de inte lämnar några spår efter sig."),
+    ("ٱلتَّوَابُ", "at-Tawwāb", "Den som vägleder till ånger och godtar den", "Han är den som gång på gång öppnar vägarna till ånger. Han gläds över sina tjänares ånger och älskar dem som återvänder till honom."),
+    ("الكَرِيمُ", "al-Karīm", "Den Generöse", "Han är den som är ytterst god och fullkomlig i alla aspekter. Han ger i överflöd, förlåter även när han har makt att straffa, och bryter aldrig sina löften."),
+    ("الأَكْرَم", "al-Akram", "Den mest Generöse", "Han är den som ingen annan kan överträffa i generositet. Han är den mest fullkomlige och skänker alltid mer än vad någon kan föreställa sig."),
+    ("الشَّاكِرُ", "ash-Shākir", "Den Uppskattande", "Han är den som erkänner sina tjänares gärningar och belönar dem. Han ger en liten handling en stor belöning."),
+    ("الشَّكُورُ", "ash-Shakūr", "Den mycket Uppskattande", "Han är den som ger riklig belöning för små gärningar och mångdubblar sina tjänares uppriktiga handlingar utan gräns."),
+    ("السَّمِيعُ", "as-Samīʿ", "Den Allhörande", "Han är den som hör allt – varje ord, varje ljud, varje suck, oavsett hur svagt eller dolt det är. Han besvarar sina tjänares böner i sin visdom."),
+    ("ٱلْبَصِيرُ", "al-Baṣīr", "Den Allseende", "Han är den som ser allt med fullkomlig syn; ingenting är dolt för honom. Han ser till och med den svarta myran på en svart sten i nattens mörker."),
+    ("الشَّهِيدُ", "ash-Shahīd", "Vittnet, den Närvarande", "Han är den som aldrig är frånvarande, utan alltid närvarande och vittnande. Ingenting undgår honom, varken stort eller smått."),
+    ("الرَّقِيبُ", "ar-Raqīb", "Den Övervakande", "Han är den som alltid övervakar och observerar sin skapelse. Inget är dolt för honom – han känner till allt som sker, öppet och dolt."),
+    ("القَرِيب", "al-Qarīb", "Den Nära", "Han är den som alltid är nära sina tjänare. Närheten visar sig genom omsorg, hjälp och besvarade böner."),
+    ("ٱلْمُجِيبُ", "al-Mujīb", "Den Bönhörande", "Han är den som besvarar sina tjänares åkallan. Han har lovat att besvara deras böner, men hans svar sker alltid utifrån hans visdom."),
+    ("المُحِيطُ", "al-Muḥīṭ", "Den Allomfattande", "Han är den som med sin kunskap, makt, hörsel och syn omsluter allt. Ingenting kan undgå honom."),
+    ("الحَسِيبُ", "al-Ḥasīb", "Den som håller räkenskapen, den Tillräcklige", "Han är den som räknar varje handling, stor som liten. Han är också den som är tillräcklig för sina tjänare och tillgodoser deras behov."),
+    ("ٱلْغَنيُّ", "al-Ghaniyy", "Den Självtillräcklige, den Oberoende", "Han är den som inte behöver någon, medan alla behöver honom. Han äger all rikedom och alla skatter i himlarna och på jorden."),
+    ("الْوَهَّابُ", "al-Wahhāb", "Den ständigt Givande", "Han är den som ständigt skänker sin skapelse gåvor i en outtömlig ström av välvilja. Ingen kan hindra den han ger till."),
+    ("المُقيِت", "al-Muqīt", "Den som ger näring", "Han är den som förser hela sin skapelse med näring och försörjning – både kroppslig och själslig. Han ger mat och dryck men också kunskap och vägledning."),
+    ("الْقَابِضُ", "al-Qābiḍ", "Den som begränsar", "Han är den som i sin visdom håller tillbaka och begränsar försörjningen. Hans begränsning kan vara en prövning, en rening eller en vägledning."),
+    ("الْبَاسِطُ", "al-Bāsiṭ", "Den som utvidgar", "Han är den som i sin nåd vidgar försörjningen och skänker rikedom, trygghet och lättnader till vem han vill. Ingen kan begränsa det han bestämmer att ge."),
+    ("ٱلْمُقَدِّمُ", "al-Muqaddim", "Den som för fram", "Han är den som för fram och sätter främst vem han vill av sina tjänare i enlighet med sin eviga visdom."),
+    ("ٱلْمُؤَخِّرُ", "al-Mu'akhkhir", "Den som håller tillbaka", "Han är den som i sin visdom håller tillbaka och fördröjer det han vill. Ingen kan påskynda det han beslutat att senarelägga."),
+    ("الرَّفِيقُ", "ar-Rafīq", "Den Varsamme", "Allah är varsam i sina handlingar. Hans föreskrifter kom successivt, som ett tecken på hans omsorg om sina tjänare. Han är varsam och förhastar sig inte."),
+    ("المَنَّان", "al-Mannān", "Den som skänker rikligt", "Han är den som översköljer sin skapelse med gåvor och välsignelser. Allt de har av liv, försörjning och vägledning kommer från honom."),
+    ("الجَوَاد", "al-Jawād", "Den Frikostige", "Allahs frikostighet omfattar hela skapelsen utan undantag. Hans välsignelser tar aldrig slut och hans nåd lämnar ingen utanför."),
+    ("المُحْسِنُ", "al-Muḥsin", "Den Välgörande", "Allah gör gott mot hela sin skapelse. Han låter dem leva, försörjer dem och tar hand om dem. All hans behandling präglas av Iḥsān."),
+    ("السِّتِّيرُ", "as-Sittīr", "Den som döljer", "Allah är den som döljer sina tjänares brister och inte exponerar dem. Han älskar att även de döljer sina egna och andras fel."),
+    ("الدَّيَّانُ", "ad-Dayyān", "Återgäldaren, den som håller räkenskapen", "Allah är den som slutligen håller räkenskapen med sin skapelse. Han återgäldar varje själ för vad den har gjort, gott som ont."),
+    ("الشَّافِي", "ash-Shāfī", "Den som skänker bot", "Allah är den som botar alla sjukdomar – både inre och yttre. Ingen kan ge bot utom han, och när han skänker bot är den fullkomlig."),
+    ("السَّيِّدُ", "as-Sayyid", "Den högsta Herren, den fullkomlige Mästaren", "Han äger hela skapelsen, och hela skapelsen är hans tjänare. All suveränitet och allt herravälde tillhör honom ensam."),
+    ("الوِتْرُ", "al-Witr", "Den Ende, den Unike", "Allah är den ende i sin essens, sina egenskaper och sina handlingar. Han har varken partner eller jämlike, och ingen kan jämföras med honom."),
+    ("الحَيِيُّ", "al-Ḥayiyy", "Den Blygsamme", "Detta namn bekräftar blyghet som en egenskap hos Allah på ett sätt som anstår hans majestät. Det är inte blyghet av svaghet, utan en ädel återhållsamhet baserad på hans generositet."),
+    ("الطَّيِّبُ", "at-Ṭayyib", "Den Gode", "Allah är höjd över alla brister. Inget kommer från honom annat än det som är gott, och inget stiger upp till honom annat än det som är gott."),
+    ("المُعْطِي", "al-Muʿṭī", "Givaren", "Allah är den som skänker och fördelar efter sin vilja. Ingen kan hindra det han väljer att ge, och ingen kan ge det han väljer att hålla tillbaka."),
+    ("الجَمِيل", "al-Jamīl", "Den Vackre", "Allah är fullkomlig i all skönhet – i sin essens, sina namn, egenskaper och handlingar. Allt som är vackert i skapelsen är en återspegling av hans skönhet."),
+]
+
+// MARK: - Embedded Quran Verse Fallback (20 curated verses)
+// Shown before first app open. After first open, JS writes exact Bernström
+// translations via hidayah_daily_content_cache (App Group), which takes priority.
+
+private struct FallbackVerse {
+    let swedish: String; let surahName: String
+    let surahNumber: Int; let ayahNumber: Int; let reference: String
+}
+
+private let kFallbackVerses: [FallbackVerse] = [
+    FallbackVerse(
+        swedish: "I Allahs, den Nåderikes, den Barmhärtiges namn. All lovprisning tillkommer Allah, världarnas Herre. Den Nåderike, den Barmhärtige. Han som råder på Domens dag. Dig dyrkar vi och till dig vänder vi oss om hjälp. Led oss på den raka vägen – vägen för dem som du har välsignat.",
+        surahName: "Al-Fatiha", surahNumber: 1, ayahNumber: 1, reference: "1:1–7"),
+    FallbackVerse(
+        swedish: "Allah - det finns ingen [sann] gud utom honom, den Levande, den evige Vidmakthållaren. Slummer griper honom inte och inte heller sömn. Honom tillhör allt i himlarna och på jorden.",
+        surahName: "Al-Baqarah", surahNumber: 2, ayahNumber: 255, reference: "2:255"),
+    FallbackVerse(
+        swedish: "Allah belastar inte en människa med mer än hon orkar. Hon [skördar] det [gott] som hon vinner och drabbas av det [onda] som hon förvärvar.",
+        surahName: "Al-Baqarah", surahNumber: 2, ayahNumber: 286, reference: "2:286"),
+    FallbackVerse(
+        swedish: "Allah är tillräcklig för oss och han är den bäste förvaltaren.",
+        surahName: "Al-Imran", surahNumber: 3, ayahNumber: 173, reference: "3:173"),
+    FallbackVerse(
+        swedish: "Varje levande varelse måste smaka döden, och på Domens dag skall ni få er fulla lön.",
+        surahName: "Al-Imran", surahNumber: 3, ayahNumber: 185, reference: "3:185"),
+    FallbackVerse(
+        swedish: "Minns mig, och jag skall minnas er. Var tacksamma mot mig och var inte otacksamma.",
+        surahName: "Al-Baqarah", surahNumber: 2, ayahNumber: 152, reference: "2:152"),
+    FallbackVerse(
+        swedish: "Och om mina tjänare frågar dig om mig – jag är nära. Jag besvarar den bedjandes bön när han åkallar mig.",
+        surahName: "Al-Baqarah", surahNumber: 2, ayahNumber: 186, reference: "2:186"),
+    FallbackVerse(
+        swedish: "Om ni är tacksamma ökar jag er välsignelse, men om ni är otacksamma – mitt straff är hårt.",
+        surahName: "Ibrahim", surahNumber: 14, ayahNumber: 7, reference: "14:7"),
+    FallbackVerse(
+        swedish: "Vår Herre! Skänk oss nåd från din sida och ordna de bästa förutsättningarna för oss i det vi har för händer.",
+        surahName: "Al-Kahf", surahNumber: 18, ayahNumber: 10, reference: "18:10"),
+    FallbackVerse(
+        swedish: "Jag är Allah – det finns ingen [sann] gud utom jag! Dyrka mig och förrätta bönen till min åminnelse.",
+        surahName: "Ta-Ha", surahNumber: 20, ayahNumber: 14, reference: "20:14"),
+    FallbackVerse(
+        swedish: "Det finns ingen gud utom dig. Ära vare dig! Jag var sannerligen bland dem som handlar orättfärdigt mot sig själva.",
+        surahName: "Al-Anbiya", surahNumber: 21, ayahNumber: 87, reference: "21:87"),
+    FallbackVerse(
+        swedish: "Med svårigheten finns lättnad. Med svårigheten finns lättnad.",
+        surahName: "Al-Inshirah", surahNumber: 94, ayahNumber: 5, reference: "94:5–6"),
+    FallbackVerse(
+        swedish: "Säg: O mina tjänare, som handlat orättfärdigt mot er själva – förtvivla aldrig om Allahs nåd. Allah förlåter alla synder. Han är den som förlåter, den Barmhärtige.",
+        surahName: "Az-Zumar", surahNumber: 39, ayahNumber: 53, reference: "39:53"),
+    FallbackVerse(
+        swedish: "Han är Allah; det finns ingen gud utom han; Konungen, den Helige, den Felfrie, den som skänker trygghet, Beskyddaren, den Mäktige, den Oemotstånglige, den som besitter all storhet.",
+        surahName: "Al-Hashr", surahNumber: 59, ayahNumber: 23, reference: "59:23"),
+    FallbackVerse(
+        swedish: "Han som skapade döden och livet för att pröva er – vem av er som handlar bäst. Han är den Allmäktige, den som förlåter.",
+        surahName: "Al-Mulk", surahNumber: 67, ayahNumber: 2, reference: "67:2"),
+    FallbackVerse(
+        swedish: "Vid tidernas lopp! Sannerligen, [hela] mänskligheten är på väg mot fördärvet, utom de som tror och lever rättskaffens och råder varandra till sanningen och råder varandra till tålamod.",
+        surahName: "Al-Asr", surahNumber: 103, ayahNumber: 1, reference: "103:1–3"),
+    FallbackVerse(
+        swedish: "Säg: Han är Allah, den Ende. Allah, den Suveräne. Han har inte avlat och inte heller blivit avlad. Och ingen är hans like.",
+        surahName: "Al-Ikhlas", surahNumber: 112, ayahNumber: 1, reference: "112:1–4"),
+    FallbackVerse(
+        swedish: "O ni människor! Vi har sannerligen skapat er av man och kvinna och gjort er till folk och stammar för att ni skall lära känna varandra.",
+        surahName: "Al-Hujurat", surahNumber: 49, ayahNumber: 13, reference: "49:13"),
+    FallbackVerse(
+        swedish: "Nådens Herres sanna tjänare är de som vandrar ödmjukt på jorden och som, när okunniga människor tilltalar dem, svarar: Fred!",
+        surahName: "Al-Furqan", surahNumber: 25, ayahNumber: 63, reference: "25:63"),
+    FallbackVerse(
+        swedish: "Dyrka Allah och sätt ingenting vid hans sida, och visa godhet mot era föräldrar och mot närstående och faderlösa och fattiga och grannar.",
+        surahName: "An-Nisa", surahNumber: 4, ayahNumber: 36, reference: "4:36"),
+]
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MARK: - Dagens Hadith Widget  (medium only)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+struct HadithEntry: TimelineEntry {
+    let date: Date
+    let arabic: String
+    let swedish: String
+    let source: String
+
+    static let placeholder = HadithEntry(
+        date: .now,
+        arabic: "إِنَّمَا الْأَعْمَالُ بِالنِّيَّاتِ",
+        swedish: "Handlingar bedöms utifrån avsikterna, och varje person belönas för vad han har haft för avsikt.",
+        source: "Sahih ul-Bukhari 1"
+    )
+}
+
+struct HadithProvider: TimelineProvider {
+    func placeholder(in context: Context) -> HadithEntry { .placeholder }
+
+    func getSnapshot(in context: Context, completion: @escaping (HadithEntry) -> Void) {
+        completion(buildEntry())
+    }
+
+    func getTimeline(in context: Context, completion: @escaping (Timeline<HadithEntry>) -> Void) {
+        completion(Timeline(entries: [buildEntry()], policy: .after(dailyMidnight())))
+    }
+
+    private func buildEntry() -> HadithEntry {
+        if let c = readDailyCache(), let h = c.hadith {
+            return HadithEntry(date: .now, arabic: h.arabic, swedish: h.swedish, source: h.source)
+        }
+        let f = kFallbackHadiths[epochDayIndex(year: 2024, month: 1, day: 1, count: kFallbackHadiths.count)]
+        return HadithEntry(date: .now, arabic: f.arabic, swedish: f.swedish, source: f.source)
+    }
+}
+
+private struct DailyHadithMediumView: View {
+    let entry: HadithEntry
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Dagens Hadith")
+                .font(.system(size: 10, weight: .semibold)).foregroundColor(kGold)
+            Spacer(minLength: 6)
+            Text(entry.arabic)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.white.opacity(0.50))
+                .lineLimit(2).multilineTextAlignment(.trailing)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+            Spacer(minLength: 6)
+            Text(entry.swedish)
+                .font(.system(size: 11, weight: .regular))
+                .foregroundColor(.white.opacity(0.85))
+                .lineLimit(4).fixedSize(horizontal: false, vertical: false)
+            Spacer(minLength: 6)
+            Text(entry.source)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(kGold.opacity(0.80)).lineLimit(1)
+        }
+        .padding(EdgeInsets(top: 14, leading: 14, bottom: 12, trailing: 14))
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+}
+
+struct HidayahDailyHadithWidget: Widget {
+    let kind = "HidayahDailyHadithWidget"
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: kind, provider: HadithProvider()) { entry in
+            DailyHadithMediumView(entry: entry)
+                .containerBackground(
+                    LinearGradient(colors: [kBgTop, kBgBottom],
+                                   startPoint: .topLeading, endPoint: .bottomTrailing),
+                    for: .widget)
+        }
+        .configurationDisplayName("Dagens Hadith")
+        .description("Läs en ny hadith varje dag.")
+        .supportedFamilies([.systemMedium])
+    }
+}
+
+// MARK: - Embedded Hadith Fallback (shown before first app open)
+
+private struct FallbackHadith {
+    let arabic: String; let swedish: String; let source: String
+}
+
+private let kFallbackHadiths: [FallbackHadith] = [
+    FallbackHadith(
+        arabic: "إِنَّمَا الْأَعْمَالُ بِالنِّيَّاتِ",
+        swedish: "Handlingar bedöms utifrån avsikterna, och varje person belönas för vad han har haft för avsikt.",
+        source: "Sahih ul-Bukhari 1"),
+    FallbackHadith(
+        arabic: "الدِّينُ النَّصِيحَةُ",
+        swedish: "Religionen är uppriktig rådgivning.",
+        source: "Sahih ul-Muslim 55"),
+    FallbackHadith(
+        arabic: "مَنْ كَانَ يُؤْمِنُ بِاللَّهِ وَالْيَوْمِ الْآخِرِ فَلْيَقُلْ خَيْرًا أَوْ لِيَصْمُتْ",
+        swedish: "Den som tror på Allah och den Yttersta dagen, låt honom säga något gott eller tiga.",
+        source: "Sahih ul-Bukhari 6136"),
+    FallbackHadith(
+        arabic: "لَا يُؤْمِنُ أَحَدُكُمْ حَتَّى يُحِبَّ لِأَخِيهِ مَا يُحِبُّ لِنَفْسِهِ",
+        swedish: "Ingen av er tror (fullständigt) förrän han önskar för sin broder det han önskar för sig själv.",
+        source: "Sahih ul-Bukhari 13"),
+    FallbackHadith(
+        arabic: "اتَّقِ اللَّهَ حَيْثُمَا كُنْتَ",
+        swedish: "Frukta Allah var du än befinner dig, och låt en god gärning följa en dålig – den utplånar den. Och bemöt folk med ett gott uppträdande.",
+        source: "At-Tirmidhi 1987"),
+]
+
 // MARK: - Previews
 
 #Preview(as: .systemSmall)           { HidayahFocusWidget()        } timeline: { PrayerEntry.placeholder() }
@@ -1500,3 +2094,8 @@ struct HidayahLockArcWidget: Widget {
 #Preview(as: .accessoryRectangular)  { HidayahLockOverviewWidget()  } timeline: { PrayerEntry.placeholder() }
 #Preview(as: .accessoryRectangular)  { HidayahLockArcWidget()       } timeline: { PrayerEntry.placeholder() }
 #endif
+#Preview(as: .systemSmall)           { HidayahAllahNameWidget()     } timeline: { AllahNameEntry.placeholder }
+#Preview(as: .systemMedium)          { HidayahAllahNameWidget()     } timeline: { AllahNameEntry.placeholder }
+#Preview(as: .systemSmall)           { HidayahDailyVerseWidget()    } timeline: { QuranVerseEntry.placeholder }
+#Preview(as: .systemMedium)          { HidayahDailyVerseWidget()    } timeline: { QuranVerseEntry.placeholder }
+#Preview(as: .systemMedium)          { HidayahDailyHadithWidget()   } timeline: { HadithEntry.placeholder }

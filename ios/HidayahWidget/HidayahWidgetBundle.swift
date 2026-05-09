@@ -19,5 +19,8 @@ struct HidayahWidgetBundle: WidgetBundle {
         HidayahLockOverviewWidget()    // lock screen – daily overview
         HidayahLockArcWidget()         // lock screen – prayer arc timeline
 #endif
+        HidayahAllahNameWidget()       // small + medium – daily Allah name
+        HidayahDailyVerseWidget()      // small + medium – daily Quran verse
+        HidayahDailyHadithWidget()     // medium – daily Hadith
     }
 }

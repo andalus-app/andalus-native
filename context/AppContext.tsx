@@ -9,6 +9,7 @@ import { buildYearlyCache, getPrayerTimesWithFallback } from '../services/monthl
 import { schedulePrayerNotifications, cancelPrayerNotifications, scheduleDhikrReminder, cancelDhikrReminder, scheduleFridayDuaReminder, cancelFridayDuaReminder, refreshPrePrayerReminderNotifications, getNotificationDisplayName } from '../services/notifications';
 import {
   updateWidgetData,
+  updateDailyContent,
   setAutoLocation,
   getBackgroundLocationUpdate,
   clearNeedsPrayerRefresh,
@@ -23,6 +24,7 @@ import {
   type NotificationScheduleState,
   type EffectivePrayerSchedule,
 } from '../modules/WidgetData';
+import { getDailyWidgetPayload } from '../services/dailyWidgetContent';
 import { refreshVisitedPlaceMultiDayCache } from '../services/visitedPlacesRefresh';
 import { getEffectivePrayerCity } from '../services/monthlyCache';
 import { getPrayerMonthFromSupabaseFallback } from '../services/supabasePrayerFallback';
@@ -383,6 +385,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }).catch(() => {
           // Non-fatal — widget will continue showing previous data
         });
+
+        // Write today's Allah name + Quran verse to App Group for daily content widgets.
+        updateDailyContent(getDailyWidgetPayload()).catch(() => {});
 
         // Mirror today/tomorrow prayer times to App Group so the native notification
         // scheduler can reschedule in the background without network access.

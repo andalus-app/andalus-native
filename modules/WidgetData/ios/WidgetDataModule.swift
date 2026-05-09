@@ -71,6 +71,26 @@ public class WidgetDataModule: Module {
             promise.resolve(nil)
         }
 
+        // updateDailyContent(payload: Object) → void
+        // Writes today's Allah name and Quran verse to the App Group daily content
+        // cache (hidayah_daily_content_cache) and reloads the daily content widgets.
+        // Called on every app open — safe to call repeatedly.
+        AsyncFunction("updateDailyContent") { (payload: [String: Any], promise: Promise) in
+            guard let defaults = UserDefaults(suiteName: self.appGroupID) else {
+                promise.resolve(nil); return
+            }
+            if let data = try? JSONSerialization.data(withJSONObject: payload) {
+                defaults.set(data, forKey: "hidayah_daily_content_cache")
+                defaults.synchronize()
+                NSLog("[WidgetData] daily content cache updated: date=%@",
+                      (payload["date"] as? String) ?? "?")
+            }
+            WidgetCenter.shared.reloadTimelines(ofKind: "HidayahAllahNameWidget")
+            WidgetCenter.shared.reloadTimelines(ofKind: "HidayahDailyVerseWidget")
+            WidgetCenter.shared.reloadTimelines(ofKind: "HidayahDailyHadithWidget")
+            promise.resolve(nil)
+        }
+
         // setAutoLocation(enabled: Bool) → void
         // Mirrors the JS autoLocation setting to App Group so the native
         // LocationBackgroundManager can respect it without the JS runtime.

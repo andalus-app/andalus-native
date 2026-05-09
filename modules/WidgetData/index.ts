@@ -329,3 +329,36 @@ export async function getNativeBgDebugEvents(): Promise<unknown[]> {
   if (!NativeModule) return [];
   return NativeModule.getNativeBgDebugEvents() ?? [];
 }
+
+/**
+ * Writes today's Allah name and Quran verse to the App Group daily content
+ * cache (key: hidayah_daily_content_cache) and triggers timeline reloads for
+ * HidayahAllahNameWidget and HidayahDailyVerseWidget.
+ *
+ * Safe to call on every app open — idempotent, non-blocking.
+ */
+export async function updateDailyContent(payload: {
+  date:      string;    // "yyyy-MM-dd"
+  updatedAt: number;    // Unix seconds
+  allahName: {
+    arabic:          string;
+    transliteration: string;
+    swedish:         string;
+    explanation:     string;
+  };
+  quranVerse: {
+    swedish:     string;
+    surahName:   string;
+    surahNumber: number;
+    ayahNumber:  number;
+    reference:   string;
+  };
+  hadith: {
+    arabic:  string;
+    swedish: string;
+    source:  string;
+  };
+}): Promise<void> {
+  if (!NativeModule) return;
+  return NativeModule.updateDailyContent(payload);
+}
