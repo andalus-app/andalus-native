@@ -19,6 +19,7 @@ import {
   getNotificationScheduleState,
   setEffectivePrayerSchedule,
   getVisitedPrayerLocations,
+  getNativeBgDebugEvents,
   type NotificationScheduleState,
   type EffectivePrayerSchedule,
 } from '../modules/WidgetData';
@@ -204,6 +205,29 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           getBackgroundLocationUpdate()
             .then(bgUpdate => { if (bgUpdate) pendingBgClearRef.current = true; })
             .catch(() => {});
+
+          // Dump native background debug events on every app open.
+          // These are written by LocationBackgroundManager into App Group and survive
+          // process termination — they prove whether native location/region events fired
+          // during the last closed-app session. Visible in device logs (Console.app)
+          // and accessible from TestFlight builds without Xcode attached.
+          getNativeBgDebugEvents().then(events => {
+            if (!events.length) {
+              console.log('[NativeBgDebug] no events recorded yet (app may not have been backgrounded)');
+              return;
+            }
+            console.log(`[NativeBgDebug] last ${events.length} native background events:`);
+            (events as Array<Record<string, unknown>>).forEach(e => {
+              const ts = e.ts ? new Date((e.ts as number) * 1000).toISOString() : '?';
+              const lat = e.lat != null ? `lat=${(e.lat as number).toFixed(4)}` : '';
+              const lng = e.lng != null ? `lng=${(e.lng as number).toFixed(4)}` : '';
+              const auth = e.authStatus != null ? ` authStatus=${e.authStatus}` : '';
+              const city = e.displayName ? ` city="${e.displayName}"` : '';
+              console.log(
+                `[NativeBgDebug]   ${ts} [${e.event}]${auth}${city} ${lat}${lng} — ${e.message}`,
+              );
+            });
+          }).catch(() => {});
 
           if (__DEV__) {
             getVisitedPrayerLocations().then(entries => {

@@ -396,7 +396,34 @@ public class WidgetDataModule: Module {
                       (todayTimes["Asr"] as? String) ?? "?",
                       entries.count)
             }
+
+            // Notify LocationBackgroundManager to refresh CLRegion monitoring so the
+            // newly cached place has a geofence immediately. This is the mechanism that
+            // makes native background work without audio: instead of waiting for a
+            // coarse significant-location-change event, iOS fires didEnterRegion the
+            // moment the user crosses the 500 m boundary of a cached visited place.
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(
+                    name: NSNotification.Name("HidayahVisitedPlacesUpdated"),
+                    object: nil
+                )
+            }
+
             promise.resolve(nil)
+        }
+
+        // getNativeBgDebugEvents() → Array
+        // Returns the last 20 native background debug events persisted to App Group.
+        // Call on app startup to diagnose TestFlight failures without Xcode attached.
+        AsyncFunction("getNativeBgDebugEvents") { (promise: Promise) in
+            guard let defaults = UserDefaults(suiteName: self.appGroupID),
+                  let data     = defaults.data(forKey: "andalus_native_bg_debug_events"),
+                  let arr      = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
+            else {
+                promise.resolve([] as [[String: Any]])
+                return
+            }
+            promise.resolve(arr)
         }
     }
 }

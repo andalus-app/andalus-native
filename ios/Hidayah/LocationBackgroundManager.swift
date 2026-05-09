@@ -1,45 +1,51 @@
 // LocationBackgroundManager.swift
-// Low-power significant-location-change monitoring using CoreLocation.
+// Two complementary background-location mechanisms:
 //
-// Significant-location monitoring allows iOS to relaunch the app for low-power
-// location events in supported conditions. It is more reliable than JS-only
-// background location, but still controlled by iOS and can be affected by
-// Background App Refresh settings, permissions, Low Power Mode, and user/system
-// behavior. It does not guarantee delivery in all termination cases.
+// 1. Significant-location-change monitoring (CLLocationManager)
+//    Cell-tower based, low power, survives termination. iOS fires at its
+//    own discretion for moves of ~500 m–3 km. Good catch-all but unreliable
+//    for short urban hops (Kista ↔ Spånga, ~6 km).
 //
-// What this does on a location event:
-//   - Requires andalus_autoLocation = true in App Group (written by JS on setting
-//     change). If the key is absent or false, the update is dropped silently.
-//   - Writes new prayer_lat / prayer_lng to App Group.
-//   - Writes backgroundLocationDetectedAt — a separate signal that is NOT the same
-//     as lastUpdatedAt (the prayer-data timestamp in andalus_widget_data).
-//   - Sets needsPrayerRefresh = true so the JS layer does a full refresh on
-//     next foreground open.
-//   - Calls WidgetCenter.reloadAllTimelines() so the widget bypasses Path-1 and
-//     fetches fresh prayer times via its own Path-2 API fallback.
+// 2. CLCircularRegion monitoring around recently visited places
+//    Fires the moment the user crosses a 500 m boundary around a cached
+//    visited place. Far more reliable for known locations than
+//    significant-location-change for short urban moves.
+//    iOS allows up to 20 monitored regions per app; we use ≤ 15.
 //
-// What this intentionally does NOT do:
-//   - Does not write prayer_city  — city name is unknown without geocoding.
-//   - Does not update andalus_widget_data — prayer times are not recalculated.
-//   - Does not touch lastUpdatedAt — that timestamp only changes on a full JS refresh.
+// On any location event (significant-change OR region entry):
+//   - Requires andalus_autoLocation = true in App Group.
+//   - Writes prayer_lat / prayer_lng.
+//   - Calls NativeNotificationScheduler.trySchedule which:
+//       • Finds nearest valid visited place (5 km radius) OR
+//       • Reuses effective JS-precise schedule (25 km) OR
+//       • Resolves nearest bundled city (100 km safety cap)
+//     and writes complete widget data (city, prayer times) for the winner.
+//   - Sets needsPrayerRefresh = true so JS does a full refresh on next open.
+//   - Calls WidgetCenter.reloadAllTimelines().
 //
-// Manual test cases:
-//   A. Auto location ON, app closed, move Stockholm → Kista:
-//      Expected: prayer_lat/lng updated, needsPrayerRefresh = true,
-//      widget bypasses Path-1, fetches Kista prayer times via Path-2,
-//      widget shows old city until app open completes full refresh.
-//   B. Auto location OFF (manual city):
-//      Expected: native handler returns immediately, no App Group changes.
-//   C. Auto location ON, but key not yet written to App Group (first install):
-//      Expected: native handler returns immediately (defaults to false = safe).
-//   D. App open after scenario A (network available):
-//      Expected: full refresh completes, needsPrayerRefresh cleared, widget
-//      shows correct city + prayer times, lastUpdatedAt updated.
-//   E. App open after scenario A (network unavailable):
-//      Expected: refresh fails, needsPrayerRefresh stays set, retried on next open.
+// Debug events:
+//   Every key event is appended to andalus_native_bg_debug_events (max 20).
+//   Read from JS via WidgetDataModule.getNativeBgDebugEvents() to diagnose
+//   TestFlight failures without Xcode attached.
+//
+// NOTE: Force-quit suppresses significant-location-change relaunch.
+// Region-entry relaunch works even after force-quit in some iOS versions but
+// is not guaranteed. Normal backgrounding/suspension always works.
 
 import CoreLocation
 import WidgetKit
+
+// MARK: - Minimal decodable for region refresh (avoids cross-module dependency)
+
+private struct VisitedPlaceForRegion: Decodable {
+    let locationKey: String
+    let displayName: String
+    let lat:         Double
+    let lng:         Double
+    let lastUsedAt:  Double
+}
+
+// MARK: - LocationBackgroundManager
 
 final class LocationBackgroundManager: NSObject, CLLocationManagerDelegate {
 
@@ -48,120 +54,344 @@ final class LocationBackgroundManager: NSObject, CLLocationManagerDelegate {
     private let manager  = CLLocationManager()
     private let appGroup = "group.com.anonymous.Hidayah"
 
+    private let kVisitedLocationsKey   = "andalus_visited_prayer_locations"
+    private let kDebugEventsKey        = "andalus_native_bg_debug_events"
+    private let kRegionPrefix          = "hidayah-visited-"
+    private let kMaxMonitoredRegions   = 15
+    private let kRegionRadiusMeters: Double = 500
+    private let kMaxDebugEvents        = 20
+
     private override init() {
         super.init()
         manager.delegate = self
+
+        // Refresh monitored regions when JS writes new visited-place cache.
+        // WidgetDataModule posts this notification after every upsert.
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleVisitedPlacesUpdated),
+            name: NSNotification.Name("HidayahVisitedPlacesUpdated"),
+            object: nil
+        )
     }
 
-    // MARK: - Setup
+    // MARK: - Setup (call from AppDelegate on every launch)
 
-    /// Call once from AppDelegate.application(_:didFinishLaunchingWithOptions:).
-    /// Safe on every launch — startMonitoringSignificantLocationChanges() is
-    /// idempotent and required on background relaunches triggered by location events.
-    ///
-    /// NOTE: If the app is force-quit by the user, iOS will NOT relaunch it for
-    /// significant-location-change events. Background relaunch only works when the
-    /// app was closed normally (home button / swipe up without force-quit).
+    /// Must be called from application(_:didFinishLaunchingWithOptions:) on every launch
+    /// including background relaunches triggered by location or region events.
     func setup() {
         let status = manager.authorizationStatus
         NSLog("[LocationBG] setup: authorizationStatus=%ld", status.rawValue)
+
+        if let defaults = UserDefaults(suiteName: appGroup) {
+            appendDebugEvent(defaults, event: "setup",
+                             message: "authorizationStatus=\(status.rawValue)",
+                             authStatus: Int(status.rawValue))
+        }
+
         switch status {
         case .authorizedAlways:
             manager.startMonitoringSignificantLocationChanges()
-            NSLog("[LocationBG] setup: significant location monitoring started (authorizedAlways) ✓")
+            NSLog("[LocationBG] setup: significant location monitoring started ✓")
+            if let defaults = UserDefaults(suiteName: appGroup) {
+                refreshMonitoredRegions(defaults: defaults)
+            }
         case .notDetermined:
-            NSLog("[LocationBG] setup: authorization not determined — monitoring deferred until JS requests Always permission")
+            NSLog("[LocationBG] setup: not determined — deferred until permission granted")
         case .authorizedWhenInUse:
-            NSLog("[LocationBG] setup: authorizedWhenInUse — Always permission required for background monitoring; app will not be relaunched for location events")
+            NSLog("[LocationBG] setup: whenInUse — Always required; background monitoring not active")
+            if let defaults = UserDefaults(suiteName: appGroup) {
+                appendDebugEvent(defaults, event: "earlyReturn",
+                                 message: "authorizedWhenInUse — background monitoring unavailable. User must grant Always in Settings.")
+            }
         case .denied:
-            NSLog("[LocationBG] setup: location permission denied — monitoring not started")
+            NSLog("[LocationBG] setup: denied — monitoring not started")
         case .restricted:
-            NSLog("[LocationBG] setup: location permission restricted — monitoring not started")
+            NSLog("[LocationBG] setup: restricted — monitoring not started")
         @unknown default:
-            NSLog("[LocationBG] setup: unknown authorization status (%ld) — monitoring not started", status.rawValue)
+            NSLog("[LocationBG] setup: unknown status %ld", status.rawValue)
         }
     }
 
-    // MARK: - CLLocationManagerDelegate
+    // MARK: - CLLocationManagerDelegate — authorization
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         let status = manager.authorizationStatus
         NSLog("[LocationBG] authorization changed: status=%ld", status.rawValue)
+
+        if let defaults = UserDefaults(suiteName: appGroup) {
+            appendDebugEvent(defaults, event: "authChange",
+                             message: "authorizationStatus=\(status.rawValue)",
+                             authStatus: Int(status.rawValue))
+        }
+
         switch status {
         case .authorizedAlways:
             manager.startMonitoringSignificantLocationChanges()
-            NSLog("[LocationBG] authorization changed to Always — monitoring started ✓")
+            NSLog("[LocationBG] authorizedAlways — significant location monitoring started ✓")
+            if let defaults = UserDefaults(suiteName: appGroup) {
+                refreshMonitoredRegions(defaults: defaults)
+            }
         default:
             manager.stopMonitoringSignificantLocationChanges()
-            NSLog("[LocationBG] authorization no longer Always (status=%ld) — monitoring stopped", status.rawValue)
+            // Stop all hidayah regions
+            for region in manager.monitoredRegions where region.identifier.hasPrefix(kRegionPrefix) {
+                manager.stopMonitoring(for: region)
+            }
+            NSLog("[LocationBG] authorization no longer Always — monitoring stopped")
         }
     }
+
+    // MARK: - CLLocationManagerDelegate — significant location change
 
     func locationManager(_ manager: CLLocationManager,
                          didUpdateLocations locations: [CLLocation]) {
         guard let loc = locations.last else {
-            NSLog("[LocationBG] didUpdateLocations: empty locations array — early return")
+            NSLog("[LocationBG] didUpdateLocations: empty array")
             return
         }
 
         let lat = loc.coordinate.latitude
         let lng = loc.coordinate.longitude
-        NSLog("[LocationBG] didUpdateLocations fired: lat=%.4f lng=%.4f hAcc=%.0fm speed=%.1f",
-              lat, lng, loc.horizontalAccuracy, loc.speed)
+        NSLog("[LocationBG] didUpdateLocations: lat=%.4f lng=%.4f hAcc=%.0fm", lat, lng, loc.horizontalAccuracy)
 
         guard let defaults = UserDefaults(suiteName: appGroup) else {
-            NSLog("[LocationBG] ERROR: App Group '%@' not accessible — early return", appGroup)
+            NSLog("[LocationBG] ERROR: App Group not accessible")
             return
         }
 
-        // Require explicit opt-in. If the key is absent (JS has never run on this install),
-        // default to false — do not modify App Group data until the user has opened the
-        // app and the setting has been written. This prevents unexpected city/prayer
-        // overwrites on a fresh install before the user configures the app.
+        appendDebugEvent(defaults, event: "didUpdateLocations",
+                         lat: lat, lng: lng,
+                         message: String(format: "hAcc=%.0fm", loc.horizontalAccuracy),
+                         authStatus: Int(manager.authorizationStatus.rawValue))
+
         let autoLocationObj = defaults.object(forKey: "andalus_autoLocation")
-        let autoLocation = autoLocationObj as? Bool ?? false
+        let autoLocation    = autoLocationObj as? Bool ?? false
         guard autoLocation else {
-            NSLog("[LocationBG] autoLocation not enabled (key=%@ value=%@) — early return",
-                  autoLocationObj == nil ? "missing" : "present",
-                  autoLocationObj == nil ? "nil (defaults false)" : "\(autoLocation)")
+            let reason = autoLocationObj == nil ? "key missing" : "false"
+            NSLog("[LocationBG] didUpdateLocations: autoLocation=%@ — early return", reason)
+            appendDebugEvent(defaults, event: "earlyReturn",
+                             lat: lat, lng: lng,
+                             message: "autoLocation=\(reason)")
             return
         }
 
-        // Write new coordinates so the widget's Path-2 API fallback uses the new
-        // location when today's prayer data becomes stale (e.g. after midnight).
-        // prayer_city is intentionally left unchanged — it is stale until the JS layer
-        // resolves the new city name via reverse geocoding on next foreground open.
-        defaults.set(lat, forKey: "prayer_lat")
-        defaults.set(lng, forKey: "prayer_lng")
+        processLocationEvent(lat: lat, lng: lng, defaults: defaults, trigger: "significantChange")
+    }
 
-        // needsPrayerRefresh and backgroundLocationDetectedAt are written here as a
-        // baseline. The notification scheduler below may produce a successful reschedule
-        // for a cached city, in which case those fields remain set so the JS layer
-        // still does a full refresh (city name, hijri, widget data) on next open.
-        defaults.set(true, forKey: "needsPrayerRefresh")
-        defaults.set(Date().timeIntervalSince1970, forKey: "backgroundLocationDetectedAt")
-        defaults.synchronize()
+    // MARK: - CLLocationManagerDelegate — region monitoring
 
-        // Attempt native notification rescheduling. This runs asynchronously
-        // because UNUserNotificationCenter callbacks use completion handlers.
-        // WidgetCenter reload is called regardless — widget Path-2 will use
-        // the updated prayer_lat/lng even if notification scheduling is skipped.
-        NativeNotificationScheduler.shared.trySchedule(lat: lat, lng: lng,
-                                                       defaults: defaults) { scheduled in
-            if scheduled {
-                NSLog("[LocationBG] Native notifications rescheduled for new location")
-            } else {
-                NSLog("[LocationBG] Native notification reschedule skipped — JS will handle on next open")
-            }
-            WidgetCenter.shared.reloadAllTimelines()
+    func locationManager(_ manager: CLLocationManager, didEnterRegion region: CLRegion) {
+        guard region.identifier.hasPrefix(kRegionPrefix) else { return }
+
+        let locationKey = String(region.identifier.dropFirst(kRegionPrefix.count))
+        NSLog("[LocationBG] didEnterRegion: %@", locationKey)
+
+        guard let defaults = UserDefaults(suiteName: appGroup) else { return }
+
+        let autoLocation = defaults.object(forKey: "andalus_autoLocation") as? Bool ?? false
+        guard autoLocation else {
+            NSLog("[LocationBG] didEnterRegion: autoLocation off — skip")
+            return
         }
 
-        NSLog("[LocationBG] Significant location detected: lat=%.4f lng=%.4f", lat, lng)
+        // Resolve the visited place coordinates from the cache
+        guard let raw    = defaults.data(forKey: kVisitedLocationsKey),
+              let places = try? JSONDecoder().decode([VisitedPlaceForRegion].self, from: raw),
+              let place  = places.first(where: { $0.locationKey == locationKey })
+        else {
+            NSLog("[LocationBG] didEnterRegion: locationKey=%@ not found in cache", locationKey)
+            appendDebugEvent(defaults, event: "earlyReturn",
+                             message: "didEnterRegion: locationKey=\(locationKey) not in visited cache")
+            return
+        }
+
+        NSLog("[LocationBG] didEnterRegion matched: %@ (%.4f, %.4f)",
+              place.displayName, place.lat, place.lng)
+        appendDebugEvent(defaults, event: "didEnterRegion",
+                         lat: place.lat, lng: place.lng,
+                         message: "Entered region for \(place.displayName)",
+                         displayName: place.displayName)
+
+        processLocationEvent(lat: place.lat, lng: place.lng, defaults: defaults, trigger: "regionEntry")
+    }
+
+    func locationManager(_ manager: CLLocationManager, didExitRegion region: CLRegion) {
+        // Exit events intentionally ignored — we only act on entry.
+    }
+
+    func locationManager(_ manager: CLLocationManager,
+                         monitoringDidFailFor region: CLRegion?,
+                         withError error: Error) {
+        NSLog("[LocationBG] region monitoring failed: %@ — %@",
+              region?.identifier ?? "nil", error.localizedDescription)
+        if let defaults = UserDefaults(suiteName: appGroup) {
+            appendDebugEvent(defaults, event: "earlyReturn",
+                             message: "regionMonitoringFail: \(region?.identifier ?? "nil") \(error.localizedDescription)")
+        }
+    }
+
+    func locationManager(_ manager: CLLocationManager,
+                         didStartMonitoringFor region: CLRegion) {
+        NSLog("[LocationBG] monitoring started: %@", region.identifier)
     }
 
     func locationManager(_ manager: CLLocationManager,
                          didFailWithError error: Error) {
-        // Significant-location monitoring rarely fails; log and continue.
-        NSLog("[LocationBG] Error: %@", error.localizedDescription)
+        NSLog("[LocationBG] location error: %@", error.localizedDescription)
+    }
+
+    // MARK: - Shared location event processing
+
+    /// Common path for both significant-location-change and region-entry events.
+    private func processLocationEvent(lat: Double, lng: Double,
+                                      defaults: UserDefaults,
+                                      trigger: String) {
+        // Write new coordinates so widget Path-2 uses them even if trySchedule fails.
+        defaults.set(lat, forKey: "prayer_lat")
+        defaults.set(lng, forKey: "prayer_lng")
+        defaults.set(true, forKey: "needsPrayerRefresh")
+        defaults.set(Date().timeIntervalSince1970, forKey: "backgroundLocationDetectedAt")
+        defaults.synchronize()
+
+        NativeNotificationScheduler.shared.trySchedule(lat: lat, lng: lng,
+                                                       defaults: defaults) { [weak self] (scheduled: Bool) in
+            guard let self else { return }
+
+            if scheduled {
+                NSLog("[LocationBG] (%@) native notifications rescheduled", trigger)
+            } else {
+                NSLog("[LocationBG] (%@) notification reschedule skipped — JS will handle on open", trigger)
+            }
+
+            // Log the outcome so we can read it from JS on next app open
+            if let d = UserDefaults(suiteName: self.appGroup) {
+                let widgetCity = self.readCurrentWidgetCity(d)
+                self.appendDebugEvent(d,
+                                      event: "reloadTimelines",
+                                      lat: lat, lng: lng,
+                                      message: "trigger=\(trigger) scheduled=\(scheduled) widgetCity=\(widgetCity ?? "nil")",
+                                      displayName: widgetCity)
+            }
+
+            WidgetCenter.shared.reloadAllTimelines()
+            NSLog("[LocationBG] (%@) WidgetCenter.reloadAllTimelines called", trigger)
+        }
+    }
+
+    // MARK: - Region monitoring refresh
+
+    /// Refreshes CLCircularRegion monitoring for the most recently visited places.
+    /// Uses a diff strategy: keeps existing regions that are still valid, adds new ones,
+    /// removes stale ones. Safe to call on every app launch or visited-places update.
+    /// Must be called on the main thread (CLLocationManager requirement).
+    func refreshMonitoredRegions(defaults: UserDefaults) {
+        guard manager.authorizationStatus == .authorizedAlways else {
+            NSLog("[LocationBG] refreshMonitoredRegions: not authorizedAlways — skip")
+            return
+        }
+
+        let places: [VisitedPlaceForRegion]
+        if let raw  = defaults.data(forKey: kVisitedLocationsKey),
+           let arr  = try? JSONDecoder().decode([VisitedPlaceForRegion].self, from: raw) {
+            // Most recently used first, capped at kMaxMonitoredRegions
+            places = Array(arr.sorted { $0.lastUsedAt > $1.lastUsedAt }.prefix(kMaxMonitoredRegions))
+        } else {
+            places = []
+        }
+
+        let desiredIDs  = Set(places.map { kRegionPrefix + $0.locationKey })
+        let existingIDs = Set(manager.monitoredRegions
+            .filter { $0.identifier.hasPrefix(kRegionPrefix) }
+            .map    { $0.identifier })
+
+        // Remove regions no longer needed
+        for region in manager.monitoredRegions where region.identifier.hasPrefix(kRegionPrefix) {
+            if !desiredIDs.contains(region.identifier) {
+                manager.stopMonitoring(for: region)
+                NSLog("[LocationBG] region removed: %@", region.identifier)
+            }
+        }
+
+        // Add new regions
+        for place in places {
+            let id = kRegionPrefix + place.locationKey
+            guard !existingIDs.contains(id) else { continue }
+            let region = CLCircularRegion(
+                center:     CLLocationCoordinate2D(latitude: place.lat, longitude: place.lng),
+                radius:     kRegionRadiusMeters,
+                identifier: id
+            )
+            region.notifyOnEntry = true
+            region.notifyOnExit  = false
+            manager.startMonitoring(for: region)
+            NSLog("[LocationBG] region added: %@ (%.4f, %.4f) r=%.0fm",
+                  place.displayName, place.lat, place.lng, kRegionRadiusMeters)
+        }
+
+        NSLog("[LocationBG] refreshMonitoredRegions: %d desired, %d total after refresh",
+              places.count, manager.monitoredRegions.filter { $0.identifier.hasPrefix(kRegionPrefix) }.count)
+    }
+
+    // MARK: - Notification from WidgetDataModule
+
+    @objc private func handleVisitedPlacesUpdated() {
+        // Called when JS writes a new visited place. Refresh region monitoring
+        // on the main thread (CLLocationManager requirement).
+        DispatchQueue.main.async { [weak self] in
+            guard let self,
+                  let defaults = UserDefaults(suiteName: self.appGroup) else { return }
+            self.refreshMonitoredRegions(defaults: defaults)
+        }
+    }
+
+    // MARK: - Debug event log
+
+    /// Appends one event to andalus_native_bg_debug_events (max 20).
+    /// Readable from JS via WidgetDataModule.getNativeBgDebugEvents().
+    private func appendDebugEvent(_ defaults: UserDefaults,
+                                  event: String,
+                                  lat: Double? = nil,
+                                  lng: Double? = nil,
+                                  message: String,
+                                  source: String? = nil,
+                                  displayName: String? = nil,
+                                  authStatus: Int? = nil) {
+        var events: [[String: Any]] = []
+        if let d   = defaults.data(forKey: kDebugEventsKey),
+           let arr = try? JSONSerialization.jsonObject(with: d) as? [[String: Any]] {
+            events = arr
+        }
+
+        var entry: [String: Any] = [
+            "ts":      Date().timeIntervalSince1970,
+            "event":   event,
+            "message": message,
+        ]
+        if let lat         { entry["lat"]         = lat }
+        if let lng         { entry["lng"]         = lng }
+        if let source      { entry["source"]      = source }
+        if let displayName { entry["displayName"] = displayName }
+        if let authStatus  { entry["authStatus"]  = authStatus }
+
+        events.append(entry)
+        if events.count > kMaxDebugEvents {
+            events = Array(events.suffix(kMaxDebugEvents))
+        }
+
+        if let data = try? JSONSerialization.data(withJSONObject: events) {
+            defaults.set(data, forKey: kDebugEventsKey)
+            // Do not call synchronize() here — we're often in a fast path;
+            // the OS will flush within a few seconds.
+        }
+    }
+
+    // MARK: - Helpers
+
+    private func readCurrentWidgetCity(_ defaults: UserDefaults) -> String? {
+        guard let d       = defaults.data(forKey: "andalus_widget_data"),
+              let obj     = try? JSONSerialization.jsonObject(with: d) as? [String: Any],
+              let city    = obj["city"] as? String else { return nil }
+        return city
     }
 }

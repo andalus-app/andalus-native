@@ -298,8 +298,34 @@ export interface VisitedPrayerLocation {
  * The native significant-location scheduler reads this FIRST (before the
  * effective schedule) so that a 2.0 km radius match gives suburb-precise
  * prayer times even when the phone is locked.
+ *
+ * After writing, the native module posts HidayahVisitedPlacesUpdated which
+ * causes LocationBackgroundManager to refresh its CLCircularRegion set so
+ * the newly cached place has a 500 m geofence immediately.
  */
 export async function upsertVisitedPrayerLocation(entry: VisitedPrayerLocation): Promise<void> {
   if (!NativeModule) return;
   return NativeModule.upsertVisitedPrayerLocation(entry);
+}
+
+/**
+ * Returns the last ≤ 20 native background debug events persisted to App Group.
+ * Each event: { ts, event, lat?, lng?, message, source?, displayName?, authStatus? }
+ *
+ * Events are written by LocationBackgroundManager on every key background action:
+ *   - "setup"              — app launched, authorizationStatus recorded
+ *   - "authChange"         — CLAuthorizationStatus changed
+ *   - "didUpdateLocations" — significant-location-change fired
+ *   - "didEnterRegion"     — geofence entry for a cached visited place
+ *   - "reloadTimelines"    — WidgetCenter.reloadAllTimelines() called (includes selected city)
+ *   - "earlyReturn"        — any early-return path with reason
+ *
+ * Use this on app startup to diagnose TestFlight failures without Xcode:
+ *   if nativeLocationDidFire is absent → iOS never delivered a location event
+ *   if didEnterRegion present but widget stale → bug in data write path
+ *   if authStatus != 4 (authorizedAlways) → user has only "When In Use"
+ */
+export async function getNativeBgDebugEvents(): Promise<unknown[]> {
+  if (!NativeModule) return [];
+  return NativeModule.getNativeBgDebugEvents() ?? [];
 }
