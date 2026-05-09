@@ -1510,6 +1510,7 @@ private let kDailyContentKey = "hidayah_daily_content_cache"
 
 private struct DailyCache: Decodable {
     struct AllahNameData: Decodable {
+        let nameNr: Int?
         let arabic: String; let transliteration: String
         let swedish: String; let explanation: String
     }
@@ -1518,6 +1519,7 @@ private struct DailyCache: Decodable {
         let surahNumber: Int; let ayahNumber: Int; let reference: String
     }
     struct HadithData: Decodable {
+        let hadith_nr: Int?
         let arabic: String; let swedish: String; let source: String
     }
     let date: String; let allahName: AllahNameData; let quranVerse: VerseData
@@ -1555,11 +1557,13 @@ struct AllahNameEntry: TimelineEntry {
     let date: Date
     let arabic: String; let transliteration: String
     let swedish: String; let explanation: String
+    let nameNr: Int
 
     static let placeholder = AllahNameEntry(
         date: .now, arabic: "ٱلرَّحْمَـٰنُ",
         transliteration: "ar-Raḥmān", swedish: "Den Nåderike",
-        explanation: "Allah är barmhärtig mot alla sina skapelser och skänker dem det de behöver."
+        explanation: "Allah är barmhärtig mot alla sina skapelser och skänker dem det de behöver.",
+        nameNr: 1
     )
 }
 
@@ -1576,16 +1580,19 @@ struct AllahNameProvider: TimelineProvider {
 
     private func buildAllahEntry() -> AllahNameEntry {
         // Prefer App Group cache (written by JS on app open with exact asmaul_husna.json text)
+        let idx = epochDayIndex(year: 2025, month: 1, day: 1, count: kAllahNames.count)
         if let c = readDailyCache() {
             return AllahNameEntry(date: .now,
                                   arabic: c.allahName.arabic, transliteration: c.allahName.transliteration,
-                                  swedish: c.allahName.swedish, explanation: c.allahName.explanation)
+                                  swedish: c.allahName.swedish, explanation: c.allahName.explanation,
+                                  nameNr: c.allahName.nameNr ?? (idx + 1))
         }
         // Fallback: embedded data — same epoch 2025-01-01 as notifications.ts
-        let n = kAllahNames[epochDayIndex(year: 2025, month: 1, day: 1, count: kAllahNames.count)]
+        let n = kAllahNames[idx]
         return AllahNameEntry(date: .now,
                               arabic: n.arabic, transliteration: n.transliteration,
-                              swedish: n.swedish, explanation: n.explanation)
+                              swedish: n.swedish, explanation: n.explanation,
+                              nameNr: idx + 1)
     }
 }
 
@@ -1669,6 +1676,7 @@ struct HidayahAllahNameWidget: Widget {
                     LinearGradient(colors: [kBgTop, kBgBottom],
                                    startPoint: .topLeading, endPoint: .bottomTrailing),
                     for: .widget)
+                .widgetURL(URL(string: "hidayah://asmaul?nameNr=\(entry.nameNr)"))
         }
         .configurationDisplayName("Allahs namn")
         .description("Lär dig ett av Allahs 99 namn varje dag.")
@@ -1787,6 +1795,7 @@ struct HidayahDailyVerseWidget: Widget {
                     LinearGradient(colors: [kBgTop, kBgBottom],
                                    startPoint: .topLeading, endPoint: .bottomTrailing),
                     for: .widget)
+                .widgetURL(URL(string: "hidayah://quran?verseKey=\(entry.surahNumber):\(entry.ayahNumber)"))
         }
         .configurationDisplayName("Dagens Koranvers")
         .description("Läs en ny Koranvers varje dag.")
@@ -1981,12 +1990,14 @@ struct HadithEntry: TimelineEntry {
     let arabic: String
     let swedish: String
     let source: String
+    let hadith_nr: Int
 
     static let placeholder = HadithEntry(
         date: .now,
         arabic: "إِنَّمَا الْأَعْمَالُ بِالنِّيَّاتِ",
         swedish: "Handlingar bedöms utifrån avsikterna, och varje person belönas för vad han har haft för avsikt.",
-        source: "Sahih ul-Bukhari 1"
+        source: "Sahih ul-Bukhari 1",
+        hadith_nr: 1
     )
 }
 
@@ -2003,10 +2014,12 @@ struct HadithProvider: TimelineProvider {
 
     private func buildEntry() -> HadithEntry {
         if let c = readDailyCache(), let h = c.hadith {
-            return HadithEntry(date: .now, arabic: h.arabic, swedish: h.swedish, source: h.source)
+            return HadithEntry(date: .now, arabic: h.arabic, swedish: h.swedish, source: h.source,
+                               hadith_nr: h.hadith_nr ?? 1)
         }
         let f = kFallbackHadiths[epochDayIndex(year: 2024, month: 1, day: 1, count: kFallbackHadiths.count)]
-        return HadithEntry(date: .now, arabic: f.arabic, swedish: f.swedish, source: f.source)
+        return HadithEntry(date: .now, arabic: f.arabic, swedish: f.swedish, source: f.source,
+                           hadith_nr: f.hadith_nr)
     }
 }
 
@@ -2046,6 +2059,7 @@ struct HidayahDailyHadithWidget: Widget {
                     LinearGradient(colors: [kBgTop, kBgBottom],
                                    startPoint: .topLeading, endPoint: .bottomTrailing),
                     for: .widget)
+                .widgetURL(URL(string: "hidayah://hadith/\(entry.hadith_nr)"))
         }
         .configurationDisplayName("Dagens Hadith")
         .description("Läs en ny hadith varje dag.")
@@ -2056,30 +2070,30 @@ struct HidayahDailyHadithWidget: Widget {
 // MARK: - Embedded Hadith Fallback (shown before first app open)
 
 private struct FallbackHadith {
-    let arabic: String; let swedish: String; let source: String
+    let arabic: String; let swedish: String; let source: String; let hadith_nr: Int
 }
 
 private let kFallbackHadiths: [FallbackHadith] = [
     FallbackHadith(
         arabic: "إِنَّمَا الْأَعْمَالُ بِالنِّيَّاتِ",
         swedish: "Handlingar bedöms utifrån avsikterna, och varje person belönas för vad han har haft för avsikt.",
-        source: "Sahih ul-Bukhari 1"),
+        source: "Sahih ul-Bukhari 1", hadith_nr: 1),
     FallbackHadith(
         arabic: "الدِّينُ النَّصِيحَةُ",
         swedish: "Religionen är uppriktig rådgivning.",
-        source: "Sahih ul-Muslim 55"),
+        source: "Sahih ul-Muslim 55", hadith_nr: 1),
     FallbackHadith(
         arabic: "مَنْ كَانَ يُؤْمِنُ بِاللَّهِ وَالْيَوْمِ الْآخِرِ فَلْيَقُلْ خَيْرًا أَوْ لِيَصْمُتْ",
         swedish: "Den som tror på Allah och den Yttersta dagen, låt honom säga något gott eller tiga.",
-        source: "Sahih ul-Bukhari 6136"),
+        source: "Sahih ul-Bukhari 6136", hadith_nr: 1),
     FallbackHadith(
         arabic: "لَا يُؤْمِنُ أَحَدُكُمْ حَتَّى يُحِبَّ لِأَخِيهِ مَا يُحِبُّ لِنَفْسِهِ",
         swedish: "Ingen av er tror (fullständigt) förrän han önskar för sin broder det han önskar för sig själv.",
-        source: "Sahih ul-Bukhari 13"),
+        source: "Sahih ul-Bukhari 13", hadith_nr: 15),
     FallbackHadith(
         arabic: "اتَّقِ اللَّهَ حَيْثُمَا كُنْتَ",
         swedish: "Frukta Allah var du än befinner dig, och låt en god gärning följa en dålig – den utplånar den. Och bemöt folk med ett gott uppträdande.",
-        source: "At-Tirmidhi 1987"),
+        source: "At-Tirmidhi 1987", hadith_nr: 11),
 ]
 
 // MARK: - Previews

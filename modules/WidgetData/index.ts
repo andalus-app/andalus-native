@@ -341,6 +341,7 @@ export async function updateDailyContent(payload: {
   date:      string;    // "yyyy-MM-dd"
   updatedAt: number;    // Unix seconds
   allahName: {
+    nameNr:          number;
     arabic:          string;
     transliteration: string;
     swedish:         string;
@@ -354,9 +355,10 @@ export async function updateDailyContent(payload: {
     reference:   string;
   };
   hadith: {
-    arabic:  string;
-    swedish: string;
-    source:  string;
+    hadith_nr: number;
+    arabic:    string;
+    swedish:   string;
+    source:    string;
   };
 }): Promise<void> {
   if (!NativeModule) return;

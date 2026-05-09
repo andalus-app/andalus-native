@@ -652,14 +652,14 @@ export async function cancelZakatNotifications(): Promise<void> {
 }
 
 // ── Allah's 99 Names daily notification ──────────────────────────────────────
-// Fires every day at 07:00 local time with the next name in sequential rotation.
+// Fires every day at 09:00 local time with the next name in sequential rotation.
 // Schedules the next 30 days in advance so notifications fire even if the app
 // isn't opened daily. Re-synced on app startup and when the toggle changes.
 
 const ALLAH_NAMES_PREFIX        = 'andalus-allah-names-';
 const ALLAH_NAMES_ENABLED_KEY   = 'allahNamesNotificationEnabled';
 // Bump this when fire time or schedule logic changes — forces a re-schedule for all users.
-const ALLAH_NAMES_SCHEDULE_VERSION     = '2';
+const ALLAH_NAMES_SCHEDULE_VERSION     = '3';
 const ALLAH_NAMES_SCHEDULE_VERSION_KEY = 'allahNamesScheduleVersion';
 
 // Fixed epoch — do not change. Makes the rotation deterministic across devices.
@@ -677,9 +677,9 @@ function allahNamesIndex(dayOffset = 0): number {
     ALLAH_NAMES_DATA.length;
 }
 
-const ALLAH_NAMES_HOUR = 7; // Daily notification time — 07:00
+const ALLAH_NAMES_HOUR = 9; // Daily notification time — 09:00
 
-/** Schedules daily 07:00 notifications for the next 30 days.
+/** Schedules daily 09:00 notifications for the next 30 days.
  *  Each notification carries the sequential name for that calendar day. */
 export async function scheduleAllahNamesNotifications(): Promise<void> {
   if (!N) return;
@@ -715,7 +715,7 @@ export async function scheduleAllahNamesNotifications(): Promise<void> {
         },
       });
     }
-    console.log('[AllahNames] Scheduled 30-day notifications at 07:00');
+    console.log('[AllahNames] Scheduled 30-day notifications at 09:00');
   } catch (e) {
     console.warn('[AllahNames] scheduleAllahNamesNotifications error:', e);
   }

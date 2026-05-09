@@ -36,6 +36,7 @@ export interface DailyWidgetPayload {
   date:      string;    // "yyyy-MM-dd"
   updatedAt: number;    // Unix seconds
   allahName: {
+    nameNr:          number;
     arabic:          string;
     transliteration: string;
     swedish:         string;
@@ -49,9 +50,10 @@ export interface DailyWidgetPayload {
     reference:   string;
   };
   hadith: {
-    arabic:  string;
-    swedish: string;
-    source:  string;
+    hadith_nr: number;
+    arabic:    string;
+    swedish:   string;
+    source:    string;
   };
 }
 
@@ -65,6 +67,7 @@ export function getDailyWidgetPayload(): DailyWidgetPayload {
     date:      new Date().toISOString().slice(0, 10),
     updatedAt: Date.now() / 1000,
     allahName: {
+      nameNr:          name.nr,
       arabic:          name.arabic,
       transliteration: name.transliteration,
       swedish:         name.swedish,
@@ -78,9 +81,10 @@ export function getDailyWidgetPayload(): DailyWidgetPayload {
       reference:   verse.displayRef,
     },
     hadith: {
-      arabic:  hadith.arabiska,
-      swedish: hadith.svenska,
-      source:  hadith.kalla,
+      hadith_nr: hadith.hadithNr,
+      arabic:    hadith.arabiska,
+      swedish:   hadith.svenska,
+      source:    hadith.kalla,
     },
   };
 }
