@@ -164,6 +164,7 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }: TaskMan
 
     // Mirror prayer times to App Group multi-city cache so the native notification
     // scheduler can reschedule in the background if the app is later killed.
+    let scheduleState: NotificationScheduleState | null = null;
     if (Platform.OS === 'ios') {
       const effectiveCity    = getEffectivePrayerCity(city);
       const settingsRaw2     = await AsyncStorage.getItem('andalus_settings').catch(() => null);
@@ -190,7 +191,9 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }: TaskMan
         updatedAt:    Date.now() / 1000,
       }).catch(() => {});
 
-      const scheduleState: NotificationScheduleState = {
+      // scheduleState is assigned to the outer let so it can be written AFTER
+      // schedulePrayerNotifications runs — see the write call below the scheduling block.
+      scheduleState = {
         version:                  1,
         owner:                    'js',
         source:                   'js_background',
@@ -208,7 +211,6 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }: TaskMan
         prePrayerOffset:          isNaN(reminderOffset) ? 0 : reminderOffset,
         updatedAt:                Date.now() / 1000,
       };
-      await setNotificationScheduleState(scheduleState).catch(() => {});
 
       // Write precise effective schedule so native background scheduler prefers
       // these exact times over the nearest-fallback-city lookup. This is the
@@ -259,6 +261,15 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }: TaskMan
     if (timesChangedByMinute || cityNameChanged) {
       await schedulePrayerNotifications(todayT, tomT, effectiveCityForNotif, { method, school });
       await refreshPrePrayerReminderNotifications();
+    }
+
+    // Write schedule state AFTER scheduling so schedulePrayerNotifications does not
+    // read back this exact state and skip its own cancel+reschedule cycle.
+    // Previously this write happened BEFORE the scheduling call, causing the
+    // skip-check inside schedulePrayerNotifications to always match (it read back
+    // the state we just wrote) and silently bypass the actual scheduling.
+    if (scheduleState) {
+      await setNotificationScheduleState(scheduleState).catch(() => {});
     }
   } catch {}
 });

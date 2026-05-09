@@ -191,11 +191,34 @@ export async function schedulePrayerNotifications(
 }
 
 // ── Cancel all our notifications ─────────────────────────────────────────────
+// Cancels current-format notifications (andalus-prayer-*) AND any legacy prayer
+// notifications from old builds that used different identifier formats.
+// Legacy notifications are identified by prayer-specific Swedish phrases in the
+// content (e.g. "Det är dags för" in title, or the old "träder in" in body).
+// Safe prefixes for other notification types are explicitly excluded.
 export async function cancelPrayerNotifications(): Promise<void> {
   if (!N) return;
   try {
     const all  = await N.getAllScheduledNotificationsAsync();
-    const ours = all.filter(n => n.identifier.startsWith(ID_PREFIX));
+    // Prefixes that belong to other notification systems — never cancel these here.
+    const SAFE_PREFIXES = [
+      'andalus-dhikr-', 'andalus-friday-dua-', 'andalus-allah-names-',
+      'andalus-live-',  'andalus-announcement-', 'andalus-kahf-',
+      'andalus-zakat-', 'hidayah-pre-prayer-',
+    ];
+    const ours = all.filter(n => {
+      // Primary: current-format prayer identifiers
+      if (n.identifier.startsWith(ID_PREFIX)) return true;
+      // Never touch other known notification subsystems
+      if (SAFE_PREFIXES.some(p => n.identifier.startsWith(p))) return false;
+      // Legacy: prayer notifications from pre-git builds with non-standard identifiers.
+      // Identified by prayer-specific Swedish phrases that only appear in prayer
+      // titles/bodies ("Det är dags för" is the current title prefix; "träder in"
+      // was used in old body text like "Maghrib träder in i Stockholm").
+      const title = n.content.title ?? '';
+      const body  = n.content.body  ?? '';
+      return title.includes('Det är dags för') || body.includes('träder in');
+    });
     await Promise.all(ours.map(n => N!.cancelScheduledNotificationAsync(n.identifier)));
   } catch {}
 }
