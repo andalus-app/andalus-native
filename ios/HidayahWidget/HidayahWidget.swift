@@ -20,8 +20,9 @@ private let kHighlight = Color(red: 100/255, green: 210/255, blue: 195/255) // r
 private let kGold      = Color(red: 202/255, green: 180/255, blue: 136/255) // matches app dark mode #cab488
 private let kBgTop     = Color(red: 18/255,  green: 30/255,  blue: 25/255)
 private let kBgBottom  = Color(red:  8/255,  green: 16/255,  blue: 13/255)
-private let kAppGroup = "group.com.anonymous.Hidayah"
-private let kDataKey  = "andalus_widget_data"
+private let kAppGroup      = "group.com.anonymous.Hidayah"
+private let kDataKey       = "andalus_widget_data"
+private let kBgDetectedKey = "backgroundLocationDetectedAt"
 
 // MARK: - App Groups JSON model
 
@@ -277,18 +278,21 @@ struct PrayerProvider: TimelineProvider {
 
     func getSnapshot(in context: Context,
                      completion: @escaping (PrayerEntry) -> Void) {
+        NSLog("[Widget] PrayerProvider.getSnapshot called")
         if let stored = readAppGroupData() {
             let prayers = parsePrayers(stored.prayers)
             if !prayers.isEmpty {
                 let now = Date()
                 let (cur, nxt) = currentAndNext(prayers: prayers, at: now)
                 let lastUpdatedAt = stored.timestamp.map { Date(timeIntervalSince1970: $0) }
+                NSLog("[Widget] getSnapshot: city=%@ ts=%.0f", stored.city, stored.timestamp ?? 0)
                 completion(PrayerEntry(date: now, current: cur, next: nxt,
                                        allPrayers: prayers, city: stored.city,
                                        lastUpdatedAt: lastUpdatedAt))
                 return
             }
         }
+        NSLog("[Widget] getSnapshot: no valid data — placeholder")
         completion(.placeholder())
     }
 
@@ -297,56 +301,66 @@ struct PrayerProvider: TimelineProvider {
 
         let midnight = Calendar.current.startOfDay(for: Date()).addingTimeInterval(86_400 + 60)
 
-        // If the native background location monitor detected a new position, the stored
-        // prayer data belongs to the old location. Bypass Path-1 so Path-2 fetches fresh
-        // prayer times using the updated prayer_lat/prayer_lng coordinates.
-        // needsPrayerRefresh is cleared by the JS layer after a successful full refresh.
-        let locationChanged = UserDefaults(suiteName: kAppGroup)?
-            .bool(forKey: "needsPrayerRefresh") ?? false
+        let defaults        = UserDefaults(suiteName: kAppGroup)
+        let locationChanged = defaults?.bool(forKey: "needsPrayerRefresh") ?? false
+        NSLog("[Widget] PrayerProvider.getTimeline: locationChanged=%@", locationChanged ? "yes" : "no")
 
-        // ── Path 1: App Groups has fresh data for today AND location has not changed ──
-        if !locationChanged, let stored = readAppGroupData() {
+        // ── Path 1: App Groups has today's data AND either no location change
+        //   OR native has ALREADY written fresh widget data for the new location ──
+        //
+        // When needsPrayerRefresh is true, native may have already resolved the new
+        // city via the visited-places cache and written a complete, authoritative blob
+        // (city + prayers + timestamp). We detect this by comparing the blob's timestamp
+        // against backgroundLocationDetectedAt: if blob.timestamp > detectedAt, native
+        // wrote AFTER the location event and the data is correct — use Path 1 so the
+        // widget shows the right city AND "Uppdaterad kl HH:mm" immediately.
+        // JS still sees needsPrayerRefresh=true and does a full refresh on next app open.
+        if let stored = readAppGroupData() {
             let prayers = parsePrayers(stored.prayers)
             if !prayers.isEmpty {
-                let lastUpdatedAt = stored.timestamp.map { Date(timeIntervalSince1970: $0) }
-                let entries = buildEntries(prayers: prayers, city: stored.city,
-                                           lastUpdatedAt: lastUpdatedAt)
-                completion(Timeline(entries: entries, policy: .after(midnight)))
-                return
+                let bgDetectedAt = defaults?.double(forKey: kBgDetectedKey) ?? 0
+                let blobTs       = stored.timestamp ?? 0
+                // nativeFresh: native wrote the blob AFTER this location event fired.
+                let nativeFresh  = locationChanged && blobTs > 0 && bgDetectedAt > 0 && blobTs > bgDetectedAt
+                NSLog("[Widget] getTimeline stored: city=%@ blobTs=%.0f bgDetectedAt=%.0f nativeFresh=%@",
+                      stored.city, blobTs, bgDetectedAt, nativeFresh ? "YES" : "NO")
+
+                if !locationChanged || nativeFresh {
+                    let lastUpdatedAt = stored.timestamp.map { Date(timeIntervalSince1970: $0) }
+                    NSLog("[Widget] getTimeline PATH-1: city=%@ updatedAt=%.0f Asr=%@",
+                          stored.city, blobTs,
+                          stored.prayers.first(where: { $0.name == "Asr" })?.time ?? "?")
+                    let entries = buildEntries(prayers: prayers, city: stored.city,
+                                               lastUpdatedAt: lastUpdatedAt)
+                    NSLog("[Widget] getTimeline PATH-1: %d entries policy=midnight", entries.count)
+                    completion(Timeline(entries: entries, policy: .after(midnight)))
+                    return
+                }
             }
         }
 
-        // ── Path 2: Stale / missing / location changed → fetch from aladhan.com ──
+        // ── Path 2: Stale / missing / location changed AND native hasn't resolved yet ──
         //
-        // fetchFromAPI is in-memory only — it does NOT write to App Group or UserDefaults.
-        // The fetched prayer times live only in the PrayerEntry timeline entries until
-        // WidgetKit discards them. Permanent App Group writes happen only when the JS
-        // layer completes a full refresh on app open (updateWidgetData in AppContext).
-        //
-        // When locationChanged == true (needsPrayerRefresh set by native background
-        // monitor), prayer times are fetched for the updated prayer_lat/prayer_lng
-        // coordinates. City name comes from the stored prayer_city key, which may be
-        // the previous city until the app-open refresh resolves the new city via
-        // reverse geocoding.
-        //
-        // lastUpdatedAt is intentionally nil when locationChanged, because the city
-        // name is potentially stale. Hiding "Uppdaterad HH:mm" avoids implying a
-        // complete data refresh when only prayer times were re-fetched for new coords.
-        // The label reappears (with correct city) after the app-open full refresh.
+        // fetchFromAPI is in-memory only — does NOT write to App Group or UserDefaults.
+        // Reached only when needsPrayerRefresh is true AND the blob's timestamp is not
+        // newer than backgroundLocationDetectedAt (native hasn't written yet).
+        // City comes from prayer_city (written by native in writeWidgetDataFromSource).
+        // lastUpdatedAt is nil — hide "Uppdaterad" until native writes and Path 1 takes over.
         let (lat, lng, city) = readStoredLocation()
+        NSLog("[Widget] getTimeline PATH-2: city=%@ lat=%.4f lng=%.4f", city, lat, lng)
         fetchFromAPI(lat: lat, lng: lng) { prayers in
             guard !prayers.isEmpty else {
-                // API failed — retry in 15 min
+                NSLog("[Widget] getTimeline PATH-2: API failed — retry in 15 min")
                 let timeline = Timeline(entries: [PrayerEntry.placeholder()],
                                         policy: .after(Date().addingTimeInterval(900)))
                 completion(timeline)
                 return
             }
-            // Show "Uppdaterad HH:mm" only when this is a normal stale-date refresh
-            // (city name is correct). When triggered by a location change, hide the
-            // timestamp to avoid claiming a complete refresh with a potentially stale city.
             let updatedAt: Date? = locationChanged ? nil : Date()
+            NSLog("[Widget] getTimeline PATH-2: fetched %d prayers city=%@ updatedAt=%@",
+                  prayers.count, city, updatedAt != nil ? "set" : "nil")
             let entries = buildEntries(prayers: prayers, city: city, lastUpdatedAt: updatedAt)
+            NSLog("[Widget] getTimeline PATH-2: %d entries policy=midnight", entries.count)
             completion(Timeline(entries: entries, policy: .after(midnight)))
         }
     }
@@ -1255,49 +1269,72 @@ struct LockArcProvider: TimelineProvider {
 
     func getSnapshot(in context: Context,
                      completion: @escaping (PrayerEntry) -> Void) {
+        NSLog("[Widget] LockArcProvider.getSnapshot called")
         if let stored = readAppGroupData() {
             let prayers = parsePrayers(stored.prayers)
             if !prayers.isEmpty {
                 let now = Date()
                 let (cur, nxt) = currentAndNext(prayers: prayers, at: now)
                 let lastUpdatedAt = stored.timestamp.map { Date(timeIntervalSince1970: $0) }
+                NSLog("[Widget] LockArc getSnapshot: city=%@ ts=%.0f", stored.city, stored.timestamp ?? 0)
                 completion(PrayerEntry(date: now, current: cur, next: nxt,
                                        allPrayers: prayers, city: stored.city,
                                        lastUpdatedAt: lastUpdatedAt))
                 return
             }
         }
+        NSLog("[Widget] LockArc getSnapshot: no valid data — placeholder")
         completion(.placeholder())
     }
 
     func getTimeline(in context: Context,
                      completion: @escaping (Timeline<PrayerEntry>) -> Void) {
-        let midnight = Calendar.current.startOfDay(for: Date()).addingTimeInterval(86_400 + 60)
-        let locationChanged = UserDefaults(suiteName: kAppGroup)?
-            .bool(forKey: "needsPrayerRefresh") ?? false
+        let midnight        = Calendar.current.startOfDay(for: Date()).addingTimeInterval(86_400 + 60)
+        let defaults        = UserDefaults(suiteName: kAppGroup)
+        let locationChanged = defaults?.bool(forKey: "needsPrayerRefresh") ?? false
+        NSLog("[Widget] LockArcProvider.getTimeline: locationChanged=%@", locationChanged ? "yes" : "no")
 
-        if !locationChanged, let stored = readAppGroupData() {
+        // Same Path-1/Path-2 logic as PrayerProvider: use the stored blob whenever
+        // native has already written fresh data for the new location (blob.timestamp >
+        // backgroundLocationDetectedAt), so the widget shows the correct city and
+        // "Uppdaterad kl HH:mm" immediately after a background location event.
+        if let stored = readAppGroupData() {
             let prayers = parsePrayers(stored.prayers)
             if !prayers.isEmpty {
-                let lastUpdatedAt = stored.timestamp.map { Date(timeIntervalSince1970: $0) }
-                let entries = buildLockArcEntries(prayers: prayers, city: stored.city,
-                                                   lastUpdatedAt: lastUpdatedAt)
-                completion(Timeline(entries: entries, policy: .after(midnight)))
-                return
+                let bgDetectedAt = defaults?.double(forKey: kBgDetectedKey) ?? 0
+                let blobTs       = stored.timestamp ?? 0
+                let nativeFresh  = locationChanged && blobTs > 0 && bgDetectedAt > 0 && blobTs > bgDetectedAt
+                NSLog("[Widget] LockArc getTimeline stored: city=%@ blobTs=%.0f bgDetectedAt=%.0f nativeFresh=%@",
+                      stored.city, blobTs, bgDetectedAt, nativeFresh ? "YES" : "NO")
+
+                if !locationChanged || nativeFresh {
+                    let lastUpdatedAt = stored.timestamp.map { Date(timeIntervalSince1970: $0) }
+                    NSLog("[Widget] LockArc getTimeline PATH-1: city=%@ updatedAt=%.0f", stored.city, blobTs)
+                    let entries = buildLockArcEntries(prayers: prayers, city: stored.city,
+                                                      lastUpdatedAt: lastUpdatedAt)
+                    NSLog("[Widget] LockArc getTimeline PATH-1: %d entries policy=midnight", entries.count)
+                    completion(Timeline(entries: entries, policy: .after(midnight)))
+                    return
+                }
             }
         }
 
         let (lat, lng, city) = readStoredLocation()
+        NSLog("[Widget] LockArc getTimeline PATH-2: city=%@ lat=%.4f lng=%.4f", city, lat, lng)
         fetchFromAPI(lat: lat, lng: lng) { prayers in
             guard !prayers.isEmpty else {
+                NSLog("[Widget] LockArc getTimeline PATH-2: API failed — retry in 15 min")
                 let timeline = Timeline(entries: [PrayerEntry.placeholder()],
                                         policy: .after(Date().addingTimeInterval(900)))
                 completion(timeline)
                 return
             }
             let updatedAt: Date? = locationChanged ? nil : Date()
+            NSLog("[Widget] LockArc getTimeline PATH-2: fetched %d prayers city=%@ updatedAt=%@",
+                  prayers.count, city, updatedAt != nil ? "set" : "nil")
             let entries = buildLockArcEntries(prayers: prayers, city: city,
-                                               lastUpdatedAt: updatedAt)
+                                              lastUpdatedAt: updatedAt)
+            NSLog("[Widget] LockArc getTimeline PATH-2: %d entries policy=midnight", entries.count)
             completion(Timeline(entries: entries, policy: .after(midnight)))
         }
     }

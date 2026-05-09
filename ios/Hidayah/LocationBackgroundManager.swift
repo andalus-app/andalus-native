@@ -275,7 +275,21 @@ final class LocationBackgroundManager: NSObject, CLLocationManagerDelegate {
             }
 
             WidgetCenter.shared.reloadAllTimelines()
-            NSLog("[LocationBG] (%@) WidgetCenter.reloadAllTimelines called", trigger)
+            NSLog("[LocationBG] (%@) WidgetCenter.reloadAllTimelines called at ts=%.0f",
+                  trigger, Date().timeIntervalSince1970)
+
+            // Also reload each widget kind individually so WidgetKit schedules a
+            // getTimeline call for every family, even if reloadAllTimelines is throttled.
+            let widgetKinds = [
+                "HidayahWidget", "HidayahFocusWidget", "HidayahListWidget",
+                "HidayahLargeWidget", "HidayahOverviewWidget",
+                "HidayahLockFocusWidget", "HidayahLockOverviewWidget", "HidayahLockArcWidget",
+            ]
+            for kind in widgetKinds {
+                WidgetCenter.shared.reloadTimelines(ofKind: kind)
+            }
+            NSLog("[LocationBG] (%@) reloadTimelines(ofKind:) called for %d kinds",
+                  trigger, widgetKinds.count)
         }
     }
 

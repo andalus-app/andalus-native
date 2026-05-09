@@ -1165,11 +1165,17 @@ final class NativeNotificationScheduler {
             widgetData = decoded  // preserve hijri and other fields JS wrote
         }
 
+        let writeTs = Date().timeIntervalSince1970
+        let bgDetected = defaults.double(forKey: "backgroundLocationDetectedAt")
+
         widgetData["city"]      = city.displayName
         widgetData["latitude"]  = city.lat
         widgetData["longitude"] = city.lng
         widgetData["date"]      = resolved.todayDate
-        widgetData["timestamp"] = Date().timeIntervalSince1970
+        widgetData["timestamp"] = writeTs
+
+        NSLog("[NativeNotif] writeWidgetDataFromSource: city=%@ writeTs=%.0f bgDetectedAt=%.0f deltaSecs=%.2f source=%@",
+              city.displayName, writeTs, bgDetected, writeTs - bgDetected, source)
 
         let prayerMap: [(api: String, widget: String)] = [
             ("Fajr",     "Fajr"),
