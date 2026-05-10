@@ -1604,7 +1604,7 @@ private struct AllahNameMedium: View {
                 }
                 Spacer()
                 Text(entry.arabic)
-                    .font(.system(size: 34, weight: .bold)).foregroundColor(.white)
+                    .font(Font.custom("Amiri-Regular", size: 34)).foregroundColor(.white)
                     .lineLimit(1).minimumScaleFactor(0.60).multilineTextAlignment(.trailing)
             }
             .padding(.top, 7)

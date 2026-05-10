@@ -355,7 +355,7 @@ const SurahHeaderCard = memo(function SurahHeaderCard({
   return (
     <TouchableOpacity
       activeOpacity={1}
-      delayLongPress={1000}
+      delayLongPress={450}
       onLongPress={stableOnLongPress}
       onLayout={(e) => {
         const y = e.nativeEvent.layout.y;
@@ -502,7 +502,7 @@ const VerseCard = memo(function VerseCard({
   //   and block the JS thread for ~10s on unmount as all 60+ deregister at once.
   // - onPress forwards short taps to toggleChrome (same effect as the outer
   //   Pressable in QuranPager), so chrome toggling works identically.
-  // - onLongPress fires after 1000ms, then haptics + action menu open.
+  // - onLongPress fires after 450ms, then haptics + action menu open.
   const stableHandlePress = useRef(() => { onPressRef.current(); }).current;
   const stableHandleLongPress = useRef(() => {
     onLongPressRef.current(verseKeyRef.current);
@@ -547,7 +547,7 @@ const VerseCard = memo(function VerseCard({
       <Pressable
         onPress={stableHandlePress}
         onLongPress={stableHandleLongPress}
-        delayLongPress={1000}
+        delayLongPress={450}
         onLayout={(e) => {
           const y = e.nativeEvent.layout.y;
           verseYMapRef.current[item.verseKey] = y;
@@ -602,7 +602,7 @@ const VerseCard = memo(function VerseCard({
     <Pressable
       onPress={stableHandlePress}
       onLongPress={stableHandleLongPress}
-      delayLongPress={1000}
+      delayLongPress={450}
       onLayout={(e) => {
         const y = e.nativeEvent.layout.y;
         verseYMapRef.current[item.verseKey] = y;

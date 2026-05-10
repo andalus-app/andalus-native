@@ -40,19 +40,33 @@ import { BlurView } from 'expo-blur';
 import { Clipboard } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { useQuranContext } from '../../context/QuranContext';
+import { useNotification } from '../../context/NotificationContext';
 import { SURAH_INDEX, surahForPage } from '../../data/surahIndex';
-import { getPageVerseData } from '../../services/quranVerseService';
+import { getPageVerseData, getSurahVerseData, type VerseData } from '../../services/quranVerseService';
 import { LOCAL_BERNSTROM_ID } from '../../services/quranTranslationService';
 import { getBernstromByKey } from '../../data/bernstromTranslation';
 import { fetchVerseGlyphs } from '../../services/mushafApi';
 import SvgIcon from '../SvgIcon';
 import VerseShareCard, { type VerseShareCardRef, type VerseShareData } from './VerseShareCard';
 
-type Step = 'main' | 'play-to' | 'share';
+type Step = 'main' | 'play-to' | 'share' | 'multi-copy';
 type Segment = 'vers' | 'sida' | 'surah';
+
+function buildCopyText(
+  arabicText: string,
+  translation: string | null,
+  surahName: string,
+  verseKey: string,
+): string {
+  const lines = [arabicText];
+  if (translation) lines.push(translation);
+  lines.push(`${surahName} ${verseKey}`);
+  return lines.join('\n');
+}
 
 function VerseActionsMenu() {
   const { theme: T, isDark } = useTheme();
+  const { show } = useNotification();
   const {
     longPressedVerse, setLongPressedVerse, audioCommandsRef,
     addBookmark, removeBookmark, bookmarks, currentPage,
@@ -61,6 +75,9 @@ function VerseActionsMenu() {
   const [step, setStep] = useState<Step>('main');
   const [segment, setSegment] = useState<Segment>('vers');
   const [shareLoading, setShareLoading] = useState(false);
+  const [multiCopyVerses, setMultiCopyVerses] = useState<VerseData[]>([]);
+  const [multiCopyLoading, setMultiCopyLoading] = useState(false);
+  const [selectedVerseKeys, setSelectedVerseKeys] = useState<Set<string>>(new Set());
   const shareCardRef = useRef<VerseShareCardRef>(null);
 
   const visible = longPressedVerse !== null;
@@ -73,6 +90,9 @@ function VerseActionsMenu() {
     setStep('main');
     setSegment('vers');
     setShareLoading(false);
+    setMultiCopyVerses([]);
+    setMultiCopyLoading(false);
+    setSelectedVerseKeys(new Set());
   }, [setLongPressedVerse]);
 
   const play = useCallback(
@@ -173,17 +193,39 @@ function VerseActionsMenu() {
     }
   }, [fetchShareData, buildShareText, dismiss]);
 
+  const fetchCopyData = useCallback(async () => {
+    if (!longPressedVerse || isBismillahKey) return null;
+    const vk = longPressedVerse.verseKey;
+    const [sId] = vk.split(':').map(Number);
+    const s = SURAH_INDEX.find((x) => x.id === sId);
+    if (!s) return null;
+    try {
+      const isLocalBernstrom = settings.translationId === LOCAL_BERNSTROM_ID;
+      const apiTranslationId = isLocalBernstrom ? null : settings.translationId;
+      const verses = await getPageVerseData(currentPage, apiTranslationId);
+      const found = verses.find((v) => v.verseKey === vk);
+      if (!found) return null;
+      const translation = isLocalBernstrom
+        ? (getBernstromByKey(vk) ?? null)
+        : found.translation;
+      return { arabicText: found.textUthmani, translation, surahName: s.nameSimple, verseKey: vk };
+    } catch {
+      return null;
+    }
+  }, [longPressedVerse, isBismillahKey, currentPage, settings.translationId]);
+
   const handleCopyText = useCallback(async () => {
     setShareLoading(true);
     try {
-      const data = await fetchShareData();
+      const data = await fetchCopyData();
       if (!data) return;
-      Clipboard.setString(buildShareText(data));
+      Clipboard.setString(buildCopyText(data.arabicText, data.translation, data.surahName, data.verseKey));
       dismiss();
+      show('Versen har kopierats.', '');
     } finally {
       setShareLoading(false);
     }
-  }, [fetchShareData, buildShareText, dismiss]);
+  }, [fetchCopyData, dismiss, show]);
 
   const handleShareImage = useCallback(async () => {
     setShareLoading(true);
@@ -198,6 +240,51 @@ function VerseActionsMenu() {
       setShareLoading(false);
     }
   }, [fetchShareData, dismiss]);
+
+  const handleOpenMultiCopy = useCallback(async () => {
+    if (!longPressedVerse || isBismillahKey) return;
+    const vk = longPressedVerse.verseKey;
+    const sId = parseInt(vk.split(':')[0], 10);
+    setSelectedVerseKeys(new Set([vk]));
+    setStep('multi-copy');
+    setMultiCopyLoading(true);
+    try {
+      const isLocalBernstrom = settings.translationId === LOCAL_BERNSTROM_ID;
+      const apiTranslationId = isLocalBernstrom ? null : settings.translationId;
+      const verses = await getSurahVerseData(sId, apiTranslationId);
+      setMultiCopyVerses(verses);
+    } catch {
+      setMultiCopyVerses([]);
+    } finally {
+      setMultiCopyLoading(false);
+    }
+  }, [longPressedVerse, isBismillahKey, settings.translationId]);
+
+  const toggleVerseSelection = useCallback((vk: string) => {
+    setSelectedVerseKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(vk)) next.delete(vk);
+      else next.add(vk);
+      return next;
+    });
+  }, []);
+
+  const handleMultiCopyConfirm = useCallback(() => {
+    const isLocalBernstrom = settings.translationId === LOCAL_BERNSTROM_ID;
+    const selected = multiCopyVerses.filter((v) => selectedVerseKeys.has(v.verseKey));
+    const text = selected.map((v) => {
+      const trans = isLocalBernstrom
+        ? (getBernstromByKey(v.verseKey) ?? null)
+        : v.translation;
+      const s = SURAH_INDEX.find((x) => x.id === v.surahId);
+      return buildCopyText(v.textUthmani, trans, s?.nameSimple ?? '', v.verseKey);
+    }).join('\n\n');
+    if (text) {
+      Clipboard.setString(text);
+      dismiss();
+      show('Verserna har kopierats.', '');
+    }
+  }, [multiCopyVerses, selectedVerseKeys, settings.translationId, dismiss, show]);
 
   if (!visible || !longPressedVerse) return null;
 
@@ -265,7 +352,14 @@ function VerseActionsMenu() {
       {/* Backdrop — tap outside to dismiss */}
       <Pressable style={styles.backdrop} onPress={dismiss}>
         {/* Menu card — tap inside does NOT dismiss */}
-        <Pressable style={[styles.card, step === 'play-to' && { width: 320, height: maxCardH }]} onPress={() => {}}>
+        <Pressable
+          style={[
+            styles.card,
+            step === 'play-to' && { width: 320, height: maxCardH },
+            step === 'multi-copy' && { width: 300, height: Math.floor(screenH * 0.72) },
+          ]}
+          onPress={() => {}}
+        >
           {/* Blur + tint layer */}
           <BlurView
             intensity={isDark ? 72 : 88}
@@ -400,6 +494,20 @@ function VerseActionsMenu() {
 
                   {separator}
 
+                  {/* Kopiera fler verser — multi-verse copy dialog */}
+                  <TouchableOpacity
+                    style={styles.row}
+                    onPress={handleOpenMultiCopy}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.iconBadge, { backgroundColor: T.accentGlow }]}>
+                      <SvgIcon name="list" size={16} color={T.accent} />
+                    </View>
+                    <Text style={[styles.rowText, { color: T.text }]}>Kopiera fler verser</Text>
+                  </TouchableOpacity>
+
+                  {separator}
+
                   {/* Dela som bild — share as image */}
                   <TouchableOpacity
                     style={[styles.row, styles.rowLast]}
@@ -413,6 +521,84 @@ function VerseActionsMenu() {
                   </TouchableOpacity>
                 </>
               )}
+            </>
+          ) : step === 'multi-copy' ? (
+            // ── Multi-copy step ──────────────────────────────────────────────
+            <>
+              <View style={styles.playToHeader}>
+                <TouchableOpacity
+                  style={styles.backBtn}
+                  onPress={() => { setStep('share'); setMultiCopyVerses([]); setSelectedVerseKeys(new Set()); }}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={[styles.backChevron, { color: T.accent }]}>‹</Text>
+                </TouchableOpacity>
+                <Text style={[styles.playToTitle, { color: T.text }]}>Kopiera verser</Text>
+                <View style={styles.backBtn} />
+              </View>
+
+              {multiCopyLoading ? (
+                <View style={styles.shareLoadingRow}>
+                  <ActivityIndicator color={T.accent} />
+                </View>
+              ) : (
+                <ScrollView style={styles.listScroll} bounces={false} showsVerticalScrollIndicator={false}>
+                  {multiCopyVerses.map((v) => {
+                    const isSelected = selectedVerseKeys.has(v.verseKey);
+                    const trans = settings.translationId === LOCAL_BERNSTROM_ID
+                      ? (getBernstromByKey(v.verseKey) ?? null)
+                      : v.translation;
+                    return (
+                      <React.Fragment key={v.verseKey}>
+                        <TouchableOpacity
+                          style={styles.multiCopyRow}
+                          onPress={() => toggleVerseSelection(v.verseKey)}
+                          activeOpacity={0.7}
+                        >
+                          <View style={[
+                            styles.multiCheckCircle,
+                            isSelected
+                              ? { backgroundColor: T.accent, borderColor: T.accent }
+                              : { backgroundColor: 'transparent', borderColor: T.border },
+                          ]}>
+                            {isSelected && <SvgIcon name="check" size={11} color="#fff" />}
+                          </View>
+                          <View style={styles.multiCopyTextBlock}>
+                            <Text style={[styles.multiCopyVerseNum, { color: T.textMuted }]}>
+                              {v.verseNumber}
+                            </Text>
+                            {trans ? (
+                              <Text style={[styles.multiCopyTransText, { color: T.text }]} numberOfLines={1}>
+                                {trans}
+                              </Text>
+                            ) : null}
+                          </View>
+                        </TouchableOpacity>
+                        <View style={[styles.listSep, { backgroundColor: T.border }]} />
+                      </React.Fragment>
+                    );
+                  })}
+                </ScrollView>
+              )}
+
+              <TouchableOpacity
+                style={[
+                  styles.multiCopyBtn,
+                  { backgroundColor: selectedVerseKeys.size > 0 ? T.accent : T.border },
+                ]}
+                onPress={handleMultiCopyConfirm}
+                activeOpacity={0.8}
+                disabled={selectedVerseKeys.size === 0 || multiCopyLoading}
+              >
+                <Text style={[styles.multiCopyBtnText, { color: selectedVerseKeys.size > 0 ? '#fff' : T.textMuted }]}>
+                  {selectedVerseKeys.size > 0
+                    ? `Kopiera verser (${selectedVerseKeys.size} st)`
+                    : 'Kopiera verser'}
+                </Text>
+              </TouchableOpacity>
+
+              <View style={styles.playToBottom} />
             </>
           ) : (
             // ── Play-to step ───────────────────────────────────────────────────
@@ -788,6 +974,51 @@ const styles = StyleSheet.create({
     paddingVertical: 28,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+
+  // ── Multi-copy step ────────────────────────────────────────────────────────
+  multiCopyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 18,
+    paddingVertical: 11,
+    gap: 12,
+  },
+  multiCheckCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  multiCopyTextBlock: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  multiCopyVerseNum: {
+    fontSize: 13,
+    fontWeight: '600',
+    minWidth: 22,
+  },
+  multiCopyTransText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '400',
+  },
+  multiCopyBtn: {
+    marginHorizontal: 12,
+    marginTop: 8,
+    marginBottom: 4,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  multiCopyBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
 

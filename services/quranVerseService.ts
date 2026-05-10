@@ -93,3 +93,45 @@ export async function getPageVerseData(
 
   return verses;
 }
+
+/**
+ * Returns verse data for all verses in a surah.
+ * Cache-first: reads AsyncStorage, fetches from API on miss.
+ */
+export async function getSurahVerseData(
+  surahId: number,
+  translationId: number | null,
+  signal?: AbortSignal,
+): Promise<VerseData[]> {
+  const key = `andalus_quran_surah_v1_${surahId}_${translationId ?? 'none'}`;
+
+  try {
+    const cached = await AsyncStorage.getItem(key);
+    if (cached) return JSON.parse(cached) as VerseData[];
+  } catch {}
+
+  let url =
+    `${API_BASE}/verses/by_chapter/${surahId}` +
+    `?per_page=300&fields=text_uthmani,verse_key`;
+  if (translationId !== null) {
+    url += `&translations=${translationId}`;
+  }
+
+  const resp = await fetch(url, { signal });
+  if (!resp.ok) throw new Error(`Surah verse API ${resp.status}`);
+  const json = await resp.json() as { verses: ApiVerse[] };
+
+  const verses = (json.verses ?? []).map((v) => {
+    const [surahStr, verseStr] = v.verse_key.split(':');
+    return {
+      verseKey: v.verse_key,
+      surahId: parseInt(surahStr, 10),
+      verseNumber: parseInt(verseStr, 10),
+      textUthmani: v.text_uthmani,
+      translation: translationId !== null ? (v.translations?.[0]?.text ?? null) : null,
+    };
+  });
+
+  AsyncStorage.setItem(key, JSON.stringify(verses)).catch(() => undefined);
+  return verses;
+}

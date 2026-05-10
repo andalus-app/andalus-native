@@ -122,7 +122,7 @@ const SlotZone = memo(function SlotZone({
     <TouchableOpacity
       style={{ position: 'absolute', left: 0, right: 0, top: topY, height: slotH }}
       activeOpacity={1}
-      delayLongPress={1000}
+      delayLongPress={450}
       onPress={toggleChrome}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
@@ -167,7 +167,7 @@ const BismillahZone = memo(function BismillahZone({
     <TouchableOpacity
       style={{ position: 'absolute', left: 0, right: 0, top: topY, height: slotH }}
       activeOpacity={1}
-      delayLongPress={1000}
+      delayLongPress={450}
       onPress={toggleChrome}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
@@ -233,11 +233,11 @@ const SurahHeaderZone = memo(function SurahHeaderZone({
     const bsmH    = slotH - headerH;
     return (
       <>
-        {/* Upper part: surah name banner — hold 1 s to open detail sheet */}
+        {/* Upper part: surah name banner — hold to open detail sheet */}
         <TouchableOpacity
           style={{ position: 'absolute', left: 0, right: 0, top: topY, height: headerH }}
           activeOpacity={1}
-          delayLongPress={1000}
+          delayLongPress={450}
           onPress={toggleChrome}
           onPressIn={handlePressIn}
           onPressOut={handlePressOut}
@@ -247,7 +247,7 @@ const SurahHeaderZone = memo(function SurahHeaderZone({
         <TouchableOpacity
           style={{ position: 'absolute', left: 0, right: 0, top: topY + headerH, height: bsmH }}
           activeOpacity={1}
-          delayLongPress={1000}
+          delayLongPress={450}
           onPress={toggleChrome}
           onPressIn={handleBsmPressIn}
           onPressOut={handleBsmPressOut}
@@ -261,7 +261,7 @@ const SurahHeaderZone = memo(function SurahHeaderZone({
     <TouchableOpacity
       style={{ position: 'absolute', left: 0, right: 0, top: topY, height: slotH }}
       activeOpacity={1}
-      delayLongPress={1000}
+      delayLongPress={450}
       onPress={toggleChrome}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
