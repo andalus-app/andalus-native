@@ -487,13 +487,6 @@ struct SmallFocusWidgetView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             heroSection
-
-            Spacer(minLength: 6)
-
-            Text(entry.city)
-                .font(.system(size: 10, weight: .regular))
-                .foregroundColor(.white.opacity(0.38))
-                .lineLimit(1)
         }
         .padding(14)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -516,12 +509,6 @@ struct SmallListWidgetView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(entry.city)
-                .font(.system(size: 10, weight: .regular))
-                .foregroundColor(.white.opacity(0.40))
-                .lineLimit(1)
-                .padding(.bottom, 6)
-
             VStack(spacing: 0) {
                 ForEach(Array(fivePrayers.enumerated()), id: \.element.id) { idx, prayer in
                     let isCurrent = prayer.name == currentFive?.name
@@ -792,24 +779,10 @@ struct LargeFocusWidgetView: View {
             Spacer(minLength: 8)
 
             // ── 3. FOOTER ────────────────────────────────────────────────────
-            HStack(alignment: .center) {
-                Text(entry.city)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.white.opacity(0.55))
-                    .lineLimit(1)
-                Spacer()
-                if let ts = entry.lastUpdatedAt {
-                    Text("\(largeDateFmt.string(from: entry.date)) · Uppdaterad \(timeFmt.string(from: ts))")
-                        .font(.system(size: 10, weight: .regular))
-                        .foregroundColor(.white.opacity(0.40))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                } else {
-                    Text(largeDateFmt.string(from: entry.date))
-                        .font(.system(size: 12, weight: .regular))
-                        .foregroundColor(.white.opacity(0.45))
-                }
-            }
+            Text(largeDateFmt.string(from: entry.date))
+                .font(.system(size: 11, weight: .regular))
+                .foregroundColor(.white.opacity(0.40))
+                .frame(maxWidth: .infinity, alignment: .trailing)
         }
         .padding(EdgeInsets(top: 16, leading: 18, bottom: 14, trailing: 18))
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -860,25 +833,11 @@ struct LargeOverviewWidgetView: View {
         VStack(alignment: .leading, spacing: 0) {
 
             // ── 1. HEADER ────────────────────────────────────────────────────
-            HStack(alignment: .center) {
-                Text(entry.city)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.white.opacity(0.55))
-                    .lineLimit(1)
-                Spacer()
-                if let ts = entry.lastUpdatedAt {
-                    Text("\(largeDateFmt.string(from: entry.date)) · Uppdaterad \(timeFmt.string(from: ts))")
-                        .font(.system(size: 10, weight: .regular))
-                        .foregroundColor(.white.opacity(0.40))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                } else {
-                    Text(largeDateFmt.string(from: entry.date))
-                        .font(.system(size: 12, weight: .regular))
-                        .foregroundColor(.white.opacity(0.45))
-                }
-            }
-            .padding(.bottom, 16)
+            Text(largeDateFmt.string(from: entry.date))
+                .font(.system(size: 11, weight: .regular))
+                .foregroundColor(.white.opacity(0.40))
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .padding(.bottom, 16)
 
             // ── 2. PRAYER LIST ───────────────────────────────────────────────
             VStack(spacing: 0) {
@@ -1599,28 +1558,32 @@ struct AllahNameProvider: TimelineProvider {
 private struct AllahNameSmall: View {
     let entry: AllahNameEntry
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text("Allahs namn")
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundColor(kGold).lineLimit(1)
-            Spacer(minLength: 6)
+        VStack(alignment: .center, spacing: 0) {
             Text(entry.arabic)
-                .font(.system(size: 30, weight: .bold))
-                .foregroundColor(.white).lineLimit(1).minimumScaleFactor(0.6)
-                .frame(maxWidth: .infinity, alignment: .trailing)
+                .font(Font.custom("Amiri-Regular", size: 38))
+                .foregroundColor(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.55)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity, alignment: .center)
             Text(entry.transliteration)
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(kGold.opacity(0.80)).lineLimit(1).padding(.top, 3)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(kGold)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .multilineTextAlignment(.center)
+                .padding(.top, 7)
             Text(entry.swedish)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(.white).lineLimit(1).minimumScaleFactor(0.85).padding(.top, 2)
-            Spacer(minLength: 6)
-            Text(entry.explanation)
-                .font(.system(size: 10, weight: .regular))
-                .foregroundColor(.white.opacity(0.45)).lineLimit(2)
+                .font(.system(size: 12, weight: .regular))
+                .foregroundColor(.white.opacity(0.70))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .multilineTextAlignment(.center)
+                .padding(.top, 3)
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
     }
 }
 
@@ -2026,6 +1989,16 @@ struct HadithProvider: TimelineProvider {
 private struct DailyHadithMediumView: View {
     let entry: HadithEntry
     var body: some View {
+        ViewThatFits(in: .vertical) {
+            fullLayout
+            swedishOnlyLayout
+        }
+        .padding(EdgeInsets(top: 14, leading: 14, bottom: 12, trailing: 14))
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    // Arabic + Swedish — shown when both fit without crowding
+    private var fullLayout: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("Dagens Hadith")
                 .font(.system(size: 10, weight: .semibold)).foregroundColor(kGold)
@@ -2039,14 +2012,29 @@ private struct DailyHadithMediumView: View {
             Text(entry.swedish)
                 .font(.system(size: 11, weight: .regular))
                 .foregroundColor(.white.opacity(0.85))
-                .lineLimit(4).fixedSize(horizontal: false, vertical: false)
+                .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 6)
             Text(entry.source)
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundColor(kGold.opacity(0.80)).lineLimit(1)
         }
-        .padding(EdgeInsets(top: 14, leading: 14, bottom: 12, trailing: 14))
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    // Swedish only — fallback when the hadith is too long to show both languages
+    private var swedishOnlyLayout: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Dagens Hadith")
+                .font(.system(size: 10, weight: .semibold)).foregroundColor(kGold)
+            Spacer(minLength: 6)
+            Text(entry.swedish)
+                .font(.system(size: 11, weight: .regular))
+                .foregroundColor(.white.opacity(0.85))
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 6)
+            Text(entry.source)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(kGold.opacity(0.80)).lineLimit(1)
+        }
     }
 }
 

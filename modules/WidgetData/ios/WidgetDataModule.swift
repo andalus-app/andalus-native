@@ -61,13 +61,25 @@ public class WidgetDataModule: Module {
 
             defaults.synchronize()
             WidgetCenter.shared.reloadAllTimelines()
-            NSLog("[WidgetData] WidgetKit reloadAllTimelines triggered ✓")
+            let prayerKinds = [
+                "HidayahWidget", "HidayahFocusWidget", "HidayahListWidget",
+                "HidayahLargeWidget", "HidayahOverviewWidget",
+                "HidayahLockFocusWidget", "HidayahLockOverviewWidget", "HidayahLockArcWidget",
+            ]
+            for kind in prayerKinds { WidgetCenter.shared.reloadTimelines(ofKind: kind) }
+            NSLog("[WidgetData] WidgetKit reloadAllTimelines + %d individual kinds triggered ✓", prayerKinds.count)
             promise.resolve(nil)
         }
 
         // reloadWidgets() → void
         AsyncFunction("reloadWidgets") { (promise: Promise) in
             WidgetCenter.shared.reloadAllTimelines()
+            let prayerKinds = [
+                "HidayahWidget", "HidayahFocusWidget", "HidayahListWidget",
+                "HidayahLargeWidget", "HidayahOverviewWidget",
+                "HidayahLockFocusWidget", "HidayahLockOverviewWidget", "HidayahLockArcWidget",
+            ]
+            for kind in prayerKinds { WidgetCenter.shared.reloadTimelines(ofKind: kind) }
             promise.resolve(nil)
         }
 
