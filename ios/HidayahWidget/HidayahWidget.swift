@@ -1590,10 +1590,10 @@ private struct AllahNameSmall: View {
 private struct AllahNameMedium: View {
     let entry: AllahNameEntry
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text("Allahs namn")
-                .font(.system(size: 10, weight: .semibold)).foregroundColor(kGold)
-            HStack(alignment: .center, spacing: 8) {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("Allahs namn")
+                    .font(.system(size: 10, weight: .semibold)).foregroundColor(kGold)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(entry.swedish)
                         .font(.system(size: 19, weight: .bold)).foregroundColor(.white)
@@ -1602,20 +1602,23 @@ private struct AllahNameMedium: View {
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(kGold.opacity(0.85)).lineLimit(1)
                 }
-                Spacer()
-                Text(entry.arabic)
-                    .font(Font.custom("Amiri-Regular", size: 34)).foregroundColor(.white)
-                    .lineLimit(1).minimumScaleFactor(0.60).multilineTextAlignment(.trailing)
+                .padding(.top, 7)
+                Spacer(minLength: 6)
+                Text(entry.explanation)
+                    .font(.system(size: 11, weight: .regular))
+                    .foregroundColor(.white.opacity(0.55))
+                    .lineLimit(3).fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.top, 7)
-            Spacer(minLength: 8)
-            Text(entry.explanation)
-                .font(.system(size: 11, weight: .regular))
-                .foregroundColor(.white.opacity(0.55))
-                .lineLimit(3).fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            Text(entry.arabic)
+                .font(Font.custom("Amiri-Regular", size: 56)).foregroundColor(.white)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .minimumScaleFactor(0.70)
+                .frame(minWidth: 105, maxWidth: 105, maxHeight: .infinity)
         }
         .padding(EdgeInsets(top: 14, leading: 14, bottom: 12, trailing: 14))
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 

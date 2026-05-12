@@ -7,6 +7,8 @@ import DagensKoranversCard from '../../components/DagensKoranversCard';
 import NextPrayerCard from '../../components/NextPrayerCard';
 import DagensHadithCard from '../../components/DagensHadithCard';
 import FridayChecklistCards from '../../components/FridayChecklistCards';
+import DhulHijjahHighlightsCard from '../../components/DhulHijjahHighlightsCard';
+import DhulHijjahInfoCarousel from '../../components/DhulHijjahInfoCarousel';
 import { useCurrentMinute } from '../../hooks/useCurrentMinute';
 import { getHomeV2State } from '../../services/homeV2TimeEngine';
 import { useApp } from '../../context/AppContext';
@@ -1109,8 +1111,14 @@ export default function HomeScreen() {
           )}
         </View>
 
-        {/* Dagens Koranvers */}
+        {/* ── Dhul Hijjah highlights — visas dag 1–9 Dhul Hijjah ── */}
+        <DhulHijjahHighlightsCard />
+
+        {/* Dagens Koranvers — visar Dhul Hijjah-banner under dessa dagar */}
         <DagensKoranversCard />
+
+        {/* ── Dhul Hijjah info carousel — efter "Dhul-Hijjah är här", före Hadith ── */}
+        <DhulHijjahInfoCarousel />
 
         {/* Dagens Hadith */}
         <DagensHadithCard />

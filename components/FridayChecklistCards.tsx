@@ -404,18 +404,19 @@ function DhulHijjahReminderCard({ T, isDark }: { T: any; isDark: boolean }) {
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
-type Props = { fajr: Date | null; maghrib: Date | null; now: Date };
+type Props = { fajr: Date | null; maghrib: Date | null; now: Date; testMode?: boolean };
 
-export default function FridayChecklistCards({ fajr, maghrib, now }: Props) {
+export default function FridayChecklistCards({ fajr, maghrib, now, testMode = false }: Props) {
   const { theme: T, isDark } = useTheme();
   const { hijriDate } = useApp();
   const router = useRouter();
 
   const dhulHijjahDay = useMemo(() => {
+    if (testMode) return 2;
     if (!hijriDate || hijriDate.month?.number !== 12) return 0;
     const d = parseInt(String(hijriDate.day), 10);
     return isNaN(d) ? 0 : d;
-  }, [hijriDate]);
+  }, [hijriDate, testMode]);
 
   const isFriday = now.getDay() === 5;
   const inFridayWindow =

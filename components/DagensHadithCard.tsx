@@ -34,7 +34,7 @@ function msUntilMidnight(): number {
   return midnight.getTime() - now.getTime();
 }
 
-function DagensHadithCard() {
+function DagensHadithCard({ testMode = false }: { testMode?: boolean }) {
   const { theme: T, isDark } = useTheme();
   const router = useRouter();
   const { hijriDate } = useApp();
@@ -53,13 +53,17 @@ function DagensHadithCard() {
   const animHeight  = useRef(new Animated.Value(COLLAPSED_HEIGHT)).current;
   const expandedRef = useRef(false);
 
-  const hadith = useMemo(() => getDailyHadith(new Date(), hijriDate), [dateKey, hijriDate]); // eslint-disable-line react-hooks/exhaustive-deps
+  const hadith = useMemo(() => { // eslint-disable-line react-hooks/exhaustive-deps
+    const eff = testMode ? { day: '2', month: { number: 12 } } : hijriDate;
+    return getDailyHadith(new Date(), eff);
+  }, [dateKey, hijriDate, testMode]);
 
   const isEidWindow = useMemo(() => {
+    if (testMode) return false;
     if (!hijriDate || hijriDate.month?.number !== 12) return false;
     const day = parseInt(String(hijriDate.day), 10);
     return day >= 10 && day <= 13;
-  }, [hijriDate]);
+  }, [hijriDate, testMode]);
 
   const displayBody   = isEidWindow ? EID_HADITH_SVENSKA : hadith.svenska;
   const displayKalla  = isEidWindow ? EID_HADITH_KALLA   : hadith.kalla;
