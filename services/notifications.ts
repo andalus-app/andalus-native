@@ -101,6 +101,16 @@ function scheduleStateUnchanged(
 ): boolean {
   if (!existing?.todayT) return false;
 
+  // Date freshness check — mirrors native rescheduleNeeded's s.date != resolved.todayDate.
+  // If the stored state belongs to a previous calendar day, always reschedule: the
+  // tomorrow-* slot base date rolled over and old notifications target the wrong day.
+  const n = new Date();
+  const todayLocalDate = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
+  if (existing.date !== todayLocalDate) {
+    console.log(`[PrayerNotif] schedule state date changed: ${existing.date} → ${todayLocalDate}, forcing reschedule`);
+    return false;
+  }
+
   // Notification body label changed — reschedule so body text stays accurate.
   // Compare the derived notification labels, not raw displayNames, so that moves
   // within the same municipality (e.g. Kista → Spånga, both → "Stockholm") do

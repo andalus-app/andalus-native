@@ -173,7 +173,10 @@ async function runPrayerCacheMigrationIfNeeded(): Promise<boolean> {
     }
     console.log(`[CacheMigration] migration needed (stored version=${version}) — clearing UTC-shifted prayer caches`);
     await clearPrayerCachesForMigration().catch(() => {});
-    console.log(`[CacheMigration] caches cleared — awaiting successful prayer refresh to commit v${CURRENT_PRAYER_CACHE_VERSION}`);
+    console.log(`[CacheMigration] cancelling old pending prayer notifications`);
+    await cancelPrayerNotifications().catch(() => {});
+    console.log(`[CacheMigration] old pending prayer notifications cancelled`);
+    console.log(`[CacheMigration] awaiting fresh reschedule`);
     return true;
   } catch {
     return false;
@@ -547,7 +550,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (migrationPendingRef.current) {
           migrationPendingRef.current = false;
           AsyncStorage.setItem(PRAYER_CACHE_DATE_KEY_VERSION, String(CURRENT_PRAYER_CACHE_VERSION))
-            .then(() => console.log(`[CacheMigration] v${CURRENT_PRAYER_CACHE_VERSION} committed — fresh local-date cache written`))
+            .then(() => console.log(`[CacheMigration] v${CURRENT_PRAYER_CACHE_VERSION} committed — fresh local-date cache and notifications written`))
             .catch(() => {});
         }
       }
