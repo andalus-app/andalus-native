@@ -457,5 +457,36 @@ public class WidgetDataModule: Module {
             }
             promise.resolve(arr)
         }
+
+        // clearPrayerCachesForMigration() → void
+        // One-time migration helper for Fix 1 (UTC→local date strings).
+        // Clears the four App Group keys that may contain UTC-shifted date values
+        // written by the old JS logic. Absent keys are silently skipped.
+        // Does NOT touch: user settings, calculation method/school, notification
+        // preferences, Quran/bookmarks, widget display data, or any key outside
+        // the prayer-time cache namespace.
+        AsyncFunction("clearPrayerCachesForMigration") { (promise: Promise) in
+            guard let defaults = UserDefaults(suiteName: self.appGroupID) else {
+                NSLog("[CacheMigration] App Group unavailable — cannot clear caches")
+                promise.resolve(nil); return
+            }
+            let keysToRemove: [(key: String, label: String)] = [
+                ("andalus_visited_prayer_locations",         "visitedPrayerLocations"),
+                ("andalus_multi_city_cache",                 "multiCityCache"),
+                ("andalus_current_effective_prayer_schedule","effectiveSchedule"),
+                ("andalus_notification_schedule_state",      "scheduleState"),
+            ]
+            for pair in keysToRemove {
+                if defaults.object(forKey: pair.key) != nil {
+                    defaults.removeObject(forKey: pair.key)
+                    NSLog("[CacheMigration] Cleared %@ (%@)", pair.label, pair.key)
+                } else {
+                    NSLog("[CacheMigration] Already absent: %@ (%@)", pair.label, pair.key)
+                }
+            }
+            defaults.synchronize()
+            NSLog("[CacheMigration] All prayer caches cleared — ready for v2 rebuild")
+            promise.resolve(nil)
+        }
     }
 }

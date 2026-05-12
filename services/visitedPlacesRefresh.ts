@@ -28,8 +28,8 @@ type Timings      = Record<string, string>;
 type DayStore     = Record<string, Timings>;       // "yyyy-MM-dd" → prayer timings
 type MultiDayStore = Record<string, DayStore>;      // storeKey → day store
 
-function isoDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
+function localIsoDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 // "dd-MM-yyyy" format required by the Aladhan API
@@ -91,8 +91,8 @@ export async function refreshVisitedPlaceMultiDayCache(
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
 
-  const todayStr    = isoDate(today);
-  const tomorrowStr = isoDate(tomorrow);
+  const todayStr    = localIsoDate(today);
+  const tomorrowStr = localIsoDate(tomorrow);
   const storeKey    = `${params.locationKey}_${params.method}_${params.school}`;
 
   const store    = await loadStore();
@@ -112,7 +112,7 @@ export async function refreshVisitedPlaceMultiDayCache(
     for (let i = 0; i < DAYS_AHEAD; i++) {
       const d  = new Date(today);
       d.setDate(d.getDate() + i);
-      const ds = isoDate(d);
+      const ds = localIsoDate(d);
       if (dayCache[ds]) out[ds] = dayCache[ds];
     }
     return out;
@@ -137,7 +137,7 @@ export async function refreshVisitedPlaceMultiDayCache(
   for (let i = 2; i < DAYS_AHEAD; i++) {
     const d = new Date(today);
     d.setDate(d.getDate() + i);
-    if (!dayCache[isoDate(d)]) missing.push(d);
+    if (!dayCache[localIsoDate(d)]) missing.push(d);
   }
 
   if (missing.length === 0) {
@@ -150,7 +150,7 @@ export async function refreshVisitedPlaceMultiDayCache(
   }
 
   if (__DEV__) {
-    console.log(`[VisitedMultiDay] ${params.displayName}: fetching ${missing.length} missing day(s): ${missing.map(isoDate).join(', ')}`);
+    console.log(`[VisitedMultiDay] ${params.displayName}: fetching ${missing.length} missing day(s): ${missing.map(localIsoDate).join(', ')}`);
   }
 
   // Fetch missing days with limited concurrency
@@ -164,7 +164,7 @@ export async function refreshVisitedPlaceMultiDayCache(
       if (r.status === 'fulfilled') {
         // Strip null values (e.g. Midnight: null) — Timings is Record<string, string>
         const raw = r.value.timings as Record<string, string | null>;
-        dayCache[isoDate(batch[j])] = Object.fromEntries(
+        dayCache[localIsoDate(batch[j])] = Object.fromEntries(
           Object.entries(raw).filter(([, v]) => v != null),
         ) as Timings;
       }

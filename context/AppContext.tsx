@@ -21,6 +21,7 @@ import {
   setEffectivePrayerSchedule,
   getVisitedPrayerLocations,
   getNativeBgDebugEvents,
+  clearPrayerCachesForMigration,
   type NotificationScheduleState,
   type EffectivePrayerSchedule,
 } from '../modules/WidgetData';
@@ -63,6 +64,10 @@ function makeLocationKey(displayName: string): string {
 function getTodayStr() {
   const n = new Date();
   return String(n.getDate()).padStart(2,'0')+'-'+String(n.getMonth()+1).padStart(2,'0')+'-'+n.getFullYear();
+}
+
+function localIsoDate(d: Date = new Date()): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 type LocationType = { latitude: number; longitude: number; city: string; suburb?: string; country: string } | null;
@@ -142,12 +147,48 @@ async function setCached(loc: LocationType, method: number, school: number, toda
   } catch {}
 }
 
+// ── Prayer cache date-key migration (Fix 1 — UTC → local date strings) ──────────
+// Version flag stored in AsyncStorage (JS-side, survives app updates).
+// Version 2 = all App Group prayer-cache keys use local-timezone date strings.
+const PRAYER_CACHE_DATE_KEY_VERSION = 'prayerCacheDateKeyVersion';
+const CURRENT_PRAYER_CACHE_VERSION  = 2;
+
+/**
+ * Checks whether existing App Group prayer caches were written with the old
+ * UTC-shifted date logic. If so, clears all four affected keys so native never
+ * reads stale tomorrow-as-today data. Returns true when migration was performed
+ * (caller must set migrationPendingRef so the version is committed after the
+ * first successful loadPrayers() write).
+ *
+ * Idempotent: safe to call on every startup — exits immediately when v2 is set.
+ * Only runs on iOS (App Group caches do not exist on Android).
+ */
+async function runPrayerCacheMigrationIfNeeded(): Promise<boolean> {
+  try {
+    const stored  = await AsyncStorage.getItem(PRAYER_CACHE_DATE_KEY_VERSION);
+    const version = stored ? parseInt(stored, 10) : 0;
+    if (version >= CURRENT_PRAYER_CACHE_VERSION) {
+      console.log(`[CacheMigration] v${CURRENT_PRAYER_CACHE_VERSION} already applied — skip`);
+      return false;
+    }
+    console.log(`[CacheMigration] migration needed (stored version=${version}) — clearing UTC-shifted prayer caches`);
+    await clearPrayerCachesForMigration().catch(() => {});
+    console.log(`[CacheMigration] caches cleared — awaiting successful prayer refresh to commit v${CURRENT_PRAYER_CACHE_VERSION}`);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState);
   const lastFetchRef       = useRef<string | null>(null);
   // Set when native background location detected a move while app was closed.
   // Cleared only after a successful loadPrayers() call — never cleared on error.
   const pendingBgClearRef  = useRef(false);
+  // Set when the prayer-cache date-key migration cleared stale App Group data.
+  // Cleared + version committed after the first successful loadPrayers() write.
+  const migrationPendingRef = useRef(false);
   // Refs for the AppState foreground-refresh listener — must not read state inside
   // a long-lived callback (stale closure). These refs are kept in sync below.
   const appStateRef        = useRef(AppState.currentState);
@@ -253,6 +294,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               });
             }).catch(() => {});
           }
+
+          // One-time prayer cache migration (Fix 1).
+          // Awaited so App Group caches are empty before refreshLocation triggers
+          // loadPrayers and writes fresh local-date data. AsyncStorage reads are
+          // fast (< 10 ms) — this never delays visible startup.
+          const needsMigration = await runPrayerCacheMigrationIfNeeded();
+          if (needsMigration) migrationPendingRef.current = true;
         }
 
         // Refresh GPS silently in background so home screen and prayer tab both
@@ -361,9 +409,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (Platform.OS === 'ios') {
         const h = todayRes.hijri;
         const dateFormatter = new Intl.DateTimeFormat('sv-SE', { dateStyle: 'short' });
-        const todayIso = new Date().toISOString().slice(0, 10); // "yyyy-MM-dd"
+        const todayIso = localIsoDate(); // "yyyy-MM-dd"
+        const fullDisplayName = (loc.suburb && loc.suburb !== loc.city)
+          ? `${loc.suburb}, ${loc.city}`
+          : loc.city;
         updateWidgetData({
-          city: loc.city,
+          city: fullDisplayName,
           latitude: loc.latitude,
           longitude: loc.longitude,
           prayers: [
@@ -394,14 +445,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const effectiveCity  = getEffectivePrayerCity(loc.city);
         const cityKey        = `${effectiveCity.toLowerCase()}_${method}_${school}`;
         const todayDate      = new Date();
-        const tomorrowDate   = new Date(Date.now() + 86_400_000);
+        const tomorrowDate   = new Date(todayDate.getFullYear(), todayDate.getMonth(), todayDate.getDate() + 1);
         upsertCityPrayerCache({
           cityKey,
           displayName:  effectiveCity,
           lat:          loc.latitude,
           lng:          loc.longitude,
-          date:         todayDate.toISOString().slice(0, 10),
-          tomorrowDate: tomorrowDate.toISOString().slice(0, 10),
+          date:         localIsoDate(todayDate),
+          tomorrowDate: localIsoDate(tomorrowDate),
           method,
           school,
           todayT,
@@ -415,17 +466,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // when a significant-location-change fires while the app is closed.
         // displayName is the full geocoded name ("Kista, Stockholm" when suburb is set);
         // notificationDisplayName is the body-text label ("Stockholm").
-        const fullDisplayName = (loc.suburb && loc.suburb !== loc.city)
-          ? `${loc.suburb}, ${loc.city}`
-          : loc.city;
         setEffectivePrayerSchedule({
           displayName:             fullDisplayName,
           notificationDisplayName: getNotificationDisplayName(fullDisplayName),
           locationKey:             cityKey,
           lat:                     loc.latitude,
           lng:                     loc.longitude,
-          date:                    todayDate.toISOString().slice(0, 10),
-          tomorrowDate:            tomorrowDate.toISOString().slice(0, 10),
+          date:                    localIsoDate(todayDate),
+          tomorrowDate:            localIsoDate(tomorrowDate),
           todayTimes:              todayT,
           tomorrowTimes:           tomT ?? null,
           method,
@@ -474,7 +522,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             notificationDisplayName:  getNotificationDisplayName(effectiveCity),
             lat:                      loc.latitude,
             lng:                      loc.longitude,
-            date:                     todayDate.toISOString().slice(0, 10),
+            date:                     localIsoDate(todayDate),
             method,
             school,
             todayT,
@@ -492,6 +540,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (pendingBgClearRef.current) {
           pendingBgClearRef.current = false;
           clearNeedsPrayerRefresh().catch(() => {});
+        }
+
+        // Commit v2 migration only after a successful Aladhan fetch + App Group write.
+        // The flag is set in the startup useEffect when old UTC-shifted caches were cleared.
+        if (migrationPendingRef.current) {
+          migrationPendingRef.current = false;
+          AsyncStorage.setItem(PRAYER_CACHE_DATE_KEY_VERSION, String(CURRENT_PRAYER_CACHE_VERSION))
+            .then(() => console.log(`[CacheMigration] v${CURRENT_PRAYER_CACHE_VERSION} committed — fresh local-date cache written`))
+            .catch(() => {});
         }
       }
 
@@ -516,8 +573,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             await setCached(loc, method, school, fallback.todayT, fallback.tomT, fallback.hijri);
             if (Platform.OS === 'ios') {
               const h = fallback.hijri;
+              const fullDisplayName = (loc.suburb && loc.suburb !== loc.city)
+                ? `${loc.suburb}, ${loc.city}`
+                : loc.city;
               updateWidgetData({
-                city:      loc.city,
+                city:      fullDisplayName,
                 latitude:  loc.latitude,
                 longitude: loc.longitude,
                 prayers: [
@@ -534,7 +594,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                   monthNameEn: h?.month.en ?? '',
                   year:        h ? parseInt(h.year,         10) : 0,
                 },
-                date:      new Date().toISOString().slice(0, 10),
+                date:      localIsoDate(),
                 timestamp: Date.now() / 1000,
               }).catch(() => {});
             }

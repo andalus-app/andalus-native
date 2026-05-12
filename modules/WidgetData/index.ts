@@ -331,6 +331,25 @@ export async function getNativeBgDebugEvents(): Promise<unknown[]> {
 }
 
 /**
+ * Clears the four App Group prayer-cache keys that may contain UTC-shifted date
+ * strings written by the old JS logic (Fix 1). Called once at app startup when
+ * prayerCacheDateKeyVersion < 2. Idempotent — absent keys are silently skipped.
+ *
+ * Keys cleared:
+ *   andalus_visited_prayer_locations          (visited places + dailyTimesByDate)
+ *   andalus_multi_city_cache                  (multi-city fallback cache)
+ *   andalus_current_effective_prayer_schedule (effective schedule)
+ *   andalus_notification_schedule_state       (schedule state / change detection)
+ *
+ * Does NOT touch: user settings, calculation method/school, notification
+ * preferences, Quran/bookmarks, widget display data, or AsyncStorage.
+ */
+export async function clearPrayerCachesForMigration(): Promise<void> {
+  if (!NativeModule) return;
+  return NativeModule.clearPrayerCachesForMigration();
+}
+
+/**
  * Writes today's Allah name and Quran verse to the App Group daily content
  * cache (key: hidayah_daily_content_cache) and triggers timeline reloads for
  * HidayahAllahNameWidget and HidayahDailyVerseWidget.

@@ -35,8 +35,8 @@ function apiDateStr(): string {
 }
 
 // "yyyy-MM-dd" format used in cache storage and Swift date comparison
-function isoDateStr(d: Date = new Date()): string {
-  return d.toISOString().slice(0, 10);
+function localIsoDate(d: Date = new Date()): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 interface FallbackCity {
@@ -182,7 +182,7 @@ const FALLBACK_CITIES: FallbackCity[] = [
 export async function warmupNativeCache(method: number, school: number): Promise<void> {
   if (Platform.OS !== 'ios') return;
 
-  const today = isoDateStr();
+  const today = localIsoDate();
 
   // Read current cache to avoid redundant fetches
   const existing = await getMultiCityCache().catch(() => ({}));
@@ -256,16 +256,18 @@ async function fetchAndCache(
   };
   const tomT: Record<string, string> = { ...tomTimings, Midnight: '' };
 
-  const now      = new Date();
-  const tomorrow = new Date(Date.now() + 86_400_000);
+  const now           = new Date();
+  const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const tomorrow      = new Date(todayMidnight);
+  tomorrow.setDate(tomorrow.getDate() + 1);
 
   await upsertCityPrayerCache({
     cityKey:      `${city.name}_${method}_${school}`,
     displayName:  city.displayName,
     lat:          city.lat,
     lng:          city.lng,
-    date:         isoDateStr(now),
-    tomorrowDate: isoDateStr(tomorrow),
+    date:         localIsoDate(now),
+    tomorrowDate: localIsoDate(tomorrow),
     method,
     school,
     todayT,

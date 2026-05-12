@@ -40,6 +40,10 @@ function getTodayStr(): string {
   );
 }
 
+function localIsoDate(d: Date = new Date()): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 // Returns the largest absolute difference (minutes) across the main prayers
 // between two timing objects. Used to skip notification rescheduling when
 // the user only moved a few hundred metres and prayer times didn't change.
@@ -157,7 +161,7 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }: TaskMan
           monthNameEn: h?.month?.en              ?? '',
           year:        parseInt(h?.year          ?? '0', 10),
         },
-        date:      new Date().toISOString().slice(0, 10),
+        date:      localIsoDate(),
         timestamp: Date.now() / 1000,
       }).catch(() => {});
     }
@@ -173,7 +177,7 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }: TaskMan
       const school2: number  = settings2.school ?? 0;
       const cityKey          = `${effectiveCity.toLowerCase()}_${method2}_${school2}`;
       const todayDate        = new Date();
-      const tomorrowDate     = new Date(Date.now() + 86_400_000);
+      const tomorrowDate     = new Date(todayDate.getFullYear(), todayDate.getMonth(), todayDate.getDate() + 1);
       const reminderRaw      = await AsyncStorage.getItem('hidayah_prayer_reminder_offset').catch(() => null);
       const reminderOffset   = reminderRaw ? parseInt(reminderRaw, 10) : 0;
 
@@ -182,8 +186,8 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }: TaskMan
         displayName:  effectiveCity,
         lat:          coords.latitude,
         lng:          coords.longitude,
-        date:         todayDate.toISOString().slice(0, 10),
-        tomorrowDate: tomorrowDate.toISOString().slice(0, 10),
+        date:         localIsoDate(todayDate),
+        tomorrowDate: localIsoDate(tomorrowDate),
         method:       method2,
         school:       school2,
         todayT,
@@ -202,7 +206,7 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }: TaskMan
         notificationDisplayName:  getNotificationDisplayName(effectiveCity),
         lat:                      coords.latitude,
         lng:                      coords.longitude,
-        date:                     todayDate.toISOString().slice(0, 10),
+        date:                     localIsoDate(todayDate),
         method:                   method2,
         school:                   school2,
         todayT,
@@ -221,8 +225,8 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }: TaskMan
         locationKey:             cityKey,
         lat:                     coords.latitude,
         lng:                     coords.longitude,
-        date:                    todayDate.toISOString().slice(0, 10),
-        tomorrowDate:            tomorrowDate.toISOString().slice(0, 10),
+        date:                    localIsoDate(todayDate),
+        tomorrowDate:            localIsoDate(tomorrowDate),
         todayTimes:              todayT,
         tomorrowTimes:           tomT ?? null,
         method:                  method2,
