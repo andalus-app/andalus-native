@@ -56,13 +56,14 @@ struct Prayer: Identifiable {
 }
 
 struct PrayerEntry: TimelineEntry {
-    let date:          Date
-    let current:       Prayer
-    let next:          Prayer
-    let allPrayers:    [Prayer]
-    let city:          String
-    let lastUpdatedAt: Date?    // when widget data was last written; nil hides the timestamp
-    let hijriDateStr:  String?  // "26 Dhu al-Qa'dah 1447" from Aladhan; nil → hidden
+    let date:             Date
+    let current:          Prayer
+    let next:             Prayer
+    let allPrayers:       [Prayer]
+    let city:             String
+    let lastUpdatedAt:    Date?    // when widget data was last written; nil hides the timestamp
+    let hijriDateStr:     String?  // "26 Dhu al-Qa'dah 1447" from Aladhan; nil → hidden
+    let previousIshaTime: Date?    // yesterday's Isha time — shown on premium widget between 00:00 and Fajr
 
     static func placeholder(at now: Date = .now) -> PrayerEntry {
         let offsets: [(String, Double)] = [
@@ -73,7 +74,7 @@ struct PrayerEntry: TimelineEntry {
         let all = offsets.map { Prayer(name: $0.0, time: now.addingTimeInterval($0.1)) }
         return PrayerEntry(date: now, current: all[2], next: all[3],
                            allPrayers: all, city: "Stockholm", lastUpdatedAt: nil,
-                           hijriDateStr: nil)
+                           hijriDateStr: nil, previousIshaTime: nil)
     }
 }
 
@@ -95,6 +96,25 @@ private func readAppGroupData() -> StoredData? {
     guard stored.date == localToday || stored.date == utcToday else { return nil }
 
     return stored
+}
+
+/// Reads yesterday's Isha time from the stale blob (no date guard).
+/// Used by PremiumMediumWidget to keep Isha active between 00:00 and Fajr.
+private func extractPreviousIshaTime() -> Date? {
+    guard
+        let defaults = UserDefaults(suiteName: kAppGroup),
+        let raw      = defaults.data(forKey: kDataKey),
+        let stored   = try? JSONDecoder().decode(StoredData.self, from: raw),
+        let ishaRaw  = stored.prayers.first(where: { $0.name == "Isha" })?.time
+    else { return nil }
+
+    let cal       = Calendar.current
+    let yesterday = cal.startOfDay(for: Date().addingTimeInterval(-86_400))
+    let parts     = ishaRaw.split(separator: ":").compactMap { Int($0) }
+    guard parts.count >= 2 else { return nil }
+    var c = cal.dateComponents([.year, .month, .day], from: yesterday)
+    c.hour = parts[0]; c.minute = parts[1]; c.second = 0
+    return cal.date(from: c)
 }
 
 /// Reads last-known location from App Groups even if prayer data is stale.
@@ -237,7 +257,7 @@ private func currentAndNext(prayers: [Prayer], at now: Date) -> (Prayer, Prayer)
     return (current, next)
 }
 
-private func buildEntries(prayers: [Prayer], city: String, lastUpdatedAt: Date? = nil, hijriDateStr: String? = nil) -> [PrayerEntry] {
+private func buildEntries(prayers: [Prayer], city: String, lastUpdatedAt: Date? = nil, hijriDateStr: String? = nil, previousIshaTime: Date? = nil) -> [PrayerEntry] {
     let now = Date()
     var dates = Set<Date>()
     dates.insert(now)
@@ -294,7 +314,7 @@ private func buildEntries(prayers: [Prayer], city: String, lastUpdatedAt: Date? 
         let (cur, nxt) = currentAndNext(prayers: prayers, at: t)
         return PrayerEntry(date: t, current: cur, next: nxt,
                            allPrayers: prayers, city: city, lastUpdatedAt: lastUpdatedAt,
-                           hijriDateStr: hijriDateStr)
+                           hijriDateStr: hijriDateStr, previousIshaTime: previousIshaTime)
     }
 }
 
@@ -317,7 +337,8 @@ struct PrayerProvider: TimelineProvider {
                 NSLog("[Widget] getSnapshot: city=%@ ts=%.0f", stored.city, stored.timestamp ?? 0)
                 completion(PrayerEntry(date: now, current: cur, next: nxt,
                                        allPrayers: prayers, city: stored.city,
-                                       lastUpdatedAt: lastUpdatedAt, hijriDateStr: hijriDateStr))
+                                       lastUpdatedAt: lastUpdatedAt, hijriDateStr: hijriDateStr,
+                                       previousIshaTime: nil))
                 return
             }
         }
@@ -329,6 +350,10 @@ struct PrayerProvider: TimelineProvider {
                      completion: @escaping (Timeline<PrayerEntry>) -> Void) {
 
         let midnight = Calendar.current.startOfDay(for: Date()).addingTimeInterval(86_400 + 60)
+
+        // Read yesterday's Isha from the stale blob regardless of path taken.
+        // PremiumMediumWidget uses this to keep Isha shown as active between 00:00 and Fajr.
+        let previousIshaTime = extractPreviousIshaTime()
 
         let defaults        = UserDefaults(suiteName: kAppGroup)
         let locationChanged = defaults?.bool(forKey: "needsPrayerRefresh") ?? false
@@ -361,7 +386,8 @@ struct PrayerProvider: TimelineProvider {
                           stored.city, blobTs,
                           stored.prayers.first(where: { $0.name == "Asr" })?.time ?? "?")
                     let entries = buildEntries(prayers: prayers, city: stored.city,
-                                               lastUpdatedAt: lastUpdatedAt, hijriDateStr: hijriDateStr)
+                                               lastUpdatedAt: lastUpdatedAt, hijriDateStr: hijriDateStr,
+                                               previousIshaTime: previousIshaTime)
                     NSLog("[Widget] getTimeline PATH-1: %d entries policy=midnight", entries.count)
                     completion(Timeline(entries: entries, policy: .after(midnight)))
                     return
@@ -400,7 +426,7 @@ struct PrayerProvider: TimelineProvider {
                   prayers.count, city, updatedAt != nil ? "set" : "nil",
                   locationChanged ? "15min" : "midnight")
             let entries = buildEntries(prayers: prayers, city: city, lastUpdatedAt: updatedAt,
-                                       hijriDateStr: hijriStr)
+                                       hijriDateStr: hijriStr, previousIshaTime: previousIshaTime)
             completion(Timeline(entries: entries, policy: policy))
         }
     }
@@ -723,9 +749,24 @@ private func premiumPrayerIconName(_ name: String) -> String {
 struct PremiumMediumWidgetView: View {
     let entry: PrayerEntry
 
-    // Currently active prayer — last one whose time has passed.
+    // Active prayer — last of the five canonical prayers whose time has passed.
+    // Shuruq/Soluppgång is deliberately excluded.
     private var activePrayer: Prayer? {
-        entry.allPrayers.last { $0.time <= entry.date }
+        let five = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"]
+        return entry.allPrayers.last { five.contains($0.name) && $0.time <= entry.date }
+    }
+
+    // Hero shown on the left side. After midnight and before Fajr, activePrayer is nil
+    // (today's prayers haven't started yet). In that window, fall back to yesterday's
+    // Isha so the widget doesn't show "--:--" during the night.
+    private var heroActive: (name: String, time: Date)? {
+        if let p = activePrayer {
+            return (p.name == "Soluppgång" ? "Shuruq" : p.name, p.time)
+        }
+        if let ishaTime = entry.previousIshaTime {
+            return ("Isha", ishaTime)
+        }
+        return nil
     }
 
     var body: some View {
@@ -735,7 +776,7 @@ struct PremiumMediumWidgetView: View {
             rightSection
                 .frame(maxWidth: .infinity)
         }
-        .padding(EdgeInsets(top: 13, leading: 14, bottom: 11, trailing: 12))
+        .padding(EdgeInsets(top: 13, leading: 8, bottom: 11, trailing: 6))
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
@@ -748,26 +789,26 @@ struct PremiumMediumWidgetView: View {
             // "Nu" pill + active prayer name + icon
             HStack(spacing: 5) {
                 Text("Nu")
-                    .font(.system(size: 9, weight: .bold))
+                    .font(.system(size: 11, weight: .bold))
                     .foregroundColor(.white.opacity(0.92))
                     .padding(.horizontal, 7)
                     .padding(.vertical, 3)
                     .background(Capsule().fill(Color.white.opacity(0.20)))
 
-                if let active = activePrayer {
-                    Text(active.name == "Soluppgång" ? "Shuruq" : active.name)
-                        .font(.system(size: 12, weight: .semibold))
+                if let hero = heroActive {
+                    Text(hero.name)
+                        .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(.white)
                         .lineLimit(1)
-                    Image(premiumPrayerIconName(active.name))
+                    Image(premiumPrayerIconName(hero.name))
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .frame(width: 17, height: 17)
+                        .frame(width: 32, height: 32)
                 }
             }
 
             // Large current prayer time
-            Text(activePrayer.map { timeFmt.string(from: $0.time) } ?? "--:--")
+            Text(heroActive.map { timeFmt.string(from: $0.time) } ?? "--:--")
                 .font(.system(size: 33, weight: .bold).monospacedDigit())
                 .foregroundColor(.white)
                 .lineLimit(1)
@@ -807,24 +848,24 @@ struct PremiumMediumWidgetView: View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(entry.allPrayers, id: \.name) { prayer in
                 let isActive = prayer.name == activePrayer?.name
-                let isPast   = prayer.time < entry.date && !isActive
+                let isPast   = !isActive && prayer.time < entry.date
 
-                HStack(spacing: 5) {
-                    Image(premiumPrayerIconName(prayer.name))
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 14, height: 14)
-                        .opacity(isPast ? 0.28 : isActive ? 1.0 : 0.72)
-
+                HStack(spacing: 4) {
                     Text(prayer.name == "Soluppgång" ? "Shuruq" : prayer.name)
                         .font(.system(size: 11, weight: isActive ? .semibold : .regular))
                         .foregroundColor(
                             isActive ? .white :
-                            isPast   ? .white.opacity(0.28) :
-                                       .white.opacity(0.58)
+                            isPast   ? .white.opacity(0.38) :
+                                       .white.opacity(0.85)
                         )
                         .lineLimit(1)
                         .minimumScaleFactor(0.85)
+
+                    Image(premiumPrayerIconName(prayer.name))
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 17, height: 17)
+                        .opacity(isActive ? 1.0 : isPast ? 0.30 : 0.90)
 
                     Spacer(minLength: 2)
 
@@ -832,8 +873,8 @@ struct PremiumMediumWidgetView: View {
                         .font(.system(size: 11, weight: isActive ? .semibold : .regular).monospacedDigit())
                         .foregroundColor(
                             isActive ? .white :
-                            isPast   ? .white.opacity(0.22) :
-                                       .white.opacity(0.50)
+                            isPast   ? .white.opacity(0.32) :
+                                       .white.opacity(0.82)
                         )
                         .lineLimit(1)
                 }
