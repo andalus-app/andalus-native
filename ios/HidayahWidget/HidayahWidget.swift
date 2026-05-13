@@ -1301,14 +1301,6 @@ struct LockArcProvider: TimelineProvider {
     }
 }
 
-private let kPrayerSymbols: [String: String] = [
-    "Fajr":    "sunrise.fill",
-    "Dhuhr":   "sun.max.fill",
-    "Asr":     "cloud.sun.fill",
-    "Maghrib": "sunset.fill",
-    "Isha":    "moon.stars.fill",
-]
-
 struct PrayerArcLockScreenView: View {
     let entry: PrayerEntry
 
@@ -1316,17 +1308,14 @@ struct PrayerArcLockScreenView: View {
         entry.allPrayers.filter { kFivePrayers.contains($0.name) }
     }
 
-    /// The most recent five-prayer whose time has already passed.
     private var currentFive: Prayer? {
         fivePrayers.last { $0.time <= entry.date }
     }
 
-    /// The next upcoming five-prayer.
     private var nextFive: Prayer? {
         fivePrayers.first { $0.time > entry.date }
     }
 
-    /// Index of the node that should be filled (= index of the next prayer, or last).
     private var activeNodeIndex: Int {
         fivePrayers.firstIndex { $0.time > entry.date } ?? (fivePrayers.count - 1)
     }
@@ -1355,82 +1344,45 @@ struct PrayerArcLockScreenView: View {
         }
     }
 
-    // MARK: Arc canvas
-
-    private let tVals: [CGFloat] = [0.0, 0.25, 0.5, 0.75, 1.0]
-
-    // Arc geometry constants — shared between Canvas and GeometryReader overlay
-    // so circles and icons always align perfectly.
-    private func arcGeometry(in size: CGSize) -> (p0: CGPoint, p1: CGPoint, control: CGPoint) {
-        let yBase    = size.height * 0.92
-        let yControl = size.height * 0.15
-        // Wider left padding to give the large left icon room to render fully.
-        let xPad     = size.width  * 0.07
-        return (
-            p0:      CGPoint(x: xPad,              y: yBase),
-            p1:      CGPoint(x: size.width - xPad, y: yBase),
-            control: CGPoint(x: size.width * 0.5,  y: yControl)
-        )
-    }
-
     private var arcCanvas: some View {
-        ZStack {
-            // ── Layer 1: arc line + uniform circles (Canvas) ──────────────────
-            Canvas { ctx, size in
-                let active = activeNodeIndex
-                let (p0, p1, control) = arcGeometry(in: size)
+        Canvas { ctx, size in
+            let active   = activeNodeIndex
+            let yBase    = size.height * 0.86
+            let yControl = size.height * 0.04
+            let xPad     = size.width  * 0.03
+            let p0       = CGPoint(x: xPad,              y: yBase)
+            let p1       = CGPoint(x: size.width - xPad, y: yBase)
+            let control  = CGPoint(x: size.width * 0.5,  y: yControl)
 
-                // Arc line
-                var arcPath = Path()
-                arcPath.move(to: p0)
-                arcPath.addQuadCurve(to: p1, control: control)
-                var arcCtx = ctx
-                arcCtx.opacity = 0.35
-                arcCtx.stroke(arcPath, with: .foreground,
-                              style: StrokeStyle(lineWidth: 1.2, lineCap: .round))
+            var arcPath = Path()
+            arcPath.move(to: p0)
+            arcPath.addQuadCurve(to: p1, control: control)
+            var arcCtx = ctx
+            arcCtx.opacity = 0.35
+            arcCtx.stroke(arcPath, with: .foreground,
+                          style: StrokeStyle(lineWidth: 1.2, lineCap: .round))
 
-                // Uniform circles — same radius for all, active=filled others=stroked.
-                let r: CGFloat = 4.5
-                for (i, t) in tVals.enumerated() {
-                    let pt   = bezierPoint(t: t, p0: p0, control: control, p1: p1)
-                    let rect = CGRect(x: pt.x - r, y: pt.y - r, width: r * 2, height: r * 2)
-                    if i == active {
-                        ctx.fill(Path(ellipseIn: rect), with: .foreground)
-                    } else {
-                        var c = ctx
-                        c.opacity = i < active ? 0.25 : 0.45
-                        c.stroke(Path(ellipseIn: rect), with: .foreground,
-                                 style: StrokeStyle(lineWidth: 1.0))
-                    }
+            let tVals: [CGFloat] = [0.0, 0.25, 0.5, 0.75, 1.0]
+            for (i, t) in tVals.enumerated() {
+                let pt       = bezierPoint(t: t, p0: p0, control: control, p1: p1)
+                let isActive = i == active
+                let isPast   = i < active
+                let r: CGFloat = isActive ? 4.2 : 3.0
+                let rect = CGRect(x: pt.x - r, y: pt.y - r, width: r * 2, height: r * 2)
+                if isActive {
+                    ctx.fill(Path(ellipseIn: rect), with: .foreground)
+                } else {
+                    var nodeCtx = ctx
+                    nodeCtx.opacity = isPast ? 0.18 : 0.45
+                    nodeCtx.stroke(Path(ellipseIn: rect), with: .foreground,
+                                   style: StrokeStyle(lineWidth: 1.0))
                 }
-            }
-
-            // ── Layer 2: Single large icon for active prayer, above leftmost node ──
-            GeometryReader { geo in
-                let (p0, p1, control) = arcGeometry(in: geo.size)
-                let leftPt   = bezierPoint(t: tVals[0], p0: p0, control: control, p1: p1)
-                let circleR:  CGFloat = 4.5
-                let iconSize: CGFloat = 22
-                let gap:      CGFloat = 3
-                let iconY    = leftPt.y - circleR - gap - iconSize / 2
-                let symbol   = kPrayerSymbols[fivePrayers[activeNodeIndex].name] ?? "circle.fill"
-
-                Image(symbol)
-                    .renderingMode(.template)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: iconSize, height: iconSize)
-                    .foregroundStyle(.primary)
-                    .position(x: leftPt.x, y: iconY)
             }
         }
     }
 
-    // MARK: Text row
-
     private var textRow: some View {
         HStack(alignment: .center, spacing: 0) {
-            // Previous / current prayer name (left)
             Text(currentFive?.name ?? "")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.primary)
@@ -1438,21 +1390,12 @@ struct PrayerArcLockScreenView: View {
                 .minimumScaleFactor(0.8)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            // Compact countdown (center) — use .timer for <60 s so AOD updates live.
-            Group {
-                if let next = nextFive,
-                   next.time.timeIntervalSince(entry.date) < 60 {
-                    Text(next.time, style: .timer)
-                } else {
-                    Text(countdownText)
-                }
-            }
-            .font(.system(size: 14, weight: .bold).monospacedDigit())
-            .foregroundStyle(.primary)
-            .lineLimit(1)
-            .fixedSize(horizontal: true, vertical: false)
+            Text(countdownText)
+                .font(.system(size: 14, weight: .bold).monospacedDigit())
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
 
-            // Next prayer name (right)
             Text(nextFive?.name ?? (fivePrayers.last?.name ?? ""))
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.primary)
@@ -1461,8 +1404,6 @@ struct PrayerArcLockScreenView: View {
                 .frame(maxWidth: .infinity, alignment: .trailing)
         }
     }
-
-    // MARK: Helpers
 
     private func bezierPoint(t: CGFloat,
                               p0: CGPoint,
