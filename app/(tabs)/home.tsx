@@ -531,6 +531,15 @@ function BookingBellPanel({
   );
 }
 
+function buildDateStrings(hijriData: any): { gregStr: string; hijriStr: string } {
+  const now = new Date();
+  const greg = now.toLocaleDateString('sv-SE', { weekday: 'long', day: 'numeric', month: 'long' });
+  return {
+    gregStr: greg.charAt(0).toUpperCase() + greg.slice(1),
+    hijriStr: hijriData ? `${hijriData.day} ${hijriData.month.en} ${hijriData.year}` : '',
+  };
+}
+
 const FORTSATT_ITEM_DEFS = {
   quran:        { title: 'Läs Koranen',         subtitle: 'Öppna Koranen',                           icon: 'quran'       as const, route: '/quran'  },
   'friday-quran': { title: 'Läs Sura Al-Kahf',  subtitle: 'Direkt efter Fajr och fram till Maghrib', icon: 'quran'       as const, route: '/quran?page=293' },
@@ -552,7 +561,7 @@ export default function HomeScreen() {
   const { pendingCount, cancelledCount, pendingBookings, bookingNotifs, totalUnread: bookingUnread, isAdmin, isLoggedIn, dismissNotif, markAllSeen, refresh: refreshBookingNotif } = useBookingNotif();
   const { stream, isLive, isUpcoming, refresh: refreshYoutube } = useYoutubeLive();
   const now = useCurrentMinute();
-  const { prayerTimes: rawPrayer } = useApp();
+  const { prayerTimes: rawPrayer, hijriDate } = useApp();
   const scrollRef                 = useRef<ScrollView>(null);
   const youtubeCardYRef           = useRef<number>(0);
   // Set to true when a live-notification tap is pending. Triggers scroll either
@@ -579,6 +588,31 @@ export default function HomeScreen() {
   const [pulsingId,           setPulsingId]           = useState<string | null>(null);
   // Active home_top banner (alternates with greeting every 5 s) — stored in AsyncStorage only
   const [homeTopBanner, setHomeTopBanner] = useState<{ text: string; url: string; active: boolean } | null>(null);
+
+  // ── Date header: gregorian + hijri with midnight fade ──────────────────────
+  const dateOpacity = useRef(new Animated.Value(1)).current;
+  const [dateStrings, setDateStrings] = useState(() => buildDateStrings(null));
+  const hijriDateRef = useRef<any>(null);
+  hijriDateRef.current = hijriDate ?? null;
+  const midnightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isHomeFocusedRef = useRef(false);
+  const lastFocusDateRef = useRef<string>('');
+  const scheduleDateRef = useRef<() => void>(() => {});
+  // Reassigned each render so the timeout callback always gets the latest closures.
+  // Timer is only started from useFocusEffect — never from a global useEffect.
+  scheduleDateRef.current = () => {
+    if (midnightTimerRef.current) clearTimeout(midnightTimerRef.current);
+    const now = new Date();
+    const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 5);
+    const delay = Math.max(0, midnight.getTime() - now.getTime());
+    midnightTimerRef.current = setTimeout(() => {
+      Animated.timing(dateOpacity, { toValue: 0, duration: 350, useNativeDriver: true }).start(() => {
+        setDateStrings(buildDateStrings(hijriDateRef.current));
+        Animated.timing(dateOpacity, { toValue: 1, duration: 400, useNativeDriver: true }).start();
+        scheduleDateRef.current();
+      });
+    }, delay);
+  };
   // 0 = greeting visible, 1 = banner visible
   const homeTopPhase     = useRef<0 | 1>(0);
   const greetingX        = useRef(new Animated.Value(0)).current;
@@ -857,6 +891,53 @@ export default function HomeScreen() {
   // Load on tab focus (initial load + tab-switch refresh)
   useFocusEffect(useCallback(() => { loadAnnouncements(); }, [loadAnnouncements]));
 
+  // Date header: start midnight timer on focus, clear it on blur.
+  // Also detects a day change when navigating back to home after midnight.
+  useFocusEffect(useCallback(() => {
+    isHomeFocusedRef.current = true;
+    const today = new Date().toDateString();
+    const dayChanged = lastFocusDateRef.current !== '' && lastFocusDateRef.current !== today;
+    const newStrings = buildDateStrings(hijriDateRef.current);
+    if (dayChanged) {
+      Animated.timing(dateOpacity, { toValue: 0, duration: 350, useNativeDriver: true }).start(() => {
+        setDateStrings(newStrings);
+        Animated.timing(dateOpacity, { toValue: 1, duration: 400, useNativeDriver: true }).start();
+      });
+    } else {
+      setDateStrings(newStrings);
+    }
+    lastFocusDateRef.current = today;
+    scheduleDateRef.current(); // arm the midnight timer
+    return () => {
+      isHomeFocusedRef.current = false;
+      if (midnightTimerRef.current) clearTimeout(midnightTimerRef.current);
+    };
+  }, [])); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Update hijri string when prayer data loads (cheap state update, no animation needed)
+  useEffect(() => {
+    if (hijriDate && isHomeFocusedRef.current) setDateStrings(buildDateStrings(hijriDate));
+  }, [hijriDate]);
+
+  // AppState listener: only acts when home tab is the active tab.
+  // Handles the case where the app was backgrounded and brought back after midnight.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active' && isHomeFocusedRef.current) {
+        const today = new Date().toDateString();
+        if (today !== lastFocusDateRef.current) {
+          lastFocusDateRef.current = today;
+          Animated.timing(dateOpacity, { toValue: 0, duration: 350, useNativeDriver: true }).start(() => {
+            setDateStrings(buildDateStrings(hijriDateRef.current));
+            Animated.timing(dateOpacity, { toValue: 1, duration: 400, useNativeDriver: true }).start();
+            scheduleDateRef.current();
+          });
+        }
+      }
+    });
+    return () => sub.remove();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Home-top banner crossfade cycle (greeting ↔ banner every 5 s) ──────────
   useEffect(() => {
     if (!homeTopBanner) {
@@ -999,6 +1080,29 @@ export default function HomeScreen() {
         <TouchableOpacity onPress={handleLogoTap} activeOpacity={1} hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}>
           <HidayahLogo size={52} />
         </TouchableOpacity>
+
+        {/* Centered date block — absolute so it centers on full screen width */}
+        <Animated.View
+          pointerEvents="none"
+          style={{ position: 'absolute', left: 0, right: 0, top: 56, bottom: 0, alignItems: 'center', justifyContent: 'center', opacity: dateOpacity }}
+        >
+          <Text style={{ fontSize: 16, fontWeight: '500', color: T.text, letterSpacing: -0.2, textAlign: 'center' }}>
+            {dateStrings.gregStr}
+          </Text>
+          {dateStrings.hijriStr ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 3 }}>
+              <View style={{ marginRight: 4 }}>
+                <Svg width={13} height={13} viewBox="0 0 24 24">
+                  <Path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" fill={isDark ? '#cab488' : T.accent} />
+                </Svg>
+              </View>
+              <Text style={{ fontSize: 13, fontWeight: '500', color: isDark ? '#cab488' : T.accent, letterSpacing: 0.1 }}>
+                {dateStrings.hijriStr}
+              </Text>
+            </View>
+          ) : null}
+        </Animated.View>
+
         <View style={{ flex: 1 }} />
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           {isLoggedIn && <TouchableOpacity onPress={openBell} style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}>

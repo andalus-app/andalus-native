@@ -10,7 +10,7 @@
  * Active Juz is highlighted based on scroll position.
  */
 
-import React, { useEffect, useRef, memo, useState, useCallback } from 'react';
+import React, { useEffect, useRef, memo, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -26,6 +26,7 @@ import {
   type ListRenderItemInfo,
   type FlatList as FlatListType,
 } from 'react-native';
+import Svg, { Circle, Path } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -40,6 +41,11 @@ import {
 } from '../../data/surahIndex';
 import type { Bookmark } from '../../hooks/quran/useQuranBookmarks';
 import KhatmahScreen from './KhatmahScreen';
+import {
+  loadRecentPages,
+  saveRecentPage,
+  type RecentPage,
+} from '../../services/quranRecentPages';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -68,14 +74,58 @@ function juzForPage(page: number): number {
 
 // ── Row height constants — must match StyleSheet values below ─────────────────
 // SURAH_ROW_H   = paddingVertical:10×2=20 + max(badge:32px, text:~32px) = 52
-// JUZ_HEADER_H  = paddingTop:14 + text:~13 + paddingBottom:4 + marginBottom:2 + border:~1 = 34
+// JUZ_HEADER_H  = marginTop:16 + paddingTop:10 + text:~20 + paddingBottom:2 + marginBottom:0 + border:~1 = 49
+// RECENT_LABEL_H = paddingTop:16 + text:~20 + paddingBottom:8 = 44
+// RECENT_ROW_H   = paddingVertical:12×2=24 + title:~18 + gap:2 + meta:~14 = 58
+// RECENT_FOOTER_H = marginBottom:8 before JUZ 1 = 8
 
 const SURAH_ROW_H = 52;
-const JUZ_HEADER_H = 34;
+const JUZ_HEADER_H = 49;
+const RECENT_LABEL_H = 44;
+const RECENT_ROW_H = 58;
+const RECENT_FOOTER_H = 8;
+
+function recentHeaderHeight(count: number): number {
+  if (count === 0) return 0;
+  return RECENT_LABEL_H + count * RECENT_ROW_H + RECENT_FOOTER_H;
+}
+
 const PICKER_W          = 28;
 const PICKER_W_LANDSCAPE = 40;
 const PICKER_ITEM_H      = 28; // fixed height per item in landscape — guarantees tap targets
 const JUZ_NUMBERS = Array.from({ length: 30 }, (_, i) => i + 1);
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function relativeTimeSv(timestamp: number): string {
+  const ms = Date.now() - timestamp;
+  const min = Math.floor(ms / 60_000);
+  if (min < 1) return 'Just nu';
+  if (min < 60) return `${min} min sedan`;
+  const hr = Math.floor(ms / 3_600_000);
+  if (hr < 24) return `${hr} tim sedan`;
+  const days = Math.floor(ms / 86_400_000);
+  if (days < 7) return `${days} dag${days !== 1 ? 'ar' : ''} sedan`;
+  const weeks = Math.floor(days / 7);
+  if (weeks < 5) return `${weeks} vecka${weeks !== 1 ? 'or' : ''} sedan`;
+  const months = Math.floor(days / 30);
+  return `${months} månad${months !== 1 ? 'er' : ''} sedan`;
+}
+
+function ClockIcon({ size, color }: { size: number; color: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Circle cx="12" cy="12" r="9" stroke={color} strokeWidth="1.8" />
+      <Path
+        d="M12 7v5l3 2"
+        stroke={color}
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
 
 // ── Pre-computed layout tables (module-level, computed once) ──────────────────
 
@@ -303,6 +353,84 @@ const pickerStyles = StyleSheet.create({
   },
 });
 
+// ── RecentPagesSection ────────────────────────────────────────────────────────
+
+const RecentPagesSection = memo(function RecentPagesSection({
+  pages,
+  onPress,
+  theme: T,
+}: {
+  pages: RecentPage[];
+  onPress: (page: number) => void;
+  theme: ReturnType<typeof import('../../context/ThemeContext').useTheme>['theme'];
+}) {
+  return (
+    <View style={recentStyles.container}>
+      <Text style={[recentStyles.label, { color: T.textMuted }]}>SENASTE SIDOR</Text>
+      {pages.map((item, idx) => (
+        <TouchableOpacity
+          key={item.page}
+          style={[
+            recentStyles.row,
+            idx < pages.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: T.separator },
+          ]}
+          onPress={() => onPress(item.page)}
+          activeOpacity={0.7}
+        >
+          <ClockIcon size={20} color={T.textMuted} />
+          <View style={recentStyles.rowText}>
+            <Text style={[recentStyles.rowTitle, { color: T.text }]} numberOfLines={1}>
+              {item.surahName}
+            </Text>
+            <Text style={[recentStyles.rowMeta, { color: T.textMuted }]}>
+              {relativeTimeSv(item.visitedAt)}
+            </Text>
+          </View>
+          <Text style={[recentStyles.pageNum, { color: T.textMuted }]}>{item.page}</Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+});
+
+const recentStyles = StyleSheet.create({
+  container: {
+    marginBottom: RECENT_FOOTER_H,
+  },
+  label: {
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+    paddingTop: 16,
+    paddingBottom: 8,
+    paddingHorizontal: 16,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  rowText: {
+    flex: 1,
+  },
+  rowTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  rowMeta: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  pageNum: {
+    fontSize: 14,
+    fontWeight: '500',
+    minWidth: 30,
+    textAlign: 'right',
+  },
+});
+
 // ── Main Component ────────────────────────────────────────────────────────────
 
 function QuranContentsScreen() {
@@ -323,10 +451,41 @@ function QuranContentsScreen() {
   const [tab, setTab] = useState<Tab>('suror');
   const [activeJuz, setActiveJuz] = useState<number>(() => juzForPage(currentPage));
   const activeJuzRef = useRef(juzForPage(currentPage));
-  // Set to true while a programmatic scrollToIndex is animating so that
-  // handleSurahScroll does not overwrite activeJuz with intermediate positions.
   const programmaticScrollRef = useRef(false);
   const programmaticScrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Recent pages ────────────────────────────────────────────────────────────
+
+  const [recentPages, setRecentPages] = useState<RecentPage[]>([]);
+  const recordDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastRecordedPageRef = useRef<number>(-1);
+
+  useEffect(() => {
+    loadRecentPages().then(setRecentPages);
+  }, []);
+
+  useEffect(() => {
+    if (recordDebounceRef.current) clearTimeout(recordDebounceRef.current);
+    recordDebounceRef.current = setTimeout(async () => {
+      if (currentPage === lastRecordedPageRef.current) return;
+      lastRecordedPageRef.current = currentPage;
+      let surah = SURAH_INDEX[0];
+      for (const s of SURAH_INDEX) {
+        if (s.firstPage <= currentPage) surah = s;
+        else break;
+      }
+      const updated = await saveRecentPage(currentPage, surah.id, surah.nameSimple);
+      setRecentPages(updated);
+    }, 1500);
+    return () => {
+      if (recordDebounceRef.current) clearTimeout(recordDebounceRef.current);
+    };
+  }, [currentPage]);
+
+  const recentHeaderH = useMemo(
+    () => recentHeaderHeight(recentPages.length),
+    [recentPages.length],
+  );
 
   // Panel is parked here when idle (closed). Must be large enough that
   // (PANEL_IDLE_OFFSET + maxDeviceWidth) < 0 for any iOS device. 1200 > 430 (widest iPhone).
@@ -436,35 +595,33 @@ function QuranContentsScreen() {
   const getSurahItemLayout = useCallback(
     (_: unknown, index: number) => ({
       length: SURAH_ITEM_HEIGHTS[index] ?? SURAH_ROW_H,
-      offset: SURAH_ITEM_OFFSETS[index] ?? 0,
+      offset: (SURAH_ITEM_OFFSETS[index] ?? 0) + recentHeaderH,
       index,
     }),
-    [],
+    [recentHeaderH],
   );
 
   const handleSurahScrollToIndexFailed = useCallback(
     ({ index }: { index: number; highestMeasuredFrameIndex: number; averageItemLength: number }) => {
       surahListRef.current?.scrollToOffset({
-        offset: SURAH_ITEM_OFFSETS[index] ?? 0,
+        offset: (SURAH_ITEM_OFFSETS[index] ?? 0) + recentHeaderH,
         animated: true,
       });
     },
-    [],
+    [recentHeaderH],
   );
 
-  // Track active juz from scroll position; only setState when juz actually changes.
-  // Suppressed while a programmatic scrollToIndex is in flight to avoid flashing.
   const handleSurahScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       if (programmaticScrollRef.current) return;
-      const y = e.nativeEvent.contentOffset.y;
+      const y = Math.max(0, e.nativeEvent.contentOffset.y - recentHeaderH);
       const newJuz = activeJuzForOffset(y);
       if (newJuz !== activeJuzRef.current) {
         activeJuzRef.current = newJuz;
         setActiveJuz(newJuz);
       }
     },
-    [],
+    [recentHeaderH],
   );
 
   // ── Juz picker tap ──────────────────────────────────────────────────────────
@@ -667,6 +824,15 @@ function QuranContentsScreen() {
             data={SURAH_INDEX}
             renderItem={renderSurah}
             keyExtractor={(item) => String(item.id)}
+            ListHeaderComponent={
+              recentPages.length > 0 ? (
+                <RecentPagesSection
+                  pages={recentPages}
+                  onPress={(page) => { goToPage(page); closeContentsMenu(); }}
+                  theme={T}
+                />
+              ) : null
+            }
             contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 100, paddingLeft: insets.left }]}
             showsVerticalScrollIndicator={false}
             getItemLayout={getSurahItemLayout}
@@ -777,15 +943,16 @@ const styles = StyleSheet.create({
   },
   juzHeader: {
     paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 4,
+    marginTop: 16,
+    paddingTop: 10,
+    paddingBottom: 2,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    marginBottom: 2,
+    marginBottom: 0,
   },
   juzHeaderText: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 1,
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 0.3,
   },
   listRow: {
     flexDirection: 'row',
