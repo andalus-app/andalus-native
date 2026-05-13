@@ -1,8 +1,9 @@
 {
   "images": [
     {
-      "filename": "cloud.sun.fill.svg",
-      "idiom": "universal"
+      "filename": "cloud.sun.fill.png",
+      "idiom": "universal",
+      "scale": "3x"
     }
   ],
   "info": {

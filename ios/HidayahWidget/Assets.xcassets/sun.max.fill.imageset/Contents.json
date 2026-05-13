@@ -1,8 +1,9 @@
 {
   "images": [
     {
-      "filename": "sun.max.fill.svg",
-      "idiom": "universal"
+      "filename": "sun.max.fill.png",
+      "idiom": "universal",
+      "scale": "3x"
     }
   ],
   "info": {

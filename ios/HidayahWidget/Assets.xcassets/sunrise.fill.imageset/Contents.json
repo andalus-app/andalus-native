@@ -1,8 +1,9 @@
 {
   "images": [
     {
-      "filename": "sunrise.fill.svg",
-      "idiom": "universal"
+      "filename": "sunrise.fill.png",
+      "idiom": "universal",
+      "scale": "3x"
     }
   ],
   "info": {

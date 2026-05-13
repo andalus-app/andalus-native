@@ -1432,9 +1432,8 @@ struct PrayerArcLockScreenView: View {
         HStack(alignment: .center, spacing: 0) {
             // Previous / current prayer name (left)
             Text(currentFive?.name ?? "")
-                .font(.system(size: 10, weight: .regular))
+                .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.primary)
-                .opacity(0.55)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -1448,16 +1447,15 @@ struct PrayerArcLockScreenView: View {
                     Text(countdownText)
                 }
             }
-            .font(.system(size: 12, weight: .semibold).monospacedDigit())
+            .font(.system(size: 14, weight: .bold).monospacedDigit())
             .foregroundStyle(.primary)
             .lineLimit(1)
             .fixedSize(horizontal: true, vertical: false)
 
             // Next prayer name (right)
             Text(nextFive?.name ?? (fivePrayers.last?.name ?? ""))
-                .font(.system(size: 10, weight: .regular))
+                .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.primary)
-                .opacity(0.55)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
                 .frame(maxWidth: .infinity, alignment: .trailing)
