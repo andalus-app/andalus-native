@@ -32,12 +32,19 @@ private struct StoredPrayer: Decodable {
 }
 
 private struct StoredData: Decodable {
+    struct Hijri: Decodable {
+        let day:         Int
+        let monthNumber: Int
+        let monthNameEn: String
+        let year:        Int
+    }
     let city:      String
     let latitude:  Double?   // optional — absent in data written by older app versions
     let longitude: Double?
     let prayers:   [StoredPrayer]
     let date:      String    // "yyyy-MM-dd" in UTC (JS toISOString)
     let timestamp: Double?   // Unix seconds — absent in older payloads; nil hides the timestamp label
+    let hijri:     Hijri?    // from Aladhan via JS updateWidgetData; absent in older payloads
 }
 
 // MARK: - Domain model
@@ -54,7 +61,8 @@ struct PrayerEntry: TimelineEntry {
     let next:          Prayer
     let allPrayers:    [Prayer]
     let city:          String
-    let lastUpdatedAt: Date?   // when widget data was last written; nil hides the timestamp
+    let lastUpdatedAt: Date?    // when widget data was last written; nil hides the timestamp
+    let hijriDateStr:  String?  // "26 Dhu al-Qa'dah 1447" from Aladhan; nil → hidden
 
     static func placeholder(at now: Date = .now) -> PrayerEntry {
         let offsets: [(String, Double)] = [
@@ -64,7 +72,8 @@ struct PrayerEntry: TimelineEntry {
         ]
         let all = offsets.map { Prayer(name: $0.0, time: now.addingTimeInterval($0.1)) }
         return PrayerEntry(date: now, current: all[2], next: all[3],
-                           allPrayers: all, city: "Stockholm", lastUpdatedAt: nil)
+                           allPrayers: all, city: "Stockholm", lastUpdatedAt: nil,
+                           hijriDateStr: nil)
     }
 }
 
@@ -151,14 +160,24 @@ private let kSwedishNames = [
 private struct AladhanResponse: Decodable {
     struct Data: Decodable {
         struct Meta: Decodable { let timezone: String }
+        struct DateInfo: Decodable {
+            struct Hijri: Decodable {
+                struct Month: Decodable { let en: String }
+                let day:   String
+                let month: Month
+                let year:  String
+            }
+            let hijri: Hijri?
+        }
         let timings: [String: String]
         let meta:    Meta
+        let date:    DateInfo?
     }
     let data: Data
 }
 
 private func fetchFromAPI(lat: Double, lng: Double,
-                          completion: @escaping ([Prayer]) -> Void) {
+                          completion: @escaping ([Prayer], String?) -> Void) {
     let ts  = Int(Date().timeIntervalSince1970)
     let url = URL(string:
         "https://api.aladhan.com/v1/timings/\(ts)"
@@ -169,7 +188,7 @@ private func fetchFromAPI(lat: Double, lng: Double,
         guard
             let data,
             let resp = try? JSONDecoder().decode(AladhanResponse.self, from: data)
-        else { completion([]); return }
+        else { completion([], nil); return }
 
         let tz  = TimeZone(identifier: resp.data.meta.timezone) ?? .current
         var cal = Calendar.current; cal.timeZone = tz
@@ -187,7 +206,15 @@ private func fetchFromAPI(lat: Double, lng: Double,
                 result.append(Prayer(name: name, time: date))
             }
         }
-        completion(result.sorted { $0.time < $1.time })
+
+        let hijriStr: String? = {
+            guard let h    = resp.data.date?.hijri,
+                  let day  = Int(h.day),
+                  let year = Int(h.year), year > 0 else { return nil }
+            return "\(day) \(h.month.en) \(year)"
+        }()
+
+        completion(result.sorted { $0.time < $1.time }, hijriStr)
     }.resume()
 }
 
@@ -210,7 +237,7 @@ private func currentAndNext(prayers: [Prayer], at now: Date) -> (Prayer, Prayer)
     return (current, next)
 }
 
-private func buildEntries(prayers: [Prayer], city: String, lastUpdatedAt: Date? = nil) -> [PrayerEntry] {
+private func buildEntries(prayers: [Prayer], city: String, lastUpdatedAt: Date? = nil, hijriDateStr: String? = nil) -> [PrayerEntry] {
     let now = Date()
     var dates = Set<Date>()
     dates.insert(now)
@@ -266,7 +293,8 @@ private func buildEntries(prayers: [Prayer], city: String, lastUpdatedAt: Date? 
     return dates.sorted().map { t in
         let (cur, nxt) = currentAndNext(prayers: prayers, at: t)
         return PrayerEntry(date: t, current: cur, next: nxt,
-                           allPrayers: prayers, city: city, lastUpdatedAt: lastUpdatedAt)
+                           allPrayers: prayers, city: city, lastUpdatedAt: lastUpdatedAt,
+                           hijriDateStr: hijriDateStr)
     }
 }
 
@@ -285,10 +313,11 @@ struct PrayerProvider: TimelineProvider {
                 let now = Date()
                 let (cur, nxt) = currentAndNext(prayers: prayers, at: now)
                 let lastUpdatedAt = stored.timestamp.map { Date(timeIntervalSince1970: $0) }
+                let hijriDateStr  = stored.hijri.map { "\($0.day) \($0.monthNameEn) \($0.year)" }
                 NSLog("[Widget] getSnapshot: city=%@ ts=%.0f", stored.city, stored.timestamp ?? 0)
                 completion(PrayerEntry(date: now, current: cur, next: nxt,
                                        allPrayers: prayers, city: stored.city,
-                                       lastUpdatedAt: lastUpdatedAt))
+                                       lastUpdatedAt: lastUpdatedAt, hijriDateStr: hijriDateStr))
                 return
             }
         }
@@ -327,11 +356,12 @@ struct PrayerProvider: TimelineProvider {
 
                 if !locationChanged || nativeFresh {
                     let lastUpdatedAt = stored.timestamp.map { Date(timeIntervalSince1970: $0) }
+                    let hijriDateStr  = stored.hijri.map { "\($0.day) \($0.monthNameEn) \($0.year)" }
                     NSLog("[Widget] getTimeline PATH-1: city=%@ updatedAt=%.0f Asr=%@",
                           stored.city, blobTs,
                           stored.prayers.first(where: { $0.name == "Asr" })?.time ?? "?")
                     let entries = buildEntries(prayers: prayers, city: stored.city,
-                                               lastUpdatedAt: lastUpdatedAt)
+                                               lastUpdatedAt: lastUpdatedAt, hijriDateStr: hijriDateStr)
                     NSLog("[Widget] getTimeline PATH-1: %d entries policy=midnight", entries.count)
                     completion(Timeline(entries: entries, policy: .after(midnight)))
                     return
@@ -348,7 +378,7 @@ struct PrayerProvider: TimelineProvider {
         // lastUpdatedAt is nil — hide "Uppdaterad" until native writes and Path 1 takes over.
         let (lat, lng, city) = readStoredLocation()
         NSLog("[Widget] getTimeline PATH-2: city=%@ lat=%.4f lng=%.4f", city, lat, lng)
-        fetchFromAPI(lat: lat, lng: lng) { prayers in
+        fetchFromAPI(lat: lat, lng: lng) { prayers, hijriStr in
             guard !prayers.isEmpty else {
                 NSLog("[Widget] getTimeline PATH-2: API failed — retry in 15 min")
                 let timeline = Timeline(entries: [PrayerEntry.placeholder()],
@@ -369,7 +399,8 @@ struct PrayerProvider: TimelineProvider {
             NSLog("[Widget] getTimeline PATH-2: fetched %d prayers city=%@ updatedAt=%@ policy=%@",
                   prayers.count, city, updatedAt != nil ? "set" : "nil",
                   locationChanged ? "15min" : "midnight")
-            let entries = buildEntries(prayers: prayers, city: city, lastUpdatedAt: updatedAt)
+            let entries = buildEntries(prayers: prayers, city: city, lastUpdatedAt: updatedAt,
+                                       hijriDateStr: hijriStr)
             completion(Timeline(entries: entries, policy: policy))
         }
     }
@@ -675,6 +706,148 @@ struct MediumWidgetView: View {
     }
 }
 
+// MARK: - Premium Medium Widget (new design — full 6-prayer list + PNG icons)
+
+private func premiumPrayerIconName(_ name: String) -> String {
+    switch name {
+    case "Fajr":                    return "fajr"
+    case "Shuruq", "Soluppgång":   return "shuruq"
+    case "Dhuhr":                   return "dhuhr"
+    case "Asr":                     return "asr"
+    case "Maghrib":                 return "maghrib"
+    case "Isha":                    return "isha"
+    default:                        return "fajr"
+    }
+}
+
+struct PremiumMediumWidgetView: View {
+    let entry: PrayerEntry
+
+    // Currently active prayer — last one whose time has passed.
+    private var activePrayer: Prayer? {
+        entry.allPrayers.last { $0.time <= entry.date }
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            leftSection
+                .frame(width: 116)
+            rightSection
+                .frame(maxWidth: .infinity)
+        }
+        .padding(EdgeInsets(top: 13, leading: 14, bottom: 11, trailing: 12))
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    // MARK: Left section
+
+    @ViewBuilder
+    private var leftSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+
+            // "Nu" pill + active prayer name + icon
+            HStack(spacing: 5) {
+                Text("Nu")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundColor(.white.opacity(0.92))
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(Color.white.opacity(0.20)))
+
+                if let active = activePrayer {
+                    Text(active.name == "Soluppgång" ? "Shuruq" : active.name)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                    Image(premiumPrayerIconName(active.name))
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 17, height: 17)
+                }
+            }
+
+            // Large current prayer time
+            Text(activePrayer.map { timeFmt.string(from: $0.time) } ?? "--:--")
+                .font(.system(size: 33, weight: .bold).monospacedDigit())
+                .foregroundColor(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .padding(.top, 5)
+
+            // City
+            Text(entry.city)
+                .font(.system(size: 11, weight: .regular))
+                .foregroundColor(.white.opacity(0.52))
+                .lineLimit(1)
+                .padding(.top, 3)
+
+            Spacer(minLength: 4)
+
+            // Gregorian (iOS local) + Hijri (from Aladhan) date footer
+            VStack(alignment: .leading, spacing: 1) {
+                Text(mediumDateFmt.string(from: entry.date))
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(kGold.opacity(0.90))
+                    .lineLimit(1)
+                if let hijriStr = entry.hijriDateStr {
+                    Text(hijriStr)
+                        .font(.system(size: 8.5, weight: .regular))
+                        .foregroundColor(kGold.opacity(0.65))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+            }
+        }
+    }
+
+    // MARK: Right section — all 6 prayers
+
+    @ViewBuilder
+    private var rightSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(entry.allPrayers, id: \.name) { prayer in
+                let isActive = prayer.name == activePrayer?.name
+                let isPast   = prayer.time < entry.date && !isActive
+
+                HStack(spacing: 5) {
+                    Image(premiumPrayerIconName(prayer.name))
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 14, height: 14)
+                        .opacity(isPast ? 0.28 : isActive ? 1.0 : 0.72)
+
+                    Text(prayer.name == "Soluppgång" ? "Shuruq" : prayer.name)
+                        .font(.system(size: 11, weight: isActive ? .semibold : .regular))
+                        .foregroundColor(
+                            isActive ? .white :
+                            isPast   ? .white.opacity(0.28) :
+                                       .white.opacity(0.58)
+                        )
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+
+                    Spacer(minLength: 2)
+
+                    Text(timeFmt.string(from: prayer.time))
+                        .font(.system(size: 11, weight: isActive ? .semibold : .regular).monospacedDigit())
+                        .foregroundColor(
+                            isActive ? .white :
+                            isPast   ? .white.opacity(0.22) :
+                                       .white.opacity(0.50)
+                        )
+                        .lineLimit(1)
+                }
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3.5)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    Capsule().fill(isActive ? Color.white.opacity(0.13) : Color.clear)
+                )
+            }
+        }
+    }
+}
+
 // MARK: - Large Focus widget
 
 struct LargeFocusWidgetView: View {
@@ -954,6 +1127,30 @@ struct HidayahWidget: Widget {
     }
 }
 
+/// Medium – Premium: current prayer hero + all six prayer rows with PNG icons.
+struct HidayahPremiumMediumWidget: Widget {
+    let kind = "HidayahPremiumMediumWidget"
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: kind, provider: PrayerProvider()) { entry in
+            PremiumMediumWidgetView(entry: entry)
+                .containerBackground(
+                    LinearGradient(
+                        colors: [
+                            Color(red: 20/255, green: 40/255, blue: 34/255),
+                            Color(red:  8/255, green: 20/255, blue: 16/255)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    for: .widget
+                )
+        }
+        .configurationDisplayName("Bönetider – Premium")
+        .description("Aktuell bön med stor tid och alla sex bönetider med ikoner.")
+        .supportedFamilies([.systemMedium])
+    }
+}
+
 /// Large – Focus Mode: dynamic hero + prayer list.
 struct HidayahLargeWidget: Widget {
     let kind = "HidayahLargeWidget"
@@ -1217,7 +1414,8 @@ private func buildLockArcEntries(prayers: [Prayer],
     return dates.sorted().map { t in
         let (cur, nxt) = currentAndNext(prayers: prayers, at: t)
         return PrayerEntry(date: t, current: cur, next: nxt,
-                           allPrayers: prayers, city: city, lastUpdatedAt: lastUpdatedAt)
+                           allPrayers: prayers, city: city, lastUpdatedAt: lastUpdatedAt,
+                           hijriDateStr: nil)
     }
 }
 
@@ -1237,7 +1435,7 @@ struct LockArcProvider: TimelineProvider {
                 NSLog("[Widget] LockArc getSnapshot: city=%@ ts=%.0f", stored.city, stored.timestamp ?? 0)
                 completion(PrayerEntry(date: now, current: cur, next: nxt,
                                        allPrayers: prayers, city: stored.city,
-                                       lastUpdatedAt: lastUpdatedAt))
+                                       lastUpdatedAt: lastUpdatedAt, hijriDateStr: nil))
                 return
             }
         }
@@ -1279,7 +1477,7 @@ struct LockArcProvider: TimelineProvider {
 
         let (lat, lng, city) = readStoredLocation()
         NSLog("[Widget] LockArc getTimeline PATH-2: city=%@ lat=%.4f lng=%.4f", city, lat, lng)
-        fetchFromAPI(lat: lat, lng: lng) { prayers in
+        fetchFromAPI(lat: lat, lng: lng) { prayers, _ in
             guard !prayers.isEmpty else {
                 NSLog("[Widget] LockArc getTimeline PATH-2: API failed — retry in 15 min")
                 let timeline = Timeline(entries: [PrayerEntry.placeholder()],

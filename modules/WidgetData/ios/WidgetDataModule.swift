@@ -62,7 +62,8 @@ public class WidgetDataModule: Module {
             defaults.synchronize()
             WidgetCenter.shared.reloadAllTimelines()
             let prayerKinds = [
-                "HidayahWidget", "HidayahFocusWidget", "HidayahListWidget",
+                "HidayahWidget", "HidayahPremiumMediumWidget",
+                "HidayahFocusWidget", "HidayahListWidget",
                 "HidayahLargeWidget", "HidayahOverviewWidget",
                 "HidayahLockFocusWidget", "HidayahLockOverviewWidget", "HidayahLockArcWidget",
             ]
@@ -75,7 +76,8 @@ public class WidgetDataModule: Module {
         AsyncFunction("reloadWidgets") { (promise: Promise) in
             WidgetCenter.shared.reloadAllTimelines()
             let prayerKinds = [
-                "HidayahWidget", "HidayahFocusWidget", "HidayahListWidget",
+                "HidayahWidget", "HidayahPremiumMediumWidget",
+                "HidayahFocusWidget", "HidayahListWidget",
                 "HidayahLargeWidget", "HidayahOverviewWidget",
                 "HidayahLockFocusWidget", "HidayahLockOverviewWidget", "HidayahLockArcWidget",
             ]

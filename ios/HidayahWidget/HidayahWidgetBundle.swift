@@ -12,6 +12,7 @@ struct HidayahWidgetBundle: WidgetBundle {
         HidayahFocusWidget()           // small – Focus Mode
         HidayahListWidget()            // small – Full List Mode
         HidayahWidget()                // medium
+        HidayahPremiumMediumWidget()   // medium – premium design
         HidayahLargeWidget()           // large – Focus Mode
         HidayahOverviewWidget()        // large – Overview Mode
 #if os(iOS)
