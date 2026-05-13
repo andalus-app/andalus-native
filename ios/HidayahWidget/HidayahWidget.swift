@@ -643,7 +643,7 @@ struct MediumWidgetView: View {
 
     @ViewBuilder
     private var shuruqSection: some View {
-        HStack(alignment: .center, spacing: 4) {
+        HStack(alignment: .top, spacing: 4) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Soluppgång")
                     .font(.system(size: 10, weight: .semibold))
@@ -658,7 +658,8 @@ struct MediumWidgetView: View {
             Image("shuruq")
                 .resizable()
                 .aspectRatio(contentMode: .fit)
-                .frame(width: 87, height: 87)
+                .frame(width: 48, height: 48)
+                .offset(y: -14)
         }
     }
 
@@ -812,7 +813,7 @@ struct PremiumMediumWidgetView: View {
     }
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: 8) {
+        HStack(alignment: .top, spacing: 8) {
             leftSection
                 .frame(width: 116)
             rightSection
@@ -904,7 +905,7 @@ struct PremiumMediumWidgetView: View {
                     Image(premiumPrayerIconName(prayer.name))
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .frame(width: 30, height: 30)
+                        .frame(width: 20, height: 20)
                         .opacity(isActive ? 1.0 : isPast ? 0.30 : 0.90)
 
                     Spacer(minLength: 2)
