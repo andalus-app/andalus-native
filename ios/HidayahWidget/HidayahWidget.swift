@@ -1345,11 +1345,11 @@ struct PrayerArcLockScreenView: View {
                 .foregroundStyle(.primary)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            VStack(alignment: .center, spacing: 4) {
+            VStack(alignment: .center, spacing: 2) {
                 arcCanvas
                     .frame(maxWidth: .infinity)
-                    .layoutPriority(1)
                 textRow
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -1362,11 +1362,10 @@ struct PrayerArcLockScreenView: View {
     // Arc geometry constants — shared between Canvas and GeometryReader overlay
     // so circles and icons always align perfectly.
     private func arcGeometry(in size: CGSize) -> (p0: CGPoint, p1: CGPoint, control: CGPoint) {
-        // yBase pushed low (0.92) and control raised moderately (0.15) to leave
-        // enough vertical room for icons above even the topmost arc node (Asr).
         let yBase    = size.height * 0.92
         let yControl = size.height * 0.15
-        let xPad     = size.width  * 0.03
+        // Wider left padding to give the large left icon room to render fully.
+        let xPad     = size.width  * 0.07
         return (
             p0:      CGPoint(x: xPad,              y: yBase),
             p1:      CGPoint(x: size.width - xPad, y: yBase),
@@ -1406,32 +1405,23 @@ struct PrayerArcLockScreenView: View {
                 }
             }
 
-            // ── Layer 2: prayer icons ABOVE each circle (GeometryReader) ──────
-            // Icons are offset upward from the bezier node so they sit clearly
-            // above the arc line. .primary tinting adapts to AOD automatically.
+            // ── Layer 2: Single large icon for active prayer, above leftmost node ──
             GeometryReader { geo in
                 let (p0, p1, control) = arcGeometry(in: geo.size)
+                let leftPt   = bezierPoint(t: tVals[0], p0: p0, control: control, p1: p1)
                 let circleR:  CGFloat = 4.5
-                let iconSize: CGFloat = 11
-                let gap:      CGFloat = 1   // space between circle top and icon bottom
+                let iconSize: CGFloat = 22
+                let gap:      CGFloat = 3
+                let iconY    = leftPt.y - circleR - gap - iconSize / 2
+                let symbol   = kPrayerSymbols[fivePrayers[activeNodeIndex].name] ?? "circle.fill"
 
-                ForEach(Array(fivePrayers.prefix(5).enumerated()), id: \.element.id) { i, prayer in
-                    let pt       = bezierPoint(t: tVals[i], p0: p0, control: control, p1: p1)
-                    let isActive = i == activeNodeIndex
-                    let isPast   = i < activeNodeIndex
-                    let symbol   = kPrayerSymbols[prayer.name] ?? "circle.fill"
-                    // Place icon center above the top edge of the circle.
-                    let iconY    = pt.y - circleR - gap - iconSize / 2
-
-                    Image(symbol)
-                        .renderingMode(.template)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: iconSize, height: iconSize)
-                        .foregroundStyle(.primary)
-                        .opacity(isActive ? 1.0 : (isPast ? 0.25 : 0.50))
-                        .position(x: pt.x, y: iconY)
-                }
+                Image(symbol)
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: iconSize, height: iconSize)
+                    .foregroundStyle(.primary)
+                    .position(x: leftPt.x, y: iconY)
             }
         }
     }
