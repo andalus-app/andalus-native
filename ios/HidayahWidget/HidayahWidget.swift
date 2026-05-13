@@ -1359,18 +1359,29 @@ struct PrayerArcLockScreenView: View {
 
     private let tVals: [CGFloat] = [0.0, 0.25, 0.5, 0.75, 1.0]
 
+    // Arc geometry constants — shared between Canvas and GeometryReader overlay
+    // so circles and icons always align perfectly.
+    private func arcGeometry(in size: CGSize) -> (p0: CGPoint, p1: CGPoint, control: CGPoint) {
+        // yBase pushed low (0.92) and control raised moderately (0.15) to leave
+        // enough vertical room for icons above even the topmost arc node (Asr).
+        let yBase    = size.height * 0.92
+        let yControl = size.height * 0.15
+        let xPad     = size.width  * 0.03
+        return (
+            p0:      CGPoint(x: xPad,              y: yBase),
+            p1:      CGPoint(x: size.width - xPad, y: yBase),
+            control: CGPoint(x: size.width * 0.5,  y: yControl)
+        )
+    }
+
     private var arcCanvas: some View {
         ZStack {
-            // Arc line + filled circle behind active icon.
+            // ── Layer 1: arc line + uniform circles (Canvas) ──────────────────
             Canvas { ctx, size in
-                let active   = activeNodeIndex
-                let yBase    = size.height * 0.86
-                let yControl = size.height * 0.04
-                let xPad     = size.width  * 0.03
-                let p0       = CGPoint(x: xPad,              y: yBase)
-                let p1       = CGPoint(x: size.width - xPad, y: yBase)
-                let control  = CGPoint(x: size.width * 0.5,  y: yControl)
+                let active = activeNodeIndex
+                let (p0, p1, control) = arcGeometry(in: size)
 
+                // Arc line
                 var arcPath = Path()
                 arcPath.move(to: p0)
                 arcPath.addQuadCurve(to: p1, control: control)
@@ -1379,42 +1390,47 @@ struct PrayerArcLockScreenView: View {
                 arcCtx.stroke(arcPath, with: .foreground,
                               style: StrokeStyle(lineWidth: 1.2, lineCap: .round))
 
-                // Filled disc behind the active prayer icon.
-                if active < tVals.count {
-                    let pt = bezierPoint(t: tVals[active], p0: p0, control: control, p1: p1)
-                    let r: CGFloat = 8
-                    ctx.fill(Path(ellipseIn: CGRect(x: pt.x - r, y: pt.y - r,
-                                                    width: r * 2, height: r * 2)),
-                             with: .foreground)
+                // Uniform circles — same radius for all, active=filled others=stroked.
+                let r: CGFloat = 4.5
+                for (i, t) in tVals.enumerated() {
+                    let pt   = bezierPoint(t: t, p0: p0, control: control, p1: p1)
+                    let rect = CGRect(x: pt.x - r, y: pt.y - r, width: r * 2, height: r * 2)
+                    if i == active {
+                        ctx.fill(Path(ellipseIn: rect), with: .foreground)
+                    } else {
+                        var c = ctx
+                        c.opacity = i < active ? 0.25 : 0.45
+                        c.stroke(Path(ellipseIn: rect), with: .foreground,
+                                 style: StrokeStyle(lineWidth: 1.0))
+                    }
                 }
             }
 
-            // SF Symbol icons positioned along the bezier curve.
-            // GeometryReader gives real pixel size so icon positions match the arc exactly.
-            // .primary foreground adapts automatically to both lit lock screen and AOD.
+            // ── Layer 2: prayer icons ABOVE each circle (GeometryReader) ──────
+            // Icons are offset upward from the bezier node so they sit clearly
+            // above the arc line. .primary tinting adapts to AOD automatically.
             GeometryReader { geo in
-                let size     = geo.size
-                let yBase    = size.height * 0.86
-                let yControl = size.height * 0.04
-                let xPad     = size.width  * 0.03
-                let p0       = CGPoint(x: xPad,              y: yBase)
-                let p1       = CGPoint(x: size.width - xPad, y: yBase)
-                let control  = CGPoint(x: size.width * 0.5,  y: yControl)
+                let (p0, p1, control) = arcGeometry(in: geo.size)
+                let circleR:  CGFloat = 4.5
+                let iconSize: CGFloat = 11
+                let gap:      CGFloat = 1   // space between circle top and icon bottom
 
                 ForEach(Array(fivePrayers.prefix(5).enumerated()), id: \.element.id) { i, prayer in
                     let pt       = bezierPoint(t: tVals[i], p0: p0, control: control, p1: p1)
                     let isActive = i == activeNodeIndex
                     let isPast   = i < activeNodeIndex
                     let symbol   = kPrayerSymbols[prayer.name] ?? "circle.fill"
+                    // Place icon center above the top edge of the circle.
+                    let iconY    = pt.y - circleR - gap - iconSize / 2
 
                     Image(symbol)
                         .renderingMode(.template)
                         .resizable()
                         .scaledToFit()
-                        .frame(width: isActive ? 13 : 10, height: isActive ? 13 : 10)
+                        .frame(width: iconSize, height: iconSize)
                         .foregroundStyle(.primary)
-                        .opacity(isActive ? 1.0 : (isPast ? 0.22 : 0.50))
-                        .position(pt)
+                        .opacity(isActive ? 1.0 : (isPast ? 0.25 : 0.50))
+                        .position(x: pt.x, y: iconY)
                 }
             }
         }
