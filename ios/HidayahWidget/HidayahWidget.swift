@@ -637,6 +637,31 @@ struct MediumWidgetView: View {
         fivePrayers.first { $0.time > entry.date }
     }
 
+    private var shuruqTime: Date? {
+        entry.allPrayers.first { $0.name == "Shuruq" || $0.name == "Soluppgång" }?.time
+    }
+
+    @ViewBuilder
+    private var shuruqSection: some View {
+        HStack(alignment: .top, spacing: 4) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Soluppgång")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.70))
+                if let t = shuruqTime {
+                    Text(timeFmt.string(from: t))
+                        .font(.system(size: 20, weight: .bold).monospacedDigit())
+                        .foregroundColor(kGold)
+                        .lineLimit(1)
+                }
+            }
+            Image("shuruq")
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 58, height: 58)
+        }
+    }
+
     @ViewBuilder
     private var heroSection: some View {
         switch heroState {
@@ -682,8 +707,14 @@ struct MediumWidgetView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
 
-            // ── 1. HERO ──────────────────────────────────────────────────────
-            heroSection
+            // ── 1. HERO + SOLUPPGÅNG ─────────────────────────────────────────
+            HStack(alignment: .top, spacing: 0) {
+                VStack(alignment: .leading, spacing: 0) {
+                    heroSection
+                }
+                Spacer(minLength: 8)
+                shuruqSection
+            }
 
             Spacer(minLength: 8)
 
@@ -749,24 +780,35 @@ private func premiumPrayerIconName(_ name: String) -> String {
 struct PremiumMediumWidgetView: View {
     let entry: PrayerEntry
 
-    // Active prayer — last of the five canonical prayers whose time has passed.
-    // Shuruq/Soluppgång is deliberately excluded.
-    private var activePrayer: Prayer? {
-        let five = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"]
-        return entry.allPrayers.last { five.contains($0.name) && $0.time <= entry.date }
-    }
+    private enum NuKind { case nu, nasta }
+    private struct PremiumState { let kind: NuKind; let prayer: Prayer }
 
-    // Hero shown on the left side. After midnight and before Fajr, activePrayer is nil
-    // (today's prayers haven't started yet). In that window, fall back to yesterday's
-    // Isha so the widget doesn't show "--:--" during the night.
-    private var heroActive: (name: String, time: Date)? {
-        if let p = activePrayer {
-            return (p.name == "Soluppgång" ? "Shuruq" : p.name, p.time)
-        }
-        if let ishaTime = entry.previousIshaTime {
-            return ("Isha", ishaTime)
-        }
-        return nil
+    // Determines which prayer to focus and whether to label it "Nu" or "Nästa":
+    //   00:00→Fajr: Nästa Fajr
+    //   Fajr→Shuruq: Nu Fajr
+    //   Shuruq→Dhuhr: Nästa Dhuhr
+    //   Dhuhr→Asr: Nu Dhuhr
+    //   Asr→Maghrib: Nu Asr
+    //   Maghrib→Isha: Nu Maghrib
+    //   Isha→00:00: Nu Isha
+    private var premiumState: PremiumState? {
+        let now = entry.date
+        let p   = entry.allPrayers
+        guard let fajr    = p.first(where: { $0.name == "Fajr" }),
+              let shuruq  = p.first(where: { $0.name == "Shuruq" || $0.name == "Soluppgång" }),
+              let dhuhr   = p.first(where: { $0.name == "Dhuhr" }),
+              let asr     = p.first(where: { $0.name == "Asr" }),
+              let maghrib = p.first(where: { $0.name == "Maghrib" }),
+              let isha    = p.first(where: { $0.name == "Isha" })
+        else { return nil }
+
+        if      now < fajr.time    { return PremiumState(kind: .nasta, prayer: fajr) }
+        else if now < shuruq.time  { return PremiumState(kind: .nu,    prayer: fajr) }
+        else if now < dhuhr.time   { return PremiumState(kind: .nasta, prayer: dhuhr) }
+        else if now < asr.time     { return PremiumState(kind: .nu,    prayer: dhuhr) }
+        else if now < maghrib.time { return PremiumState(kind: .nu,    prayer: asr) }
+        else if now < isha.time    { return PremiumState(kind: .nu,    prayer: maghrib) }
+        else                       { return PremiumState(kind: .nu,    prayer: isha) }
     }
 
     var body: some View {
@@ -776,7 +818,7 @@ struct PremiumMediumWidgetView: View {
             rightSection
                 .frame(maxWidth: .infinity)
         }
-        .padding(EdgeInsets(top: 13, leading: 8, bottom: 11, trailing: 6))
+        .padding(EdgeInsets(top: 10, leading: 8, bottom: 16, trailing: 6))
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
@@ -786,29 +828,29 @@ struct PremiumMediumWidgetView: View {
     private var leftSection: some View {
         VStack(alignment: .leading, spacing: 0) {
 
-            // "Nu" pill + active prayer name + icon
+            // "Nu"/"Nästa" pill + focused prayer name + icon
             HStack(spacing: 5) {
-                Text("Nu")
+                Text(premiumState?.kind == .nasta ? "Nästa" : "Nu")
                     .font(.system(size: 11, weight: .bold))
                     .foregroundColor(.white.opacity(0.92))
                     .padding(.horizontal, 7)
                     .padding(.vertical, 3)
                     .background(Capsule().fill(Color.white.opacity(0.20)))
 
-                if let hero = heroActive {
-                    Text(hero.name)
+                if let state = premiumState {
+                    Text(state.prayer.name)
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(.white)
                         .lineLimit(1)
-                    Image(premiumPrayerIconName(hero.name))
+                    Image(premiumPrayerIconName(state.prayer.name))
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .frame(width: 32, height: 32)
                 }
             }
 
-            // Large current prayer time
-            Text(heroActive.map { timeFmt.string(from: $0.time) } ?? "--:--")
+            // Large focused prayer time
+            Text(premiumState.map { timeFmt.string(from: $0.prayer.time) } ?? "--:--")
                 .font(.system(size: 33, weight: .bold).monospacedDigit())
                 .foregroundColor(.white)
                 .lineLimit(1)
@@ -847,7 +889,7 @@ struct PremiumMediumWidgetView: View {
     private var rightSection: some View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(entry.allPrayers, id: \.name) { prayer in
-                let isActive = prayer.name == activePrayer?.name
+                let isActive = prayer.name == premiumState?.prayer.name
                 let isPast   = !isActive && prayer.time < entry.date
 
                 HStack(spacing: 4) {
@@ -864,7 +906,7 @@ struct PremiumMediumWidgetView: View {
                     Image(premiumPrayerIconName(prayer.name))
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .frame(width: 17, height: 17)
+                        .frame(width: 20, height: 20)
                         .opacity(isActive ? 1.0 : isPast ? 0.30 : 0.90)
 
                     Spacer(minLength: 2)
@@ -879,7 +921,7 @@ struct PremiumMediumWidgetView: View {
                         .lineLimit(1)
                 }
                 .padding(.horizontal, 7)
-                .padding(.vertical, 3.5)
+                .padding(.vertical, 2.0)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(
                     Capsule().fill(isActive ? Color.white.opacity(0.13) : Color.clear)
