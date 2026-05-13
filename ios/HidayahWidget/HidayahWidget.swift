@@ -643,7 +643,7 @@ struct MediumWidgetView: View {
 
     @ViewBuilder
     private var shuruqSection: some View {
-        HStack(alignment: .top, spacing: 4) {
+        HStack(alignment: .center, spacing: 4) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Soluppgång")
                     .font(.system(size: 10, weight: .semibold))
@@ -658,7 +658,7 @@ struct MediumWidgetView: View {
             Image("shuruq")
                 .resizable()
                 .aspectRatio(contentMode: .fit)
-                .frame(width: 58, height: 58)
+                .frame(width: 87, height: 87)
         }
     }
 
@@ -812,7 +812,7 @@ struct PremiumMediumWidgetView: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
+        HStack(alignment: .bottom, spacing: 8) {
             leftSection
                 .frame(width: 116)
             rightSection
@@ -864,8 +864,6 @@ struct PremiumMediumWidgetView: View {
                 .lineLimit(1)
                 .padding(.top, 3)
 
-            Spacer(minLength: 4)
-
             // Gregorian (iOS local) + Hijri (from Aladhan) date footer
             VStack(alignment: .leading, spacing: 1) {
                 Text(mediumDateFmt.string(from: entry.date))
@@ -906,7 +904,7 @@ struct PremiumMediumWidgetView: View {
                     Image(premiumPrayerIconName(prayer.name))
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .frame(width: 20, height: 20)
+                        .frame(width: 30, height: 30)
                         .opacity(isActive ? 1.0 : isPast ? 0.30 : 0.90)
 
                     Spacer(minLength: 2)
@@ -921,7 +919,7 @@ struct PremiumMediumWidgetView: View {
                         .lineLimit(1)
                 }
                 .padding(.horizontal, 7)
-                .padding(.vertical, 2.0)
+                .padding(.vertical, 1.0)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(
                     Capsule().fill(isActive ? Color.white.opacity(0.13) : Color.clear)
