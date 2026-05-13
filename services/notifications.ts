@@ -692,7 +692,7 @@ export async function cancelZakatNotifications(): Promise<void> {
 const ALLAH_NAMES_PREFIX        = 'andalus-allah-names-';
 const ALLAH_NAMES_ENABLED_KEY   = 'allahNamesNotificationEnabled';
 // Bump this when fire time or schedule logic changes — forces a re-schedule for all users.
-const ALLAH_NAMES_SCHEDULE_VERSION     = '3';
+const ALLAH_NAMES_SCHEDULE_VERSION     = '4';
 const ALLAH_NAMES_SCHEDULE_VERSION_KEY = 'allahNamesScheduleVersion';
 
 // Fixed epoch — do not change. Makes the rotation deterministic across devices.
@@ -702,10 +702,13 @@ const ALLAH_NAMES_EPOCH_MS = new Date('2025-01-01T00:00:00Z').getTime();
 const ALLAH_NAMES_DATA: { nr: number; arabic: string; transliteration: string; forklaring: string }[] =
   require('../app/asmaul_husna.json');
 
-/** Returns the 0-based index into ALLAH_NAMES_DATA for a given day offset from today. */
-function allahNamesIndex(dayOffset = 0): number {
-  const daysSinceEpoch =
-    Math.floor((Date.now() - ALLAH_NAMES_EPOCH_MS) / 86_400_000) + dayOffset;
+/** Returns the 0-based index into ALLAH_NAMES_DATA for a given local Date.
+ *  Uses noon of the given local date to avoid UTC/local-midnight mismatches:
+ *  in UTC+2 (Sweden), between 00:00–02:00 local the UTC day is still the
+ *  previous day, which would assign the wrong name to the new local day. */
+function allahNamesIndexForDate(localDate: Date): number {
+  const noon = new Date(localDate.getFullYear(), localDate.getMonth(), localDate.getDate(), 12, 0, 0, 0);
+  const daysSinceEpoch = Math.floor((noon.getTime() - ALLAH_NAMES_EPOCH_MS) / 86_400_000);
   return ((daysSinceEpoch % ALLAH_NAMES_DATA.length) + ALLAH_NAMES_DATA.length) %
     ALLAH_NAMES_DATA.length;
 }
@@ -730,7 +733,7 @@ export async function scheduleAllahNamesNotifications(): Promise<void> {
       fire.setHours(ALLAH_NAMES_HOUR, 0, 0, 0);
       if (fire <= now) continue; // already past fire time today — skip
 
-      const idx  = allahNamesIndex(dayOffset);
+      const idx  = allahNamesIndexForDate(fire);
       const name = ALLAH_NAMES_DATA[idx];
       const dateKey = fire.toISOString().slice(0, 10); // YYYY-MM-DD
 

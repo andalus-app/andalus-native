@@ -1004,26 +1004,16 @@ struct LockScreenFocusView: View {
         computeHeroState(allPrayers: entry.allPrayers, now: entry.date)
     }
 
-    /// Shows a live `.timer` countdown for ≥ 60 s remaining.
-    /// For < 60 s the lock screen renders Text(.timer) as "<1 minut" in Swedish,
-    /// so we display an explicit "0:ss" string from the per-second entry instead.
+    /// Live countdown timer — updates every second on AOD without WidgetKit entries.
+    /// Text(.timer) renders correctly on both regular lock screen and Always On Display.
     @ViewBuilder
     private func lockCountdown(to target: Date) -> some View {
-        let secs = max(0, Int(target.timeIntervalSince(entry.date).rounded()))
-        if secs < 60 {
-            Text(String(format: "0:%02d", secs))
-                .font(.system(size: 22, weight: .bold).monospacedDigit())
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        } else {
-            Text(target, style: .timer)
-                .font(.system(size: 22, weight: .bold).monospacedDigit())
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
+        Text(target, style: .timer)
+            .font(.system(size: 22, weight: .bold).monospacedDigit())
+            .foregroundStyle(.primary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder
@@ -1311,6 +1301,14 @@ struct LockArcProvider: TimelineProvider {
     }
 }
 
+private let kPrayerSymbols: [String: String] = [
+    "Fajr":    "sunrise.fill",
+    "Dhuhr":   "sun.max.fill",
+    "Asr":     "cloud.sun.fill",
+    "Maghrib": "sunset.fill",
+    "Isha":    "moon.stars.fill",
+]
+
 struct PrayerArcLockScreenView: View {
     let entry: PrayerEntry
 
@@ -1359,40 +1357,64 @@ struct PrayerArcLockScreenView: View {
 
     // MARK: Arc canvas
 
+    private let tVals: [CGFloat] = [0.0, 0.25, 0.5, 0.75, 1.0]
+
     private var arcCanvas: some View {
-        Canvas { ctx, size in
-            let active = activeNodeIndex
-            let yBase    = size.height * 0.86
-            let yControl = size.height * 0.04
-            let xPad     = size.width  * 0.03
-            let p0      = CGPoint(x: xPad,              y: yBase)
-            let p1      = CGPoint(x: size.width - xPad, y: yBase)
-            let control = CGPoint(x: size.width * 0.5,  y: yControl)
+        ZStack {
+            // Arc line + filled circle behind active icon.
+            Canvas { ctx, size in
+                let active   = activeNodeIndex
+                let yBase    = size.height * 0.86
+                let yControl = size.height * 0.04
+                let xPad     = size.width  * 0.03
+                let p0       = CGPoint(x: xPad,              y: yBase)
+                let p1       = CGPoint(x: size.width - xPad, y: yBase)
+                let control  = CGPoint(x: size.width * 0.5,  y: yControl)
 
-            // Arc — thin stroke at reduced opacity
-            var arcPath = Path()
-            arcPath.move(to: p0)
-            arcPath.addQuadCurve(to: p1, control: control)
-            var arcCtx = ctx
-            arcCtx.opacity = 0.35
-            arcCtx.stroke(arcPath, with: .foreground,
-                          style: StrokeStyle(lineWidth: 1.2, lineCap: .round))
+                var arcPath = Path()
+                arcPath.move(to: p0)
+                arcPath.addQuadCurve(to: p1, control: control)
+                var arcCtx = ctx
+                arcCtx.opacity = 0.35
+                arcCtx.stroke(arcPath, with: .foreground,
+                              style: StrokeStyle(lineWidth: 1.2, lineCap: .round))
 
-            // Five prayer nodes at evenly-spaced t values along the bezier
-            let tVals: [CGFloat] = [0.0, 0.25, 0.5, 0.75, 1.0]
-            for (i, t) in tVals.enumerated() {
-                let pt       = bezierPoint(t: t, p0: p0, control: control, p1: p1)
-                let isActive = i == active
-                let isPast   = i < active
-                let r: CGFloat = isActive ? 4.2 : 3.0
-                let rect = CGRect(x: pt.x - r, y: pt.y - r, width: r * 2, height: r * 2)
-                if isActive {
-                    ctx.fill(Path(ellipseIn: rect), with: .foreground)
-                } else {
-                    var nodeCtx = ctx
-                    nodeCtx.opacity = isPast ? 0.18 : 0.45
-                    nodeCtx.stroke(Path(ellipseIn: rect), with: .foreground,
-                                   style: StrokeStyle(lineWidth: 1.0))
+                // Filled disc behind the active prayer icon.
+                if active < tVals.count {
+                    let pt = bezierPoint(t: tVals[active], p0: p0, control: control, p1: p1)
+                    let r: CGFloat = 8
+                    ctx.fill(Path(ellipseIn: CGRect(x: pt.x - r, y: pt.y - r,
+                                                    width: r * 2, height: r * 2)),
+                             with: .foreground)
+                }
+            }
+
+            // SF Symbol icons positioned along the bezier curve.
+            // GeometryReader gives real pixel size so icon positions match the arc exactly.
+            // .primary foreground adapts automatically to both lit lock screen and AOD.
+            GeometryReader { geo in
+                let size     = geo.size
+                let yBase    = size.height * 0.86
+                let yControl = size.height * 0.04
+                let xPad     = size.width  * 0.03
+                let p0       = CGPoint(x: xPad,              y: yBase)
+                let p1       = CGPoint(x: size.width - xPad, y: yBase)
+                let control  = CGPoint(x: size.width * 0.5,  y: yControl)
+
+                ForEach(Array(fivePrayers.prefix(5).enumerated()), id: \.element.id) { i, prayer in
+                    let pt       = bezierPoint(t: tVals[i], p0: p0, control: control, p1: p1)
+                    let isActive = i == activeNodeIndex
+                    let isPast   = i < activeNodeIndex
+                    let symbol   = kPrayerSymbols[prayer.name] ?? "circle.fill"
+
+                    Image(symbol)
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: isActive ? 13 : 10, height: isActive ? 13 : 10)
+                        .foregroundStyle(.primary)
+                        .opacity(isActive ? 1.0 : (isPast ? 0.22 : 0.50))
+                        .position(pt)
                 }
             }
         }
@@ -1411,12 +1433,19 @@ struct PrayerArcLockScreenView: View {
                 .minimumScaleFactor(0.8)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            // Compact countdown (center)
-            Text(countdownText)
-                .font(.system(size: 12, weight: .semibold).monospacedDigit())
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
+            // Compact countdown (center) — use .timer for <60 s so AOD updates live.
+            Group {
+                if let next = nextFive,
+                   next.time.timeIntervalSince(entry.date) < 60 {
+                    Text(next.time, style: .timer)
+                } else {
+                    Text(countdownText)
+                }
+            }
+            .font(.system(size: 12, weight: .semibold).monospacedDigit())
+            .foregroundStyle(.primary)
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
 
             // Next prayer name (right)
             Text(nextFive?.name ?? (fivePrayers.last?.name ?? ""))
