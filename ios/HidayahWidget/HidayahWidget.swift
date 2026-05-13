@@ -1456,7 +1456,7 @@ private func buildLockArcEntries(prayers: [Prayer],
         let (cur, nxt) = currentAndNext(prayers: prayers, at: t)
         return PrayerEntry(date: t, current: cur, next: nxt,
                            allPrayers: prayers, city: city, lastUpdatedAt: lastUpdatedAt,
-                           hijriDateStr: nil)
+                           hijriDateStr: nil, previousIshaTime: nil)
     }
 }
 
@@ -1476,7 +1476,8 @@ struct LockArcProvider: TimelineProvider {
                 NSLog("[Widget] LockArc getSnapshot: city=%@ ts=%.0f", stored.city, stored.timestamp ?? 0)
                 completion(PrayerEntry(date: now, current: cur, next: nxt,
                                        allPrayers: prayers, city: stored.city,
-                                       lastUpdatedAt: lastUpdatedAt, hijriDateStr: nil))
+                                       lastUpdatedAt: lastUpdatedAt, hijriDateStr: nil,
+                                       previousIshaTime: nil))
                 return
             }
         }
