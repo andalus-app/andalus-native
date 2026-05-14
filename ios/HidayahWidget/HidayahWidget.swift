@@ -813,13 +813,14 @@ struct PremiumMediumWidgetView: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
+        HStack(alignment: .top, spacing: 4) {
             leftSection
-                .frame(width: 116)
+                .frame(width: 140)
+                .frame(maxHeight: .infinity, alignment: .topLeading)
             rightSection
                 .frame(maxWidth: .infinity)
         }
-        .padding(EdgeInsets(top: 10, leading: 8, bottom: 16, trailing: 6))
+        .padding(EdgeInsets(top: 10, leading: 6, bottom: 16, trailing: 6))
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
@@ -834,6 +835,8 @@ struct PremiumMediumWidgetView: View {
                 Text(premiumState?.kind == .nasta ? "Nästa" : "Nu")
                     .font(.system(size: 11, weight: .bold))
                     .foregroundColor(.white.opacity(0.92))
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
                     .padding(.horizontal, 7)
                     .padding(.vertical, 3)
                     .background(Capsule().fill(Color.white.opacity(0.20)))
@@ -864,6 +867,8 @@ struct PremiumMediumWidgetView: View {
                 .foregroundColor(.white.opacity(0.52))
                 .lineLimit(1)
                 .padding(.top, 3)
+
+            Spacer(minLength: 4)
 
             // Gregorian (iOS local) + Hijri (from Aladhan) date footer
             VStack(alignment: .leading, spacing: 1) {
