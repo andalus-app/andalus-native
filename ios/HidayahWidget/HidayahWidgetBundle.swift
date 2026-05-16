@@ -23,5 +23,11 @@ struct HidayahWidgetBundle: WidgetBundle {
         HidayahAllahNameWidget()       // small + medium – daily Allah name
         HidayahDailyVerseWidget()      // small + medium – daily Quran verse
         HidayahDailyHadithWidget()     // medium – daily Hadith
+        // Apple Watch complications & Smart Stack
+#if !os(macOS)
+        HidayahWatchCircularWidget()   // accessoryCircular – Watch/lock-screen complication
+#endif
+        HidayahWatchCompactWidget()    // small – compact next-prayer card
+        HidayahWatchSmartStackWidget() // small – full prayer overview
     }
 }

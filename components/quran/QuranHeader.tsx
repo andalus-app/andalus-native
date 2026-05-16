@@ -1,11 +1,11 @@
 /**
  * QuranHeader.tsx
  *
- * Ayah-style header: hamburger | search | [centered reading mode pill] | settings | close
+ * Ayah-style header: hamburger | search | bookmark | [centered reading mode pill] | settings | close
  * Absolutely positioned overlay. BlurView background.
  */
 
-import React, { memo, useRef, useEffect, useCallback } from 'react';
+import React, { memo, useRef, useEffect, useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -19,12 +19,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import SvgIcon from '../SvgIcon';
 import { useTheme } from '../../context/ThemeContext';
 import { useQuranContext } from '../../context/QuranContext';
+import { SURAH_INDEX } from '../../data/surahIndex';
 import type { ReadingMode } from '../../hooks/quran/useQuranSettings';
 
 // ── Reading mode pill ─────────────────────────────────────────────────────────
 
-const PILL_W = 150;
-const PILL_H = 32;
+const PILL_W = 118;
+const PILL_H = 26;
 
 type PillProps = {
   mode:        ReadingMode;
@@ -33,32 +34,18 @@ type PillProps = {
   isDark:      boolean;
 };
 
-/**
- * ReadingModePill
- *
- * Single pill showing the current mode. On press the current label slides DOWN
- * off-screen and the new label slides in FROM THE TOP — both move simultaneously
- * on the native thread (useNativeDriver: true).
- *
- * Animation: spring with fast start / smooth landing / zero bounce.
- */
 const ReadingModePill = memo(function ReadingModePill({
   mode, onSelect, accentColor, isDark,
 }: PillProps) {
-  // progress: 0 = page mode, 1 = verse mode.
-  // Initialised to current mode so no animation fires on first mount.
   const progress = useRef(new Animated.Value(mode === 'page' ? 0 : 1)).current;
   const animRef  = useRef<Animated.CompositeAnimation | null>(null);
 
-  // Interpolations created ONCE — never re-created, native node stays connected.
   const { pageTranslateY, verseTranslateY } = useRef({
-    // "Läsning": sits at 0 in page mode, exits downward (+PILL_H) in verse mode
     pageTranslateY: progress.interpolate({
       inputRange:  [0, 1],
       outputRange: [0, PILL_H],
       extrapolate: 'clamp',
     }),
-    // "Vers för vers": hidden above (-PILL_H) in page mode, enters to 0 in verse mode
     verseTranslateY: progress.interpolate({
       inputRange:  [0, 1],
       outputRange: [-PILL_H, 0],
@@ -79,7 +66,6 @@ const ReadingModePill = memo(function ReadingModePill({
   }, [mode, progress]);
 
   const oppositeMode: ReadingMode = mode === 'page' ? 'verse' : 'page';
-  // Dark: subtle semi-transparent green tint; Light: solid accent so white text is readable
   const pillBg = isDark
     ? (mode === 'page' ? 'rgba(102,132,104,0.28)' : 'rgba(102,132,104,0.34)')
     : accentColor;
@@ -90,24 +76,56 @@ const ReadingModePill = memo(function ReadingModePill({
       onPress={() => onSelect(oppositeMode)}
       activeOpacity={0.7}
     >
-      {/* "Läsning" — visible in page mode, slides down when switching to verse */}
       <Animated.View
         style={[styles.pillLabel, { transform: [{ translateY: pageTranslateY }] }]}
       >
-        <SvgIcon name="book" size={13} color="#fff" />
+        <SvgIcon name="book" size={12} color="#fff" />
         <Text style={styles.pillText}>Läsning</Text>
       </Animated.View>
 
-      {/* "Vers för vers" — hidden above in page mode, slides in from top when switching */}
       <Animated.View
         style={[styles.pillLabel, { transform: [{ translateY: verseTranslateY }] }]}
       >
-        <SvgIcon name="list" size={13} color="#fff" />
+        <SvgIcon name="list" size={12} color="#fff" />
         <Text style={styles.pillText}>Vers för vers</Text>
       </Animated.View>
     </TouchableOpacity>
   );
 });
+
+// ── Save toast ────────────────────────────────────────────────────────────────
+
+type ToastData = { surahName: string; page: number };
+
+function useSaveToast() {
+  const [toastData, setToastData] = useState<ToastData | null>(null);
+  const anim = useRef(new Animated.Value(0)).current;
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const show = useCallback((data: ToastData) => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    setToastData(data);
+    anim.setValue(0);
+    Animated.spring(anim, {
+      toValue: 1,
+      useNativeDriver: true,
+      tension: 120,
+      friction: 10,
+    }).start();
+    timerRef.current = setTimeout(() => {
+      Animated.timing(anim, { toValue: 0, duration: 280, useNativeDriver: true }).start(() => {
+        setToastData(null);
+      });
+    }, 2200);
+  }, [anim]);
+
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
+
+  const opacity = anim.interpolate({ inputRange: [0, 1], outputRange: [0, 1] });
+  const translateY = anim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] });
+
+  return { toastData, show, opacity, translateY };
+}
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -121,83 +139,144 @@ function QuranHeader() {
     openSearch,
     settings,
     updateSettings,
+    currentPage,
+    currentSurahId,
+    savedPages,
+    savePage,
+    removeSavedPage,
+    isPageSaved,
   } = useQuranContext();
 
-  // Stable callback — only recreated if updateSettings reference changes (never in practice).
-  // This is critical: a new lambda on every render would break ReadingModePill's memo.
   const handleModeSelect = useCallback(
     (m: ReadingMode) => updateSettings({ readingMode: m }),
     [updateSettings],
   );
 
+  const { toastData, show: showToast, opacity: toastOpacity, translateY: toastTranslateY } = useSaveToast();
+
+  const handleBookmarkPress = useCallback(() => {
+    if (isPageSaved(currentPage)) {
+      const saved = savedPages.find((p) => p.pageNumber === currentPage);
+      if (saved) removeSavedPage(saved.id);
+    } else {
+      const surah = SURAH_INDEX.find((s) => s.id === currentSurahId);
+      savePage({
+        pageNumber: currentPage,
+        surahId: currentSurahId,
+        surahName: surah?.nameSimple ?? '',
+      });
+      showToast({ surahName: surah?.nameSimple ?? '', page: currentPage });
+    }
+  }, [isPageSaved, currentPage, savedPages, removeSavedPage, savePage, currentSurahId, showToast]);
+
   const paddingTop = insets.top + 6;
+  const isSaved = isPageSaved(currentPage);
 
   return (
-    <View style={[styles.wrapper, { height: paddingTop + 48 }]} pointerEvents="box-none">
-      <BlurView
-        intensity={isDark ? 60 : 80}
-        tint={isDark ? 'dark' : 'light'}
-        style={StyleSheet.absoluteFill}
-      />
-      <View
-        style={[
-          StyleSheet.absoluteFill,
-          { backgroundColor: isDark ? 'rgba(0,0,0,0.48)' : 'rgba(255,255,255,0.52)' },
-        ]}
-      />
+    <>
+      <View style={[styles.wrapper, { height: paddingTop + 48 }]} pointerEvents="box-none">
+        <BlurView
+          intensity={isDark ? 60 : 80}
+          tint={isDark ? 'dark' : 'light'}
+          style={StyleSheet.absoluteFill}
+        />
+        <View
+          style={[
+            StyleSheet.absoluteFill,
+            { backgroundColor: isDark ? 'rgba(0,0,0,0.48)' : 'rgba(255,255,255,0.52)' },
+          ]}
+        />
 
-      <View style={[styles.row, { paddingTop, paddingBottom: 6 }]}>
-        {/* Left group */}
-        <View style={styles.sideGroup}>
-          <TouchableOpacity
-            style={styles.iconBtn}
-            onPress={openContentsMenu}
-            activeOpacity={0.7}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <SvgIcon name="menu" size={22} color={T.text} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.iconBtn}
-            onPress={openSearch}
-            activeOpacity={0.7}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <SvgIcon name="search" size={20} color={T.text} />
-          </TouchableOpacity>
-        </View>
+        <View style={[styles.row, { paddingTop, paddingBottom: 6 }]}>
+          {/* Left group — 3 icons × 36px = 108px */}
+          <View style={styles.sideGroup}>
+            <TouchableOpacity
+              style={styles.iconBtn}
+              onPress={openContentsMenu}
+              activeOpacity={0.7}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <SvgIcon name="menu" size={22} color={T.text} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.iconBtn}
+              onPress={openSearch}
+              activeOpacity={0.7}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <SvgIcon name="search" size={20} color={T.text} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.iconBtn}
+              onPress={handleBookmarkPress}
+              activeOpacity={0.7}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <SvgIcon
+                name={isSaved ? 'bookmark-fill' : 'bookmark'}
+                size={20}
+                color={isSaved ? T.accent : T.text}
+              />
+            </TouchableOpacity>
+          </View>
 
-        {/* Center — pill */}
-        <View style={styles.centerGroup}>
-          <ReadingModePill
-            mode={settings.readingMode}
-            onSelect={handleModeSelect}
-            accentColor={T.accent}
-            isDark={isDark}
-          />
-        </View>
+          {/* Center pill — flex:1 between equal-width side groups = true screen center */}
+          <View style={styles.centerGroup}>
+            <ReadingModePill
+              mode={settings.readingMode}
+              onSelect={handleModeSelect}
+              accentColor={T.accent}
+              isDark={isDark}
+            />
+          </View>
 
-        {/* Right group */}
-        <View style={styles.sideGroup}>
-          <TouchableOpacity
-            style={styles.iconBtn}
-            onPress={toggleSettingsPanel}
-            activeOpacity={0.7}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <SvgIcon name="settings" size={20} color={T.text} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.iconBtn}
-            onPress={() => router.back()}
-            activeOpacity={0.7}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <SvgIcon name="close" size={20} color={T.text} />
-          </TouchableOpacity>
+          {/* Right group — invisible spacer first keeps settings/close flush right */}
+          <View style={styles.sideGroup}>
+            {/* Invisible spacer: 1 icon width to match the 3 icons on the left */}
+            <View style={styles.iconBtn} />
+            <TouchableOpacity
+              style={styles.iconBtn}
+              onPress={toggleSettingsPanel}
+              activeOpacity={0.7}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <SvgIcon name="settings" size={20} color={T.text} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.iconBtn}
+              onPress={() => router.back()}
+              activeOpacity={0.7}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <SvgIcon name="close" size={20} color={T.text} />
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
-    </View>
+
+      {/* Save toast — absolutely positioned on screen, outside the overflow:hidden wrapper */}
+      {toastData && (
+        <Animated.View
+          style={[
+            styles.toast,
+            {
+              top: paddingTop + 52,
+              opacity: toastOpacity,
+              transform: [{ translateY: toastTranslateY }],
+            },
+          ]}
+          pointerEvents="none"
+        >
+          <View style={styles.toastCheckCircle}>
+            <SvgIcon name="check" size={14} color="#fff" />
+          </View>
+          <View style={styles.toastTextGroup}>
+            <Text style={styles.toastTitle}>Sidan sparas i bokmärken</Text>
+            <Text style={styles.toastSub}>{toastData.surahName} · Sida {toastData.page}</Text>
+          </View>
+        </Animated.View>
+      )}
+    </>
   );
 }
 
@@ -226,7 +305,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   iconBtn: {
-    width: 38,
+    width: 36,
     height: 38,
     alignItems: 'center',
     justifyContent: 'center',
@@ -236,7 +315,7 @@ const styles = StyleSheet.create({
     width: PILL_W,
     height: PILL_H,
     borderRadius: PILL_H / 2,
-    overflow: 'hidden',      // clips labels that slide out of view
+    overflow: 'hidden',
   },
   pillLabel: {
     position: 'absolute',
@@ -247,13 +326,49 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 5,
+    gap: 4,
   },
   pillText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
     letterSpacing: 0.1,
     color: '#fff',
+  },
+  // ── Toast ───────────────────────────────────────────────────────────────────
+  toast: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    zIndex: 200,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: 'rgba(30,30,30,0.92)',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+  },
+  toastCheckCircle: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#4a8f5c',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  toastTextGroup: {
+    flex: 1,
+  },
+  toastTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  toastSub: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.65)',
+    marginTop: 2,
   },
 });
 

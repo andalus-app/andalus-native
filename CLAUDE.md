@@ -62,6 +62,49 @@ Core features:
 
 ---
 
+## Supabase Migration Rules
+
+New tables in the `public` schema are **not** automatically exposed via the Supabase Data API / PostgREST / supabase-js. Explicit `GRANT` statements are always required.
+
+For every new table:
+
+1. Create the table.
+2. Enable Row Level Security.
+3. Add the required RLS policies.
+4. Add explicit `GRANT` statements for the roles that need access.
+5. Do not grant `anon` access unless the app genuinely needs public unauthenticated access.
+6. Prefer least privilege.
+
+Example pattern:
+
+```sql
+alter table public.example_table enable row level security;
+
+grant select on public.example_table to anon;
+grant select, insert, update, delete on public.example_table to authenticated;
+grant select, insert, update, delete on public.example_table to service_role;
+```
+
+Important:
+
+* `GRANT` gives the role permission to access the table.
+* RLS policies decide which rows can actually be read/written.
+* Both `GRANT` and RLS are required — neither alone is sufficient.
+* For sensitive tables, do not grant access to `anon`.
+* For app-user data, grant to `authenticated` and control access with RLS.
+* For server-only operations, use `service_role`, not client-side access.
+
+Migration checklist — verify before finishing any migration:
+
+* Does the app access this table through `supabase.from(...)`?
+* Does the table have RLS enabled?
+* Are RLS policies present?
+* Are explicit `GRANT` statements present?
+* Is `anon` access avoided unless truly needed?
+* Has TypeScript/app code been checked for permission assumptions?
+
+---
+
 ## Performance Rules
 
 * Always use `useCallback` for handlers
@@ -178,6 +221,26 @@ Polling must NEVER stop.
 
 ```ts
 if (!mountedRef.current) return;
+```
+
+---
+
+### Numbered List Items (IMPORTANT)
+
+Never split a single list item into multiple `<Text>` or `<View>` components. Each item must be a single `<Text>` with `flex: 1` that wraps naturally. Newlines within an item use `\n` inside the string — React Native handles these correctly in a single `<Text>`.
+
+**Wrong** (causes extra blank space between lines):
+```tsx
+<View style={styles.numberedTextWrap}>
+  {text.split('\n').map((line, k) => (
+    <Text key={k}>{line}</Text>
+  ))}
+</View>
+```
+
+**Correct**:
+```tsx
+<Text style={[styles.numberedText, { flex: 1 }]}>{text}</Text>
 ```
 
 ---

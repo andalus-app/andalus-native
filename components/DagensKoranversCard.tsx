@@ -273,7 +273,7 @@ function DagensKoranversCard({ testMode = false }: { testMode?: boolean }) {
               <TouchableOpacity
                 onPress={e => { e.stopPropagation?.(); toggleExpanded(); }}
                 activeOpacity={0.7}
-                style={styles.expandZone}
+                style={[styles.expandZone, expanded && { marginTop: 6 }]}
               >
                 <Text style={[styles.visaMerLabel, { color: accentColor }]}>
                   {expanded ? 'Visa mindre' : 'Visa mer'}

@@ -15,6 +15,7 @@ import { DhikrCategoryIcon } from '../components/DhikrCategoryIcon';
 import DhikrWellbeingView from '../components/dhikr/DhikrWellbeingView';
 import HisnulMuslimInfoModal from '../components/dhikr/HisnulMuslimInfoModal';
 import HeartPlasterIcon from '../components/HeartPlasterIcon';
+import TasbihSvgIcon from '../components/TasbihSvgIcon';
 import {
   GRUPPER,
   ALL_DHIKR,
@@ -1134,6 +1135,10 @@ const TABS = [
     icon: (color: string) => <HeartPlasterIcon size={20} color={color} />,
   },
   {
+    id: 'tasbih', label: 'Tasbih',
+    icon: (color: string) => <TasbihSvgIcon size={20} color={color} />,
+  },
+  {
     id: 'search', label: 'Sök',
     icon: (color: string) => (
       <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round">
@@ -1357,6 +1362,7 @@ export default function DhikrScreen() {
                   onPress={() => {
                     Haptics.selectionAsync();
                     if (isWellbeing && showHint) dismissHint();
+                    if (t.id === 'tasbih') { router.push('/tasbih' as any); return; }
                     switchTab(t.id as any);
                   }}
                   style={{ position: 'relative', width: 42, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: active ? activePillBg : 'transparent' }}>

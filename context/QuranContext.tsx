@@ -11,6 +11,7 @@ import { surahForPage, SURAH_INDEX, type SurahInfo } from '../data/surahIndex';
 import { useQuranSettings, QuranSettings, ReadingMode } from '../hooks/quran/useQuranSettings';
 import { saveLastPage, getCachedLastPage, whenLastPageReady } from '../services/quranLastPage';
 import { useQuranBookmarks, Bookmark } from '../hooks/quran/useQuranBookmarks';
+import { useQuranSavedPages, SavedPage } from '../hooks/quran/useQuranSavedPages';
 
 // ── Playback context (lightweight — changes 4×/s during audio) ────────────────
 //
@@ -32,6 +33,7 @@ export function useActiveVerseKey(): string | null {
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export type { ReadingMode };
+export type { SavedPage };
 
 export type AudioCommands = {
   loadAndPlay: (surahId: number) => void;
@@ -94,6 +96,12 @@ type QuranContextValue = {
   isBookmarked: (pageNumber: number, verseKey?: string) => boolean;
   // Navigate to a bookmark: goes to the page
   goToBookmark: (pageNumber: number, verseKey?: string) => void;
+
+  // Saved pages (page-level saves from the header bookmark icon)
+  savedPages: SavedPage[];
+  savePage: (page: Omit<SavedPage, 'id' | 'createdAt'>) => void;
+  removeSavedPage: (id: string) => void;
+  isPageSaved: (pageNumber: number) => boolean;
 
   // Audio bridge — QuranAudioPlayer registers these on mount
   audioCommandsRef: React.MutableRefObject<AudioCommands | null>;
@@ -235,6 +243,8 @@ export function QuranProvider({ children }: Props) {
   readingModeRef.current = settings.readingMode;
   const { bookmarks, addBookmark, removeBookmark, updateNote, isBookmarked } =
     useQuranBookmarks();
+  const { savedPages, savePage, removeSavedPage, isPageSaved } =
+    useQuranSavedPages();
 
   // Audio bridge: QuranAudioPlayer writes here on mount; other components call through it
   const audioCommandsRef = useRef<AudioCommands | null>(null);
@@ -451,6 +461,10 @@ export function QuranProvider({ children }: Props) {
       updateNote,
       isBookmarked,
       goToBookmark,
+      savedPages,
+      savePage,
+      removeSavedPage,
+      isPageSaved,
       audioCommandsRef,
       audioCacheRefreshRef,
       setPlaybackVerse,
@@ -495,6 +509,10 @@ export function QuranProvider({ children }: Props) {
       updateNote,
       isBookmarked,
       goToBookmark,
+      savedPages,
+      savePage,
+      removeSavedPage,
+      isPageSaved,
       setPlaybackVerse,
       longPressedVerse,
       setLongPressedVerse,

@@ -25,6 +25,7 @@ import {
   type NativeScrollEvent,
   type ListRenderItemInfo,
   type FlatList as FlatListType,
+  type ScrollView as ScrollViewType,
 } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
@@ -444,6 +445,8 @@ function QuranContentsScreen() {
     currentPage,
     bookmarks,
     removeBookmark,
+    savedPages,
+    removeSavedPage,
   } = useQuranContext();
   const insets = useSafeAreaInsets();
   const { width: screenW } = useWindowDimensions();
@@ -494,7 +497,7 @@ function QuranContentsScreen() {
   const slideAnim = useRef(new Animated.Value(PANEL_IDLE_OFFSET)).current;
   const backdropAnim = useRef(new Animated.Value(0)).current;
   const surahListRef = useRef<FlatListType<SurahInfo>>(null);
-  const bookmarkListRef = useRef<FlatListType<Bookmark>>(null);
+  const bookmarkScrollRef = useRef<ScrollViewType>(null);
 
   // Keep a ref that's always current so animation callbacks can read screenW
   // without needing screenW in the effect deps (which would cause rotation flashes).
@@ -506,7 +509,7 @@ function QuranContentsScreen() {
   const handleTabPress = useCallback((t: Tab) => {
     if (t === tab) {
       if (t === 'suror') surahListRef.current?.scrollToOffset({ offset: 0, animated: true });
-      else if (t === 'bokmärken') bookmarkListRef.current?.scrollToOffset({ offset: 0, animated: true });
+      else if (t === 'bokmärken') bookmarkScrollRef.current?.scrollTo({ y: 0, animated: true });
     } else {
       setTab(t);
     }
@@ -695,51 +698,6 @@ function QuranContentsScreen() {
     [currentPage, T, goToSurah],
   );
 
-  const renderBookmark = useCallback(
-    ({ item }: ListRenderItemInfo<Bookmark>) => {
-      const surahInfo = item.verseKey
-        ? SURAH_INDEX.find((s) => s.id === item.surahId)
-        : null;
-      const verseNumber = item.verseKey ? item.verseKey.split(':')[1] : null;
-      const primaryLabel = surahInfo && verseNumber
-        ? `${surahInfo.nameSimple} ${verseNumber}`
-        : `Sida ${item.pageNumber}`;
-      const subLabel = surahInfo && verseNumber
-        ? `Sida ${item.pageNumber}`
-        : item.note ?? null;
-
-      return (
-        <TouchableOpacity
-          style={styles.listRow}
-          onPress={() => goToBookmark(item.pageNumber, item.verseKey)}
-          activeOpacity={0.7}
-        >
-          <View style={[styles.indexBadge, { backgroundColor: T.accentGlow }]}>
-            <SvgIcon name="bookmark-fill" size={16} color={T.accent} />
-          </View>
-          <View style={styles.rowText}>
-            <Text style={[styles.rowTitle, { color: T.text }]}>
-              {primaryLabel}
-            </Text>
-            {subLabel ? (
-              <Text style={[styles.rowMeta, { color: T.textMuted }]} numberOfLines={1}>
-                {subLabel}
-              </Text>
-            ) : null}
-          </View>
-          <TouchableOpacity
-            onPress={() => removeBookmark(item.id)}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            activeOpacity={0.7}
-          >
-            <SvgIcon name="trash" size={18} color={T.textMuted} />
-          </TouchableOpacity>
-        </TouchableOpacity>
-      );
-    },
-    [T, goToBookmark, removeBookmark],
-  );
-
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
@@ -855,7 +813,7 @@ function QuranContentsScreen() {
 
         {/* Bokmärken tab */}
         <View style={{ display: tab === 'bokmärken' ? 'flex' : 'none', flex: 1 }}>
-          {bookmarks.length === 0 ? (
+          {savedPages.length === 0 && bookmarks.length === 0 ? (
             <View style={[styles.emptyState, { paddingLeft: insets.left }]}>
               <SvgIcon name="bookmark" size={36} color={T.textMuted} />
               <Text style={[styles.emptyText, { color: T.textMuted }]}>
@@ -863,14 +821,101 @@ function QuranContentsScreen() {
               </Text>
             </View>
           ) : (
-            <FlatList
-              ref={bookmarkListRef}
-              data={bookmarks}
-              renderItem={renderBookmark}
-              keyExtractor={(item) => item.id}
+            <ScrollView
+              ref={bookmarkScrollRef}
               contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 100, paddingLeft: insets.left }]}
               showsVerticalScrollIndicator={false}
-            />
+            >
+              {/* Sparade sidor section */}
+              {savedPages.length > 0 && (
+                <>
+                  <Text style={[styles.sectionLabel, { color: T.textMuted }]}>SPARADE SIDOR</Text>
+                  {savedPages.map((item, idx) => (
+                    <View
+                      key={item.id}
+                      style={[
+                        styles.listRow,
+                        idx < savedPages.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: T.separator },
+                      ]}
+                    >
+                      <TouchableOpacity
+                        style={styles.savedPageRowContent}
+                        onPress={() => { goToPage(item.pageNumber); closeContentsMenu(); }}
+                        activeOpacity={0.7}
+                      >
+                        <View style={[styles.indexBadge, { backgroundColor: T.accentGlow }]}>
+                          <SvgIcon name="bookmark-fill" size={16} color={T.accent} />
+                        </View>
+                        <View style={styles.rowText}>
+                          <Text style={[styles.rowTitle, { color: T.text }]}>{item.surahName}</Text>
+                          <Text style={[styles.rowMeta, { color: T.textMuted }]}>Sida {item.pageNumber}</Text>
+                        </View>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => removeSavedPage(item.id)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        activeOpacity={0.7}
+                      >
+                        <SvgIcon name="trash" size={18} color={T.textMuted} />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </>
+              )}
+
+              {/* Existing verse/page bookmarks */}
+              {bookmarks.length > 0 && (
+                <>
+                  {savedPages.length > 0 && (
+                    <Text style={[styles.sectionLabel, { color: T.textMuted, marginTop: 8 }]}>BOKMÄRKEN</Text>
+                  )}
+                  {bookmarks.map((item, idx) => {
+                    const surahInfo = item.verseKey
+                      ? SURAH_INDEX.find((s) => s.id === item.surahId)
+                      : null;
+                    const verseNumber = item.verseKey ? item.verseKey.split(':')[1] : null;
+                    const primaryLabel = surahInfo && verseNumber
+                      ? `${surahInfo.nameSimple} ${verseNumber}`
+                      : `Sida ${item.pageNumber}`;
+                    const subLabel = surahInfo && verseNumber
+                      ? `Sida ${item.pageNumber}`
+                      : item.note ?? null;
+                    return (
+                      <View
+                        key={item.id}
+                        style={[
+                          styles.listRow,
+                          idx < bookmarks.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: T.separator },
+                        ]}
+                      >
+                        <TouchableOpacity
+                          style={styles.savedPageRowContent}
+                          onPress={() => goToBookmark(item.pageNumber, item.verseKey)}
+                          activeOpacity={0.7}
+                        >
+                          <View style={[styles.indexBadge, { backgroundColor: T.accentGlow }]}>
+                            <SvgIcon name="bookmark-fill" size={16} color={T.accent} />
+                          </View>
+                          <View style={styles.rowText}>
+                            <Text style={[styles.rowTitle, { color: T.text }]}>{primaryLabel}</Text>
+                            {subLabel ? (
+                              <Text style={[styles.rowMeta, { color: T.textMuted }]} numberOfLines={1}>{subLabel}</Text>
+                            ) : null}
+                          </View>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => removeBookmark(item.id)}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          activeOpacity={0.7}
+                        >
+                          <SvgIcon name="trash" size={18} color={T.textMuted} />
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  })}
+                </>
+              )}
+            </ScrollView>
           )}
         </View>
       </Animated.View>
@@ -995,6 +1040,19 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 14,
+  },
+  sectionLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    paddingTop: 16,
+    paddingBottom: 8,
+    paddingHorizontal: 16,
+  },
+  savedPageRowContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
 });
 

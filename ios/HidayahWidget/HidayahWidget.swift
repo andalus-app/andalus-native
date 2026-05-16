@@ -2318,6 +2318,252 @@ struct HidayahDailyHadithWidget: Widget {
     }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// MARK: - Apple Watch complications & Smart Stack widgets
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// MARK: - Helpers
+
+/// Swedish "om Xt Ym" countdown string — used by all three Watch/Stack widgets.
+private func watchCountdown(from now: Date, to target: Date) -> String {
+    let secs = max(0, Int(target.timeIntervalSince(now).rounded()))
+    if secs < 60 { return "om \(secs)s" }
+    let mins = secs / 60
+    if mins < 60 { return "om \(mins)m" }
+    let h = mins / 60; let m = mins % 60
+    return m > 0 ? "om \(h)t \(m)m" : "om \(h)t"
+}
+
+/// Next upcoming five-prayer from an entry; falls back to first prayer or entry.next.
+private func nextFivePrayer(in entry: PrayerEntry) -> Prayer {
+    let five = entry.allPrayers.filter { kFivePrayers.contains($0.name) }
+    return five.first { $0.time > entry.date } ?? five.first ?? entry.next
+}
+
+// MARK: - 1. Accessory Circular — smallest Watch complication
+
+struct WatchCircularView: View {
+    let entry: PrayerEntry
+
+    var body: some View {
+        let prayer = nextFivePrayer(in: entry)
+        ZStack {
+            Circle()
+                .strokeBorder(kGold.opacity(0.45), lineWidth: 1.5)
+                .padding(2)
+
+            VStack(spacing: 1) {
+                Text(prayer.name)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.82))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.68)
+                    .multilineTextAlignment(.center)
+                Text(timeFmt.string(from: prayer.time))
+                    .font(.system(size: 16, weight: .bold).monospacedDigit())
+                    .foregroundColor(kGold)
+                    .lineLimit(1)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// MARK: - 2. Small compact — next-prayer card for Apple Watch Smart Stack
+
+struct WatchCompactView: View {
+    let entry: PrayerEntry
+
+    var body: some View {
+        let prayer = nextFivePrayer(in: entry)
+        let cd     = watchCountdown(from: entry.date, to: prayer.time)
+
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Nästa bön")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(.white.opacity(0.45))
+
+            Spacer(minLength: 0)
+
+            Text(prayer.name)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundColor(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.80)
+                .padding(.top, 6)
+
+            Text(timeFmt.string(from: prayer.time))
+                .font(.system(size: 32, weight: .bold).monospacedDigit())
+                .foregroundColor(kGold)
+                .lineLimit(1)
+                .padding(.top, 1)
+
+            Spacer(minLength: 0)
+
+            Text(cd)
+                .font(.system(size: 12, weight: .regular).monospacedDigit())
+                .foregroundColor(.white.opacity(0.48))
+                .padding(.top, 4)
+        }
+        .padding(EdgeInsets(top: 14, leading: 14, bottom: 14, trailing: 14))
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+}
+
+// MARK: - 3. Smart Stack full overview — miniature home screen
+
+struct WatchSmartStackView: View {
+    let entry: PrayerEntry
+
+    private var fivePrayers: [Prayer] {
+        entry.allPrayers.filter { kFivePrayers.contains($0.name) }
+    }
+
+    private var nextPrayer: Prayer? {
+        fivePrayers.first { $0.time > entry.date }
+    }
+
+    var body: some View {
+        let hero = nextPrayer ?? fivePrayers.first ?? entry.next
+        let cd   = nextPrayer.map { watchCountdown(from: entry.date, to: $0.time) } ?? ""
+
+        VStack(alignment: .leading, spacing: 0) {
+
+            // ── Header ─────────────────────────────────────────────────────
+            HStack(alignment: .center) {
+                Text("Hidayah")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(kGold.opacity(0.72))
+                Spacer()
+                Text(mediumDateFmt.string(from: entry.date))
+                    .font(.system(size: 9, weight: .regular))
+                    .foregroundColor(.white.opacity(0.32))
+            }
+            .padding(.bottom, 5)
+
+            // ── Hero ───────────────────────────────────────────────────────
+            Text("Nästa bön")
+                .font(.system(size: 9, weight: .medium))
+                .foregroundColor(.white.opacity(0.42))
+
+            HStack(alignment: .firstTextBaseline) {
+                Text(hero.name)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(kGold)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.80)
+                Spacer()
+                Text(timeFmt.string(from: hero.time))
+                    .font(.system(size: 14, weight: .bold).monospacedDigit())
+                    .foregroundColor(kGold)
+            }
+            .padding(.top, 2)
+
+            Text(cd)
+                .font(.system(size: 9, weight: .regular).monospacedDigit())
+                .foregroundColor(.white.opacity(0.40))
+                .padding(.top, 1)
+
+            // ── Divider ────────────────────────────────────────────────────
+            Rectangle()
+                .fill(Color.white.opacity(0.09))
+                .frame(height: 0.5)
+                .padding(.vertical, 5)
+
+            // ── Prayer list ────────────────────────────────────────────────
+            VStack(spacing: 0) {
+                ForEach(Array(fivePrayers.enumerated()), id: \.element.id) { idx, prayer in
+                    let isNext = prayer.name == nextPrayer?.name
+                    let isPast = prayer.time < entry.date && !isNext
+
+                    HStack(spacing: 0) {
+                        Circle()
+                            .fill(isNext ? kGold : Color.clear)
+                            .frame(width: 4, height: 4)
+                            .padding(.trailing, 4)
+
+                        Text(prayer.name)
+                            .font(.system(size: 10, weight: isNext ? .semibold : .regular))
+                            .foregroundColor(
+                                isNext ? .white :
+                                isPast  ? .white.opacity(0.24) :
+                                          .white.opacity(0.48)
+                            )
+                            .lineLimit(1)
+
+                        Spacer()
+
+                        Text(timeFmt.string(from: prayer.time))
+                            .font(.system(size: 10, weight: isNext ? .semibold : .regular).monospacedDigit())
+                            .foregroundColor(
+                                isNext ? kGold :
+                                isPast  ? .white.opacity(0.18) :
+                                          .white.opacity(0.40)
+                            )
+                    }
+                    .frame(height: 14)
+                }
+            }
+        }
+        .padding(EdgeInsets(top: 12, leading: 12, bottom: 10, trailing: 12))
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+}
+
+// MARK: - Watch widget definitions
+
+/// Apple Watch + iOS lock screen — circular next-prayer complication.
+#if !os(macOS)
+struct HidayahWatchCircularWidget: Widget {
+    let kind = "HidayahWatchCircularWidget"
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: kind, provider: PrayerProvider()) { entry in
+            WatchCircularView(entry: entry)
+                .containerBackground(kBgTop, for: .widget)
+        }
+        .configurationDisplayName("Nästa bön – rund")
+        .description("Nästa bönetid som en rund komplikation.")
+        .supportedFamilies([.accessoryCircular])
+    }
+}
+#endif
+
+/// Small Smart Stack — compact next-prayer card.
+struct HidayahWatchCompactWidget: Widget {
+    let kind = "HidayahWatchCompactWidget"
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: kind, provider: PrayerProvider()) { entry in
+            WatchCompactView(entry: entry)
+                .containerBackground(
+                    LinearGradient(colors: [kBgTop, kBgBottom],
+                                   startPoint: .topLeading, endPoint: .bottomTrailing),
+                    for: .widget
+                )
+        }
+        .configurationDisplayName("Nästa bön – kompakt")
+        .description("Nästa bönetid med nedräkning.")
+        .supportedFamilies([.systemSmall])
+    }
+}
+
+/// Small Smart Stack — full prayer overview.
+struct HidayahWatchSmartStackWidget: Widget {
+    let kind = "HidayahWatchSmartStackWidget"
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: kind, provider: PrayerProvider()) { entry in
+            WatchSmartStackView(entry: entry)
+                .containerBackground(
+                    LinearGradient(colors: [kBgTop, kBgBottom],
+                                   startPoint: .topLeading, endPoint: .bottomTrailing),
+                    for: .widget
+                )
+        }
+        .configurationDisplayName("Bönetider – Smart Stack")
+        .description("Nästa bön med fullständig bönetidslista.")
+        .supportedFamilies([.systemSmall])
+    }
+}
+
 // MARK: - Embedded Hadith Fallback (shown before first app open)
 
 private struct FallbackHadith {
@@ -2364,3 +2610,8 @@ private let kFallbackHadiths: [FallbackHadith] = [
 #Preview(as: .systemSmall)           { HidayahDailyVerseWidget()    } timeline: { QuranVerseEntry.placeholder }
 #Preview(as: .systemMedium)          { HidayahDailyVerseWidget()    } timeline: { QuranVerseEntry.placeholder }
 #Preview(as: .systemMedium)          { HidayahDailyHadithWidget()   } timeline: { HadithEntry.placeholder }
+#if !os(macOS)
+#Preview(as: .accessoryCircular)     { HidayahWatchCircularWidget() } timeline: { PrayerEntry.placeholder() }
+#endif
+#Preview(as: .systemSmall)           { HidayahWatchCompactWidget()  } timeline: { PrayerEntry.placeholder() }
+#Preview(as: .systemSmall)           { HidayahWatchSmartStackWidget()} timeline: { PrayerEntry.placeholder() }

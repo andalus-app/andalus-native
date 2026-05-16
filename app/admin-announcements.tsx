@@ -153,15 +153,23 @@ export default function AdminAnnouncementsScreen() {
       ends_at:                  null,
       created_by_app_user_id:   appUserId || null,
     };
+    let saveError: string | null = null;
     if (htId) {
-      await updateAnnouncement(htId, input);
+      const { error } = await updateAnnouncement(htId, input);
+      saveError = error;
     } else {
-      const { data } = await createAnnouncement(input);
+      const { data, error } = await createAnnouncement(input);
+      saveError = error;
       if (data) setHtId(data.id);
     }
     setHtSaving(false);
+    if (saveError) {
+      Alert.alert('Fel', 'Kunde inte spara bannern: ' + saveError);
+      return;
+    }
     setHtExpanded(false);
-  }, [htId, htText, htUrl, htActive, appUserId]);
+    await load();
+  }, [htId, htText, htUrl, htActive, appUserId, load]);
 
   const clearHt = useCallback(async () => {
     if (htId) await updateAnnouncement(htId, { is_active: false, title: '' });
@@ -396,7 +404,7 @@ export default function AdminAnnouncementsScreen() {
             <View style={{ marginTop: 16, gap: 12 }}>
               <View style={{ backgroundColor: T.accent + '15', borderRadius: 10, padding: 12 }}>
                 <Text style={{ color: T.accent, fontSize: 12, lineHeight: 18 }}>
-                  Texten visas på hemskärmen och tonas om med hälsningen var 5:e sekund. Sparas lokalt på enheten.
+                  Texten visas på hemskärmen och tonas om med hälsningen var 5:e sekund. Sparas i Supabase och visas för alla användare.
                 </Text>
               </View>
 

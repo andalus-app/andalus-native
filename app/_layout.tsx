@@ -205,6 +205,11 @@ function AppContent({ onFontsReady }: { onFontsReady: () => void }) {
         <Stack.Screen name="hajj" options={{ fullScreenGestureEnabled: false }} />
         {/* Hadith: edge-only swipe back — inner Stack handles swipe between list and detail */}
         <Stack.Screen name="hadith" options={{ fullScreenGestureEnabled: false }} />
+        {/* Bön & Tvagning: standard edge-swipe back */}
+        <Stack.Screen name="prayer-guide" options={{ fullScreenGestureEnabled: false }} />
+        <Stack.Screen name="wudu-guide"   options={{ fullScreenGestureEnabled: false }} />
+        <Stack.Screen name="prayer-steps" options={{ fullScreenGestureEnabled: false }} />
+        <Stack.Screen name="tasbih" options={{ fullScreenGestureEnabled: false }} />
       </Stack>
 
       {/* YouTube background audio player — always mounted outside the tab/stack

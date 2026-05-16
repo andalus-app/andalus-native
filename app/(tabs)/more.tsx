@@ -8,7 +8,7 @@ import { useTheme } from '../../context/ThemeContext';
 
 // ── Data ──────────────────────────────────────────────────────────────────────
 
-type IconName = 'allahs-namn' | 'ruqyah' | 'zakat' | 'calendar' | 'book' | 'heart' | 'info' | 'umrah' | 'hajj' | 'quiz' | 'hadith' | 'settings';
+type IconName = 'allahs-namn' | 'ruqyah' | 'zakat' | 'calendar' | 'book' | 'heart' | 'info' | 'umrah' | 'hajj' | 'quiz' | 'hadith' | 'settings' | 'prayer' | 'bon-tvagning';
 
 type Row = {
   key:   string;
@@ -28,8 +28,9 @@ const SECTIONS: Section[] = [
     data: [
       { key: 'asmaul',  title: 'Allahs namn',      icon: 'allahs-namn', route: '/asmaul'  },
       { key: 'umrah',   title: 'Umrah Guide',       icon: 'umrah',       route: '/umrah'   },
-      { key: 'hajj',    title: 'Hajj Guide',        icon: 'hajj',        route: '/hajj'    },
-      { key: 'ruqyah',  title: 'Ruqyah',           icon: 'ruqyah',      route: '/ruqyah'  },
+      { key: 'hajj',         title: 'Hajj Guide',        icon: 'hajj',    route: '/hajj'          },
+      { key: 'prayer-guide', title: 'Bön & Tvagning',  icon: 'bon-tvagning',  route: '/prayer-guide'  },
+      { key: 'ruqyah',       title: 'Ruqyah',           icon: 'ruqyah',  route: '/ruqyah'        },
     ],
   },
   {

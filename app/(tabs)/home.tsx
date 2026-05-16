@@ -1215,6 +1215,22 @@ export default function HomeScreen() {
           )}
         </View>
 
+        {/* ── Supabase announcement banners — visas direkt under hälsningen ── */}
+        {bannerAnnouncements.length > 0 && (
+          <View style={{ marginTop: 10, marginBottom: 6 }}>
+            {bannerAnnouncements.map(a => (
+              <AnnouncementBannerCard
+                key={a.id}
+                announcement={a}
+                T={T}
+                isDark={isDark}
+                isPulsing={a.id === pulsingId}
+                onPulseEnd={() => setPulsingId(null)}
+              />
+            ))}
+          </View>
+        )}
+
         {/* ── Dhul Hijjah highlights — visas dag 1–9 Dhul Hijjah ── */}
         <DhulHijjahHighlightsCard />
 
@@ -1469,17 +1485,6 @@ export default function HomeScreen() {
           </TouchableOpacity>
         ))}
 
-        {/* ── Supabase announcement banners ── */}
-        {bannerAnnouncements.map(a => (
-          <AnnouncementBannerCard
-            key={a.id}
-            announcement={a}
-            T={T}
-            isDark={isDark}
-            isPulsing={a.id === pulsingId}
-            onPulseEnd={() => setPulsingId(null)}
-          />
-        ))}
 
       </ScrollView>
 
@@ -1709,10 +1714,6 @@ function AnnouncementBannerCard({
   announcement: Announcement; T: any; isDark: boolean;
   isPulsing?: boolean; onPulseEnd?: () => void;
 }) {
-  const LOGO_SIZE   = 28;
-  const GAP         = 10;
-  const TEXT_INDENT = LOGO_SIZE + GAP;
-
   // Scale animation triggered when the user taps the push notification for this banner.
   // Runs 3× (scale 1→1.06→1, 180ms each direction) then stops and resets the parent state.
   const scaleAnim = useRef(new Animated.Value(1)).current;
@@ -1729,30 +1730,23 @@ function AnnouncementBannerCard({
   }, [isPulsing]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <Animated.View style={{ transform: [{ scale: scaleAnim }], marginBottom: 10 }}>
+    <Animated.View style={{
+      transform: [{ scale: scaleAnim }], marginBottom: 10,
+      borderRadius: 14,
+      shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.08, shadowRadius: 12, elevation: 2,
+    }}>
       <View style={{
         backgroundColor: T.card, borderRadius: 14,
         borderWidth: 0.5, borderColor: T.border,
         overflow: 'hidden',
-        shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.08, shadowRadius: 12,
       }}>
         {a.image_url ? (
           <Image source={{ uri: a.image_url }} style={{ width: '100%', height: 160 }} resizeMode="cover" />
         ) : null}
         <View style={{ padding: 14 }}>
-          {/* Logo + title row */}
-          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: GAP }}>
-            <View style={{ width: LOGO_SIZE, height: LOGO_SIZE, flexShrink: 0, marginTop: 1 }}>
-              <HidayahLogo size={LOGO_SIZE} />
-            </View>
-            <Text style={{ flex: 1, fontSize: 14, fontWeight: '700', lineHeight: 20, color: T.text }}>
-              {a.title}
-            </Text>
-          </View>
-          {/* Message indented to match title left edge */}
           {a.message ? (
-            <Text style={{ fontSize: 13, color: T.textMuted, lineHeight: 19, marginTop: 4, marginLeft: TEXT_INDENT }}>
+            <Text style={{ fontSize: 13, color: T.text, lineHeight: 19 }}>
               {a.message}
             </Text>
           ) : null}
@@ -1761,7 +1755,7 @@ function AnnouncementBannerCard({
             <TouchableOpacity
               onPress={() => Linking.openURL(a.link_url!)}
               activeOpacity={0.7}
-              style={{ marginTop: 6, marginLeft: TEXT_INDENT }}
+              style={{ marginTop: 6 }}
             >
               <Text style={{ fontSize: 14, color: T.accent, textDecorationLine: 'underline' }}>
                 {a.link_text}
