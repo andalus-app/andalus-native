@@ -69,6 +69,11 @@ public class WidgetDataModule: Module {
             ]
             for kind in prayerKinds { WidgetCenter.shared.reloadTimelines(ofKind: kind) }
             NSLog("[WidgetData] WidgetKit reloadAllTimelines + %d individual kinds triggered ✓", prayerKinds.count)
+
+            // Mirror the same payload to Apple Watch so HidayahWatchApp can write it
+            // to the watchOS App Group and trigger watch widget reload.
+            WatchConnectivityBridge.shared.sendPrayerData(data)
+
             promise.resolve(nil)
         }
 

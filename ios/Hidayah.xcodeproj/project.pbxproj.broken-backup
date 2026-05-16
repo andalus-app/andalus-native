@@ -3,22 +3,15 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 70;
+	objectVersion = 56;
 	objects = {
 
 /* Begin PBXBuildFile section */
 		02B7D8E5BA5228F924FFD239 /* libPods-Hidayah.a in Frameworks */ = {isa = PBXBuildFile; fileRef = B4E894EE71B7EAA0D0C5FD8B /* libPods-Hidayah.a */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
-		6EBE6C5503E2E314FC98B217 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 35A82D2A37D138C858377FF8 /* PrivacyInfo.xcprivacy */; };
 		A66CA4B2F8039FB7C896D88B /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 35A82D2A37D138C858377FF8 /* PrivacyInfo.xcprivacy */; };
-		AC111005AABB00CC11223344 /* HidayahWatchWidgetExtension.appex in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = AC111001AABB00CC11223344 /* HidayahWatchWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		AC111006AABB00CC11223344 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DC96A8AB2F8B6BCF003994AE /* WidgetKit.framework */; };
-		AC111007AABB00CC11223344 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DC96A8AD2F8B6BCF003994AE /* SwiftUI.framework */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
-		BD111004AABB00CC11223344 /* HidayahWatchApp.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = BD111001AABB00CC11223344 /* HidayahWatchApp.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		BD111005AABB00CC11223344 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DC96A8AD2F8B6BCF003994AE /* SwiftUI.framework */; };
-		BD111006AABB00CC11223344 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DC96A8AB2F8B6BCF003994AE /* WidgetKit.framework */; };
 		DC96A8AC2F8B6BCF003994AE /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DC96A8AB2F8B6BCF003994AE /* WidgetKit.framework */; };
 		DC96A8AE2F8B6BCF003994AE /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DC96A8AD2F8B6BCF003994AE /* SwiftUI.framework */; };
 		DC96A8B92F8B6BD0003994AE /* HidayahWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = DC96A8AA2F8B6BCF003994AE /* HidayahWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -26,9 +19,22 @@
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
 		FA8B3D2E9C456F01230AABC2 /* LocationBackgroundManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA8B3D2E9C456F01230AABC1 /* LocationBackgroundManager.swift */; };
 		FB9C4D3E1A567B02340BBCD2 /* NativeNotificationScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB9C4D3E1A567B02340BBCD1 /* NativeNotificationScheduler.swift */; };
+		AC111005AABB00CC11223344 /* HidayahWatchWidgetExtension.appex in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = AC111001AABB00CC11223344 /* HidayahWatchWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		AC111006AABB00CC11223344 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DC96A8AB2F8B6BCF003994AE /* WidgetKit.framework */; };
+		AC111007AABB00CC11223344 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DC96A8AD2F8B6BCF003994AE /* SwiftUI.framework */; };
+		BD111004AABB00CC11223344 /* HidayahWatchApp.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = BD111001AABB00CC11223344 /* HidayahWatchApp.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		BD111005AABB00CC11223344 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DC96A8AD2F8B6BCF003994AE /* SwiftUI.framework */; };
+		BD111006AABB00CC11223344 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DC96A8AB2F8B6BCF003994AE /* WidgetKit.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		DC96A8B72F8B6BD0003994AE /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 83CBB9F71A601CBA00E9B192 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = DC96A8A92F8B6BCF003994AE;
+			remoteInfo = HidayahWidgetExtension;
+		};
 		AC11100CAABB00CC11223344 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 83CBB9F71A601CBA00E9B192 /* Project object */;
@@ -43,16 +49,20 @@
 			remoteGlobalIDString = BD11100AAABB00CC11223344;
 			remoteInfo = HidayahWatchApp;
 		};
-		DC96A8B72F8B6BD0003994AE /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 83CBB9F71A601CBA00E9B192 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = DC96A8A92F8B6BCF003994AE;
-			remoteInfo = HidayahWidgetExtension;
-		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
+		DC96A8BE2F8B6BD0003994AE /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 8;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				DC96A8B92F8B6BD0003994AE /* HidayahWidgetExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 1;
+		};
 		AC11100EAABB00CC11223344 /* Embed Watch Content */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 8;
@@ -65,17 +75,6 @@
 			name = "Embed Watch Content";
 			runOnlyForDeploymentPostprocessing = 1;
 		};
-		DC96A8BE2F8B6BD0003994AE /* Embed Foundation Extensions */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 8;
-			dstPath = "";
-			dstSubfolderSpec = 13;
-			files = (
-				DC96A8B92F8B6BD0003994AE /* HidayahWidgetExtension.appex in Embed Foundation Extensions */,
-			);
-			name = "Embed Foundation Extensions";
-			runOnlyForDeploymentPostprocessing = 1;
-		};
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
@@ -86,10 +85,8 @@
 		3E3206337C8F5D442D9F2360 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-Hidayah/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
 		6393115EB2339FFCD96C5B9E /* Pods-Hidayah.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Hidayah.debug.xcconfig"; path = "Target Support Files/Pods-Hidayah/Pods-Hidayah.debug.xcconfig"; sourceTree = "<group>"; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = Hidayah/SplashScreen.storyboard; sourceTree = "<group>"; };
-		AC111001AABB00CC11223344 /* HidayahWatchWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = HidayahWatchWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		B4E894EE71B7EAA0D0C5FD8B /* libPods-Hidayah.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-Hidayah.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
-		BD111001AABB00CC11223344 /* HidayahWatchApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HidayahWatchApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DC96A8AA2F8B6BCF003994AE /* HidayahWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = HidayahWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		DC96A8AB2F8B6BCF003994AE /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		DC96A8AD2F8B6BCF003994AE /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
@@ -100,23 +97,11 @@
 		F11748442D0722820044C1D9 /* Hidayah-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "Hidayah-Bridging-Header.h"; path = "Hidayah/Hidayah-Bridging-Header.h"; sourceTree = "<group>"; };
 		FA8B3D2E9C456F01230AABC1 /* LocationBackgroundManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LocationBackgroundManager.swift; path = Hidayah/LocationBackgroundManager.swift; sourceTree = "<group>"; };
 		FB9C4D3E1A567B02340BBCD1 /* NativeNotificationScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NativeNotificationScheduler.swift; path = Hidayah/NativeNotificationScheduler.swift; sourceTree = "<group>"; };
+		AC111001AABB00CC11223344 /* HidayahWatchWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = HidayahWatchWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		BD111001AABB00CC11223344 /* HidayahWatchApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HidayahWatchApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		AC111004AABB00CC11223344 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Info.plist,
-			);
-			target = AC11100BAABB00CC11223344 /* HidayahWatchWidgetExtension */;
-		};
-		BD111003AABB00CC11223344 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Info.plist,
-			);
-			target = BD11100AAABB00CC11223344 /* HidayahWatchApp */;
-		};
 		DC96A8D02F8B6D00003994AE /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -124,12 +109,28 @@
 			);
 			target = DC96A8A92F8B6BCF003994AE /* HidayahWidgetExtension */;
 		};
+		AC111004AABB00CC11223344 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				"HidayahWatchWidget.entitlements",
+				Info.plist,
+			);
+			target = AC11100BAABB00CC11223344 /* HidayahWatchWidgetExtension */;
+		};
+		BD111003AABB00CC11223344 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				"HidayahWatchApp.entitlements",
+				Info.plist,
+			);
+			target = BD11100AAABB00CC11223344 /* HidayahWatchApp */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		DC96A8AF2F8B6BCF003994AE /* HidayahWidget */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (DC96A8D02F8B6D00003994AE /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = HidayahWidget; sourceTree = "<group>"; };
 		AC111003AABB00CC11223344 /* HidayahWatchWidget */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (AC111004AABB00CC11223344 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = HidayahWatchWidget; sourceTree = "<group>"; };
 		BD111002AABB00CC11223344 /* HidayahWatchApp */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (BD111003AABB00CC11223344 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = HidayahWatchApp; sourceTree = "<group>"; };
-		DC96A8AF2F8B6BCF003994AE /* HidayahWidget */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (DC96A8D02F8B6D00003994AE /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = HidayahWidget; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -138,6 +139,15 @@
 			buildActionMask = 2147483647;
 			files = (
 				02B7D8E5BA5228F924FFD239 /* libPods-Hidayah.a in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DC96A8A72F8B6BCF003994AE /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				DC96A8AE2F8B6BCF003994AE /* SwiftUI.framework in Frameworks */,
+				DC96A8AC2F8B6BCF003994AE /* WidgetKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -156,15 +166,6 @@
 			files = (
 				BD111005AABB00CC11223344 /* SwiftUI.framework in Frameworks */,
 				BD111006AABB00CC11223344 /* WidgetKit.framework in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		DC96A8A72F8B6BCF003994AE /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				DC96A8AE2F8B6BCF003994AE /* SwiftUI.framework in Frameworks */,
-				DC96A8AC2F8B6BCF003994AE /* WidgetKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -299,6 +300,26 @@
 			productReference = 13B07F961A680F5B00A75B9A /* Hidayah.app */;
 			productType = "com.apple.product-type.application";
 		};
+		DC96A8A92F8B6BCF003994AE /* HidayahWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = DC96A8BB2F8B6BD0003994AE /* Build configuration list for PBXNativeTarget "HidayahWidgetExtension" */;
+			buildPhases = (
+				DC96A8A62F8B6BCF003994AE /* Sources */,
+				DC96A8A72F8B6BCF003994AE /* Frameworks */,
+				DC96A8A82F8B6BCF003994AE /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				DC96A8AF2F8B6BCF003994AE /* HidayahWidget */,
+			);
+			name = HidayahWidgetExtension;
+			productName = HidayahWidgetExtension;
+			productReference = DC96A8AA2F8B6BCF003994AE /* HidayahWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		AC11100BAABB00CC11223344 /* HidayahWatchWidgetExtension */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = AC111011AABB00CC11223344 /* Build configuration list for PBXNativeTarget "HidayahWatchWidgetExtension" */;
@@ -323,7 +344,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = BD11100DAABB00CC11223344 /* Build configuration list for PBXNativeTarget "HidayahWatchApp" */;
 			buildPhases = (
-				BD111009AABB00CC11223344 /* Sources */,
+				BD111005AABB00CC11223344 /* Sources */,
 				BD111007AABB00CC11223344 /* Frameworks */,
 				BD111008AABB00CC11223344 /* Resources */,
 			);
@@ -339,26 +360,6 @@
 			productReference = BD111001AABB00CC11223344 /* HidayahWatchApp.app */;
 			productType = "com.apple.product-type.application";
 		};
-		DC96A8A92F8B6BCF003994AE /* HidayahWidgetExtension */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = DC96A8BB2F8B6BD0003994AE /* Build configuration list for PBXNativeTarget "HidayahWidgetExtension" */;
-			buildPhases = (
-				DC96A8A62F8B6BCF003994AE /* Sources */,
-				DC96A8A72F8B6BCF003994AE /* Frameworks */,
-				DC96A8A82F8B6BCF003994AE /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			fileSystemSynchronizedGroups = (
-				DC96A8AF2F8B6BCF003994AE /* HidayahWidget */,
-			);
-			name = HidayahWidgetExtension;
-			productName = HidayahWidgetExtension;
-			productReference = DC96A8AA2F8B6BCF003994AE /* HidayahWidgetExtension.appex */;
-			productType = "com.apple.product-type.app-extension";
-		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -371,15 +372,15 @@
 					13B07F861A680F5B00A75B9A = {
 						LastSwiftMigration = 1250;
 					};
+					DC96A8A92F8B6BCF003994AE = {
+						CreatedOnToolsVersion = 26.4;
+						LastSwiftMigration = 2640;
+					};
 					AC11100BAABB00CC11223344 = {
 						CreatedOnToolsVersion = 26.4;
 						LastSwiftMigration = 2640;
 					};
 					BD11100AAABB00CC11223344 = {
-						CreatedOnToolsVersion = 26.4;
-						LastSwiftMigration = 2640;
-					};
-					DC96A8A92F8B6BCF003994AE = {
 						CreatedOnToolsVersion = 26.4;
 						LastSwiftMigration = 2640;
 					};
@@ -400,8 +401,8 @@
 			targets = (
 				13B07F861A680F5B00A75B9A /* Hidayah */,
 				DC96A8A92F8B6BCF003994AE /* HidayahWidgetExtension */,
-				BD11100AAABB00CC11223344 /* HidayahWatchApp */,
 				AC11100BAABB00CC11223344 /* HidayahWatchWidgetExtension */,
+				BD11100AAABB00CC11223344 /* HidayahWatchApp */,
 			);
 		};
 /* End PBXProject section */
@@ -418,6 +419,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		DC96A8A82F8B6BCF003994AE /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		AC11100AAABB00CC11223344 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -426,14 +434,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		BD111008AABB00CC11223344 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				6EBE6C5503E2E314FC98B217 /* PrivacyInfo.xcprivacy in Resources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		DC96A8A82F8B6BCF003994AE /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -586,6 +586,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		DC96A8A62F8B6BCF003994AE /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		AC111008AABB00CC11223344 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -593,14 +600,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		BD111009AABB00CC11223344 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		DC96A8A62F8B6BCF003994AE /* Sources */ = {
+		BD111005AABB00CC11223344 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -610,6 +610,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		DC96A8B82F8B6BD0003994AE /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = DC96A8A92F8B6BCF003994AE /* HidayahWidgetExtension */;
+			targetProxy = DC96A8B72F8B6BD0003994AE /* PBXContainerItemProxy */;
+		};
 		AC11100DAABB00CC11223344 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = AC11100BAABB00CC11223344 /* HidayahWatchWidgetExtension */;
@@ -619,11 +624,6 @@
 			isa = PBXTargetDependency;
 			target = BD11100AAABB00CC11223344 /* HidayahWatchApp */;
 			targetProxy = BD11100BAABB00CC11223344 /* PBXContainerItemProxy */;
-		};
-		DC96A8B82F8B6BD0003994AE /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = DC96A8A92F8B6BCF003994AE /* HidayahWidgetExtension */;
-			targetProxy = DC96A8B72F8B6BD0003994AE /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -814,184 +814,6 @@
 			};
 			name = Release;
 		};
-		AC11100FAABB00CC11223344 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CLANG_ANALYZER_NONNULL = YES;
-				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
-				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_WEAK = YES;
-				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
-				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
-				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
-				CODE_SIGN_ENTITLEMENTS = HidayahWatchWidget/HidayahWatchWidget.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 32;
-				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = EVP8ULXZUC;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
-				GCC_C_LANGUAGE_STANDARD = gnu17;
-				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = HidayahWatchWidget/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Hidayah Watch";
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
-				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MARKETING_VERSION = 1.7.4;
-				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
-				MTL_FAST_MATH = YES;
-				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_DEBUG";
-				PRODUCT_BUNDLE_IDENTIFIER = com.anonymous.Hidayah.watchkitapp.HidayahWatchWidget;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = watchos;
-				SKIP_INSTALL = NO;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 4;
-				WATCHOS_DEPLOYMENT_TARGET = 9.0;
-			};
-			name = Debug;
-		};
-		AC111010AABB00CC11223344 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CLANG_ANALYZER_NONNULL = YES;
-				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
-				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_WEAK = YES;
-				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
-				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
-				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
-				CODE_SIGN_ENTITLEMENTS = HidayahWatchWidget/HidayahWatchWidget.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 32;
-				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = EVP8ULXZUC;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
-				GCC_C_LANGUAGE_STANDARD = gnu17;
-				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = HidayahWatchWidget/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Hidayah Watch";
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
-				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MARKETING_VERSION = 1.7.4;
-				MTL_FAST_MATH = YES;
-				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_RELEASE";
-				PRODUCT_BUNDLE_IDENTIFIER = com.anonymous.Hidayah.watchkitapp.HidayahWatchWidget;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = watchos;
-				SKIP_INSTALL = NO;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 4;
-				WATCHOS_DEPLOYMENT_TARGET = 9.0;
-			};
-			name = Release;
-		};
-		BD11100EAABB00CC11223344 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CLANG_ANALYZER_NONNULL = YES;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
-				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_WEAK = YES;
-				CODE_SIGN_ENTITLEMENTS = HidayahWatchApp/HidayahWatchApp.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 32;
-				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = EVP8ULXZUC;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
-				GCC_C_LANGUAGE_STANDARD = gnu17;
-				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = HidayahWatchApp/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = Hidayah;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
-				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MARKETING_VERSION = 1.7.4;
-				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
-				MTL_FAST_MATH = YES;
-				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_DEBUG";
-				PRODUCT_BUNDLE_IDENTIFIER = com.anonymous.Hidayah.watchkitapp;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = watchos;
-				SKIP_INSTALL = NO;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 4;
-				WATCHOS_DEPLOYMENT_TARGET = 9.0;
-			};
-			name = Debug;
-		};
-		BD11100FAABB00CC11223344 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CLANG_ANALYZER_NONNULL = YES;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
-				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_WEAK = YES;
-				CODE_SIGN_ENTITLEMENTS = HidayahWatchApp/HidayahWatchApp.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 32;
-				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = EVP8ULXZUC;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
-				GCC_C_LANGUAGE_STANDARD = gnu17;
-				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = HidayahWatchApp/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = Hidayah;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
-				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MARKETING_VERSION = 1.7.4;
-				MTL_FAST_MATH = YES;
-				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_RELEASE";
-				PRODUCT_BUNDLE_IDENTIFIER = com.anonymous.Hidayah.watchkitapp;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = watchos;
-				SKIP_INSTALL = NO;
-				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 4;
-				WATCHOS_DEPLOYMENT_TARGET = 9.0;
-			};
-			name = Release;
-		};
 		DC96A8BC2F8B6BD0003994AE /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -1091,6 +913,180 @@
 			};
 			name = Release;
 		};
+		AC11100FAABB00CC11223344 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CODE_SIGN_ENTITLEMENTS = HidayahWatchWidget/HidayahWatchWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 32;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = EVP8ULXZUC;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = HidayahWatchWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Hidayah Watch";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 1.7.4;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.anonymous.Hidayah.HidayahWatchWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = NO;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 9.0;
+			};
+			name = Debug;
+		};
+		AC111010AABB00CC11223344 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CODE_SIGN_ENTITLEMENTS = HidayahWatchWidget/HidayahWatchWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 32;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = EVP8ULXZUC;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = HidayahWatchWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Hidayah Watch";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 1.7.4;
+				MTL_FAST_MATH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.anonymous.Hidayah.HidayahWatchWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = NO;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 9.0;
+			};
+			name = Release;
+		};
+		BD11100EAABB00CC11223344 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CODE_SIGN_ENTITLEMENTS = HidayahWatchApp/HidayahWatchApp.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 32;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = EVP8ULXZUC;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = HidayahWatchApp/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Hidayah;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 1.7.4;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.anonymous.Hidayah.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = NO;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 9.0;
+			};
+			name = Debug;
+		};
+		BD11100FAABB00CC11223344 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CODE_SIGN_ENTITLEMENTS = HidayahWatchApp/HidayahWatchApp.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 32;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = EVP8ULXZUC;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = HidayahWatchApp/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Hidayah;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 1.7.4;
+				MTL_FAST_MATH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.anonymous.Hidayah.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = NO;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 9.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -1112,6 +1108,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		DC96A8BB2F8B6BD0003994AE /* Build configuration list for PBXNativeTarget "HidayahWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DC96A8BC2F8B6BD0003994AE /* Debug */,
+				DC96A8BD2F8B6BD0003994AE /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		AC111011AABB00CC11223344 /* Build configuration list for PBXNativeTarget "HidayahWatchWidgetExtension" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -1126,15 +1131,6 @@
 			buildConfigurations = (
 				BD11100EAABB00CC11223344 /* Debug */,
 				BD11100FAABB00CC11223344 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		DC96A8BB2F8B6BD0003994AE /* Build configuration list for PBXNativeTarget "HidayahWidgetExtension" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				DC96A8BC2F8B6BD0003994AE /* Debug */,
-				DC96A8BD2F8B6BD0003994AE /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
