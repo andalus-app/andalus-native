@@ -458,44 +458,45 @@ function SlideSplash({ slide }: { slide: Slide }) {
   );
 }
 
-function SlideTashriq({ slide, isDark }: { slide: Slide; isDark: boolean }) {
-  const mutedText = isDark ? 'rgba(255,255,255,0.88)' : 'rgba(0,0,0,0.82)';
-  const quoteBg   = isDark ? 'rgba(201,168,76,0.07)' : 'rgba(201,168,76,0.06)';
-  const quoteLeft = isDark ? 'rgba(201,168,76,0.50)' : 'rgba(201,168,76,0.65)';
+function SlideTashriq({ slide, T, isDark }: { slide: Slide; T: any; isDark: boolean }) {
+  const mutedText  = isDark ? 'rgba(255,255,255,0.88)' : 'rgba(0,0,0,0.82)';
+  const dividerClr = isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.07)';
 
   return (
-    <View style={{ flex: 1 }}>
-      {/* Title + subtitle */}
-      <View style={{ marginBottom: 6 }}>
-        <Text style={{ fontSize: 14, fontWeight: '700', color: GOLD, lineHeight: 18 }}>
-          {slide.title}
+    <View>
+      {/* Title — same style as SlideInfo */}
+      <Text style={{ fontSize: 14, fontWeight: '700', color: T.text, lineHeight: 18, marginBottom: 5 }}>
+        {slide.title}
+      </Text>
+
+      {/* Subtitle */}
+      {slide.subtitle ? (
+        <Text style={{ fontSize: 11, color: T.textMuted, lineHeight: 14, marginBottom: 5 }}>
+          {slide.subtitle}
         </Text>
-        {slide.subtitle ? (
-          <Text style={{ fontSize: 10.5, fontStyle: 'italic', color: GOLD, opacity: 0.75, lineHeight: 14, marginTop: 1 }}>
-            {slide.subtitle}
-          </Text>
-        ) : null}
-      </View>
+      ) : null}
+
+      {/* Divider — same as SlideInfo */}
+      <View style={{ height: 0.5, backgroundColor: dividerClr, marginBottom: 8 }} />
 
       {/* Body text */}
       {slide.body ? (
-        <Text style={{ fontSize: 11, color: mutedText, lineHeight: 16, marginBottom: 6 }}>
+        <Text style={{ fontSize: 11.5, color: mutedText, lineHeight: 16, marginBottom: 6 }}>
           {slide.body}
         </Text>
       ) : null}
 
-      {/* Quote block — takes remaining space */}
+      {/* Quote block — grows with content, no clipping */}
       <View style={{
-        flex: 1,
-        backgroundColor: quoteBg,
+        alignSelf: 'stretch',
+        backgroundColor: T.accentGlow,
         borderLeftWidth: 2.5,
-        borderLeftColor: quoteLeft,
+        borderLeftColor: T.accent,
         borderRadius: 6,
         paddingHorizontal: 10,
-        paddingVertical: 8,
-        justifyContent: 'center',
+        paddingVertical: 10,
       }}>
-        <Text style={{ fontSize: 12, fontStyle: 'italic', color: mutedText, lineHeight: 19 }}>
+        <Text style={{ fontSize: 12, fontStyle: 'italic', color: mutedText, lineHeight: 20, flexShrink: 1 }}>
           {slide.quote}
         </Text>
       </View>
@@ -505,7 +506,7 @@ function SlideTashriq({ slide, isDark }: { slide: Slide; isDark: boolean }) {
         <View style={{ marginTop: 6 }}>
           <Text style={{
             fontSize: 11.5, fontStyle: 'italic',
-            color: isDark ? 'rgba(201,168,76,0.92)' : 'rgba(160,120,40,0.95)',
+            color: mutedText,
             lineHeight: 17, letterSpacing: 0.1,
           }}>
             {slide.secondQuote}
@@ -513,7 +514,7 @@ function SlideTashriq({ slide, isDark }: { slide: Slide; isDark: boolean }) {
           {slide.reference ? (
             <Text style={{
               fontSize: 10, fontStyle: 'italic',
-              color: isDark ? 'rgba(201,168,76,0.55)' : 'rgba(160,120,40,0.65)',
+              color: T.textMuted,
               marginTop: 2,
             }}>
               — {slide.reference}
@@ -521,13 +522,12 @@ function SlideTashriq({ slide, isDark }: { slide: Slide; isDark: boolean }) {
           ) : null}
         </View>
       ) : slide.reference ? (
-        <Text style={{ fontSize: 10, color: GOLD, marginTop: 5, opacity: 0.8 }}>
+        <Text style={{ fontSize: 10, color: T.textMuted, marginTop: 5, opacity: 0.8 }}>
           {slide.reference}
         </Text>
       ) : null}
       {slide.footer ? (
-        <Text style={{ fontSize: 10, color: mutedText, marginTop: 4, lineHeight: 14, opacity: 0.65 }}
-              numberOfLines={3}>
+        <Text style={{ fontSize: 10, color: T.textMuted, marginTop: 4, lineHeight: 14, opacity: 0.65 }}>
           {slide.footer}
         </Text>
       ) : null}
@@ -544,7 +544,7 @@ function SlideContent({ slide, T, isDark }: { slide: Slide; T: any; isDark: bool
     case 'dual-quote':  return <SlideDualQuote   slide={slide} T={T} isDark={isDark} />;
     case 'text':        return <SlideText        slide={slide} T={T} isDark={isDark} />;
     case 'deeds':       return <SlideDeeds       slide={slide} T={T} isDark={isDark} />;
-    case 'tashriq':     return <SlideTashriq     slide={slide} isDark={isDark} />;
+    case 'tashriq':     return <SlideTashriq     slide={slide} T={T} isDark={isDark} />;
   }
 }
 
@@ -570,11 +570,7 @@ function cardAccent(variant: SlideVariant, T: any, isDark: boolean) {
     case 'deeds':
       return { bg: T.card, border: T.border, top: T.accent };
     case 'tashriq':
-      return {
-        bg:     isDark ? 'rgba(201,168,76,0.07)' : 'rgba(201,168,76,0.05)',
-        border: isDark ? 'rgba(201,168,76,0.20)' : 'rgba(201,168,76,0.25)',
-        top:    GOLD,
-      };
+      return { bg: T.card, border: T.border, top: T.accent };
   }
 }
 
@@ -677,12 +673,14 @@ export default function DhulHijjahInfoCarousel({ testMode = false, testDayTen = 
         >
           {slides.map((slide) => {
             const { bg, border, top } = cardAccent(slide.variant, T, isDark);
+            const isTashriq = slide.variant === 'tashriq';
             return (
               <View
                 key={slide.id}
                 style={{
                   width: CARD_W,
-                  height: CARD_H,
+                  // Tashriq cards grow with content; regular slides keep fixed height.
+                  ...(isTashriq ? { minHeight: CARD_H } : { height: CARD_H }),
                   marginRight: GAP,
                   backgroundColor: bg,
                   borderRadius: 16,
