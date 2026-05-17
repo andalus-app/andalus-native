@@ -28,17 +28,22 @@
 // Midnight rollover: if cache.tomorrowDate == today, uses tomT as today's times.
 //
 // ── Managed notification identifiers ────────────────────────────────────────
-// Main prayers (10):   andalus-prayer-{today|tomorrow}-{fajr|dhuhr|asr|maghrib|isha}
+// Main prayers (10):   hidayah-prayer-YYYY-MM-DD-{fajr|dhuhr|asr|maghrib|isha}
+//                      e.g. hidayah-prayer-2025-11-10-asr
+//                      Date-scoped so each prayer×day is a unique slot.
+//                      Legacy format (andalus-prayer-today/tomorrow-*) is still
+//                      cancelled on every run to clean up old build notifications.
 // Dhikr (2):           andalus-dhikr-{today|tomorrow}  (only when dhikrReminder = true)
 // Pre-prayer reminders: hidayah-pre-prayer-YYYY-MM-DD-{prayer} (today + tomorrow)
 //
 // Does NOT touch: announcements, Allah's Names, Zakat, Al-Kahf, live-stream.
 //
 // ── Collision prevention ─────────────────────────────────────────────────────
-// Both JS and Native use identical identifiers. Because each side cancels then
-// reschedules the same set, duplicates are structurally impossible. The
-// andalus_notification_schedule_state key tracks the last scheduled times so
-// whichever side runs first does not redundantly reschedule identical times.
+// Both JS and Native use the same hidayah-prayer-YYYY-MM-DD-* prefix. Cancel
+// always uses getPendingNotificationRequests prefix-filtering so stale notifications
+// from any build are removed. The andalus_notification_schedule_state key tracks
+// the last scheduled times so whichever side runs first does not redundantly
+// reschedule identical times.
 
 import Foundation
 import UserNotifications
@@ -46,11 +51,14 @@ import UserNotifications
 // MARK: - Shared identifier constants
 // Keep in sync with notifications.ts constants.
 
-let kPrayerIdentifiers: [String] = {
-    let slots   = ["today", "tomorrow"]
-    let prayers = ["fajr", "dhuhr", "asr", "maghrib", "isha"]
-    return slots.flatMap { s in prayers.map { "andalus-prayer-\(s)-\($0)" } }
-}()
+/// Current prayer notification prefix. Identifiers use YYYY-MM-DD so each
+/// prayer×calendar-day combination is unique. Keep in sync with
+/// PRAYER_ID_PREFIX / PRAYER_NOTIFICATION_PREFIX in notifications.ts.
+let kPrayerIdPrefix          = "hidayah-prayer-"
+
+/// Legacy prefix from builds before date-scoped identifiers. Cancelled on every
+/// run so old notifications never survive across app updates.
+let kLegacyPrayerIdPrefix    = "andalus-prayer-"
 
 let kDhikrIdentifiers        = ["andalus-dhikr-today", "andalus-dhikr-tomorrow"]
 let kPrePrayerPrefix         = "hidayah-pre-prayer-"
@@ -903,88 +911,128 @@ final class NativeNotificationScheduler {
         let city       = nearest.displayName
         let notifLabel = nearest.notifLabel
 
-        // Remove stable prayer + dhikr identifiers synchronously (no need for async).
-        var toRemove = kPrayerIdentifiers
-        if settings.dhikrReminder { toRemove += kDhikrIdentifiers }
-        center.removePendingNotificationRequests(withIdentifiers: toRemove)
+        // Cancel all pending prayer notifications by prefix before scheduling new ones.
+        // This removes both the new hidayah-prayer-YYYY-MM-DD-* format AND the legacy
+        // andalus-prayer-today/tomorrow-* format from any previous build, preventing
+        // stale notifications from firing after a schedule rebuild.
+        // Dhikr identifiers are also removed here if dhikr is enabled so they can be
+        // rescheduled below. Scheduling happens in the completion block to guarantee
+        // ordering: cancel always completes before the first add() call.
+        cancelPrayerAndDhikrByPrefix(
+            center: center, includeDhikr: settings.dhikrReminder
+        ) { [weak self] in
+            guard let self else { return }
 
-        let prayerMap: [(String, String)] = [
-            ("Fajr", "fajr"), ("Dhuhr", "dhuhr"), ("Asr", "asr"),
-            ("Maghrib", "maghrib"), ("Isha", "isha"),
-        ]
+            let prayerMap: [(String, String)] = [
+                ("Fajr", "fajr"), ("Dhuhr", "dhuhr"), ("Asr", "asr"),
+                ("Maghrib", "maghrib"), ("Isha", "isha"),
+            ]
 
-        // Today's main prayers — trigger time from effective city cache; label from notifLabel
-        for (apiKey, idKey) in prayerMap {
-            guard let t = resolved.todayT[apiKey], !t.isEmpty,
-                  let fire = parseTime(t, base: todayBase), fire > now else { continue }
-            add(center, id: "andalus-prayer-today-\(idKey)",
-                title: "Det är dags för \(apiKey)", body: "i \(notifLabel)", at: fire)
-        }
-
-        // Tomorrow's main prayers
-        if let tomT = resolved.tomT {
+            // Today's prayers — date-scoped identifier: hidayah-prayer-YYYY-MM-DD-{key}
             for (apiKey, idKey) in prayerMap {
-                guard let t = tomT[apiKey], !t.isEmpty,
-                      let fire = parseTime(t, base: tomorrowBase) else { continue }
-                add(center, id: "andalus-prayer-tomorrow-\(idKey)",
-                    title: "Det är dags för \(apiKey)", body: "i \(notifLabel)", at: fire)
+                guard let t = resolved.todayT[apiKey], !t.isEmpty,
+                      let fire = self.parseTime(t, base: todayBase), fire > now else { continue }
+                self.add(center,
+                         id:    "hidayah-prayer-\(resolved.todayDate)-\(idKey)",
+                         title: "Det är dags för \(apiKey)",
+                         body:  "i \(notifLabel)",
+                         at:    fire)
             }
-        }
 
-        // Dhikr (60 min before Maghrib) — fixed body; JS will restore rotating message on open
-        if settings.dhikrReminder {
-            if let m = resolved.todayT["Maghrib"],
-               let fire = parseTime(m, base: todayBase) {
-                let t = fire.addingTimeInterval(-3600)
-                if t > now {
-                    add(center, id: "andalus-dhikr-today",
-                        title: "Tid för dhikr",
-                        body: "En timme kvar till Maghrib – minns Allah", at: t)
+            // Tomorrow's prayers — date-scoped identifier using tomorrowDate
+            if let tomT = resolved.tomT {
+                for (apiKey, idKey) in prayerMap {
+                    guard let t = tomT[apiKey], !t.isEmpty,
+                          let fire = self.parseTime(t, base: tomorrowBase), fire > now else { continue }
+                    self.add(center,
+                             id:    "hidayah-prayer-\(resolved.tomorrowDate)-\(idKey)",
+                             title: "Det är dags för \(apiKey)",
+                             body:  "i \(notifLabel)",
+                             at:    fire)
                 }
             }
-            if let tomT = resolved.tomT, let m = tomT["Maghrib"],
-               let fire = parseTime(m, base: tomorrowBase) {
-                add(center, id: "andalus-dhikr-tomorrow",
-                    title: "Tid för dhikr",
-                    body: "En timme kvar till Maghrib – minns Allah",
-                    at: fire.addingTimeInterval(-3600))
+
+            // Dhikr (60 min before Maghrib) — fixed body; JS restores rotating message on open
+            if settings.dhikrReminder {
+                if let m = resolved.todayT["Maghrib"],
+                   let fire = self.parseTime(m, base: todayBase) {
+                    let t = fire.addingTimeInterval(-3600)
+                    if t > now {
+                        self.add(center, id: "andalus-dhikr-today",
+                                 title: "Tid för dhikr",
+                                 body:  "En timme kvar till Maghrib – minns Allah", at: t)
+                    }
+                }
+                if let tomT = resolved.tomT, let m = tomT["Maghrib"],
+                   let fire = self.parseTime(m, base: tomorrowBase) {
+                    self.add(center, id: "andalus-dhikr-tomorrow",
+                             title: "Tid för dhikr",
+                             body:  "En timme kvar till Maghrib – minns Allah",
+                             at:    fire.addingTimeInterval(-3600))
+                }
             }
-        }
 
-        // Pre-prayer reminders — cancel by prefix first (they use date-based identifiers)
-        let offset = settings.effectivePrePrayerOffset
-        if offset > 0 {
-            schedulePrePrayerReminders(
-                offset: offset, resolved: resolved, city: city,
-                todayBase: todayBase, tomorrowBase: tomorrowBase, now: now,
-                center: center)
-        } else {
-            // Offset is "off" — cancel any stale pre-prayer reminders
-            cancelPrePrayerReminders(center: center)
-        }
+            // Pre-prayer reminders — cancel by prefix first (already date-based identifiers)
+            let offset = settings.effectivePrePrayerOffset
+            if offset > 0 {
+                self.schedulePrePrayerReminders(
+                    offset: offset, resolved: resolved, city: city,
+                    todayBase: todayBase, tomorrowBase: tomorrowBase, now: now,
+                    center: center)
+            } else {
+                self.cancelPrePrayerReminders(center: center)
+            }
 
-        // Write schedule state
-        let state = NotificationScheduleState(
-            version:                 1,
-            owner:                   "native",
-            source:                  scheduleSource,
-            cityKey:                 nearest.cacheKey,
-            displayName:             city,
-            notificationDisplayName: notifLabel,
-            lat:                     nearest.lat,
-            lng:                     nearest.lng,
-            date:                    resolved.todayDate,
-            method:                  settings.calculationMethod,
-            school:                  settings.school,
-            todayT:                  resolved.todayT,
-            tomT:                    resolved.tomT,
-            dhikrEnabled:            settings.dhikrReminder,
-            prePrayerOffset:         offset,
-            updatedAt:               Date().timeIntervalSince1970
-        )
-        writeScheduleState(state, defaults: defaults)
-        NSLog("[NativeNotif] Scheduled: displayName=%@ notifLabel=%@ Asr=%@ date=%@ source=%@",
-              city, notifLabel, resolved.todayT["Asr"] ?? "?", resolved.todayDate, scheduleSource)
+            // Write schedule state
+            let state = NotificationScheduleState(
+                version:                 1,
+                owner:                   "native",
+                source:                  scheduleSource,
+                cityKey:                 nearest.cacheKey,
+                displayName:             city,
+                notificationDisplayName: notifLabel,
+                lat:                     nearest.lat,
+                lng:                     nearest.lng,
+                date:                    resolved.todayDate,
+                method:                  settings.calculationMethod,
+                school:                  settings.school,
+                todayT:                  resolved.todayT,
+                tomT:                    resolved.tomT,
+                dhikrEnabled:            settings.dhikrReminder,
+                prePrayerOffset:         offset,
+                updatedAt:               Date().timeIntervalSince1970
+            )
+            self.writeScheduleState(state, defaults: defaults)
+            NSLog("[NativeNotif] Scheduled: displayName=%@ notifLabel=%@ Asr=%@ date=%@ source=%@",
+                  city, notifLabel, resolved.todayT["Asr"] ?? "?", resolved.todayDate, scheduleSource)
+        }
+    }
+
+    /// Fetches all pending notification requests and removes those whose identifier
+    /// starts with kPrayerIdPrefix ("hidayah-prayer-") or kLegacyPrayerIdPrefix
+    /// ("andalus-prayer-"). Optionally removes dhikr identifiers too.
+    /// Calls completion() after removal so callers can schedule new notifications
+    /// only after all stale ones are gone.
+    private func cancelPrayerAndDhikrByPrefix(center: UNUserNotificationCenter,
+                                               includeDhikr: Bool,
+                                               completion: @escaping () -> Void) {
+        center.getPendingNotificationRequests { requests in
+            var toRemove = requests
+                .filter {
+                    $0.identifier.hasPrefix(kPrayerIdPrefix) ||
+                    $0.identifier.hasPrefix(kLegacyPrayerIdPrefix)
+                }
+                .map { $0.identifier }
+            if includeDhikr {
+                toRemove += kDhikrIdentifiers
+            }
+            if !toRemove.isEmpty {
+                center.removePendingNotificationRequests(withIdentifiers: toRemove)
+                NSLog("[NativeNotif] Cancelled %d prayer/dhikr notifications before rescheduling",
+                      toRemove.count)
+            }
+            completion()
+        }
     }
 
     // MARK: - Pre-prayer reminders
