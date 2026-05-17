@@ -737,10 +737,8 @@ export default function HomeScreen() {
     refreshBookingNotif();
     // Reload name on every focus so edits made in Settings are reflected instantly.
     AsyncStorage.getItem('andalus_preferred_name').then(n => setPreferredName(n ?? null));
-    // Reload dev test flag on every focus so toggling in Settings is reflected immediately.
-    if (__DEV__) {
-      AsyncStorage.getItem('andalus_test_dhulhijjah_day10').then(v => setTestDhulHijjahDay10(v === 'true'));
-    }
+    // TEMP: reload test flag on focus. Remove after TestFlight testing.
+    AsyncStorage.getItem('andalus_test_dhulhijjah_day10').then(v => setTestDhulHijjahDay10(v === 'true'));
     // If the user tapped a YouTube LIVE notification, scroll to the YouTube card.
     // Two paths:
     //   Warm start: card already rendered → youtubeCardYRef.current > 0 → scroll immediately.

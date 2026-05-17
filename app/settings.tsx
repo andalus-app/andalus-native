@@ -203,10 +203,8 @@ export default function SettingsScreen() {
       }
       const name = await AsyncStorage.getItem('andalus_preferred_name');
       setPreferredName(name ?? null);
-      if (__DEV__) {
-        const testDay10 = await AsyncStorage.getItem('andalus_test_dhulhijjah_day10');
-        setTestDhulHijjahDay10(testDay10 === 'true');
-      }
+      const testDay10 = await AsyncStorage.getItem('andalus_test_dhulhijjah_day10');
+      setTestDhulHijjahDay10(testDay10 === 'true');
       if (Platform.OS === 'ios') {
         const [{ status: bgStatus }, dismissed] = await Promise.all([
           Location.getBackgroundPermissionsAsync(),
@@ -708,36 +706,34 @@ export default function SettingsScreen() {
           )}
         </View>
 
-        {__DEV__ && (
-          <>
-            <SectionLabel label="Utvecklarläge" T={T}/>
-            <View style={{backgroundColor:T.card,borderRadius:14,borderWidth:0.5,borderColor:T.border,marginBottom:8}}>
-              <Row
-                iconName="star"
-                label="Simulera 10 Dhul Hijjah"
-                value="Testar Eid-banner, Tashriq-kort A+B"
-                T={T}
-                right={
-                  <Switch
-                    value={testDhulHijjahDay10}
-                    onValueChange={async (v) => {
-                      setTestDhulHijjahDay10(v);
-                      await AsyncStorage.setItem('andalus_test_dhulhijjah_day10', v ? 'true' : 'false');
-                    }}
-                    trackColor={{ false: T.border, true: T.accent }}
-                    thumbColor="#fff"
-                  />
-                }
+        {/* TEMP: remove after TestFlight testing */}
+        <SectionLabel label="Testläge" T={T}/>
+        <View style={{backgroundColor:T.card,borderRadius:14,borderWidth:0.5,borderColor:T.border,marginBottom:8}}>
+          <Row
+            iconName="star"
+            label="Simulera 10 Dhul Hijjah"
+            value="Testar Eid-banner, Tashriq-kort A+B"
+            T={T}
+            right={
+              <Switch
+                value={testDhulHijjahDay10}
+                onValueChange={async (v) => {
+                  setTestDhulHijjahDay10(v);
+                  await AsyncStorage.setItem('andalus_test_dhulhijjah_day10', v ? 'true' : 'false');
+                }}
+                trackColor={{ false: T.border, true: T.accent }}
+                thumbColor="#fff"
               />
-            </View>
-          </>
-        )}
+            }
+          />
+        </View>
+        {/* END TEMP */}
 
         <SectionLabel label="Om appen" T={T}/>
         <View style={{backgroundColor:T.card,borderRadius:14,borderWidth:0.5,borderColor:T.border,padding:16}}>
           <Text style={{fontSize:15,fontWeight:'700',color:T.text}}>Hidayah</Text>
           <Text style={{fontSize:13,color:T.textMuted,marginTop:2}}>Bönetider och Qibla-kompass</Text>
-          <Text style={{fontSize:12,color:T.textMuted,marginTop:6,opacity:0.7}}>Version 1.8.6</Text>
+          <Text style={{fontSize:12,color:T.textMuted,marginTop:6,opacity:0.7}}>Version 1.8.7</Text>
           <Text style={{fontSize:11,color:T.textMuted,marginTop:2,opacity:0.55}}>
             © {new Date().getFullYear()} Fatih Köker. Alla rättigheter förbehållna.
           </Text>
