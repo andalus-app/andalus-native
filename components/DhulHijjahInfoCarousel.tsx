@@ -577,14 +577,13 @@ function cardAccent(variant: SlideVariant, T: any, isDark: boolean) {
 // ── main component ────────────────────────────────────────────────────────────
 
 type Props = {
-  testMode?:    boolean;
-  testDayTen?:  boolean;
-  fajr:         Date | null;
-  maghrib:      Date | null;
-  now:          Date;
+  testMode?: boolean;
+  fajr:      Date | null;
+  maghrib:   Date | null;
+  now:       Date;
 };
 
-export default function DhulHijjahInfoCarousel({ testMode = false, testDayTen = false, fajr, maghrib, now }: Props) {
+export default function DhulHijjahInfoCarousel({ testMode = false, fajr, maghrib, now }: Props) {
   const { theme: T, isDark } = useTheme();
   const { hijriDate }         = useApp();
   const { width: screenWidth } = useWindowDimensions();
@@ -594,21 +593,19 @@ export default function DhulHijjahInfoCarousel({ testMode = false, testDayTen = 
 
   const dates = useMemo(() => getDates(hijriDate, testMode), [hijriDate, testMode]);
 
-  // testDayTen overrides everything: simulate being on day 10 with Tashriq period active.
-  const currentDay = testDayTen ? 10 : (dates?.currentDay ?? 0);
+  const currentDay = dates?.currentDay ?? 0;
 
   // True when Tashriq slides should be visible:
   //   day 9  — from Fajr onwards
   //   day 10–12 — all day
   //   day 13 — until Maghrib
   const isTashriqPeriod = useMemo(() => {
-    if (testDayTen) return true;
-    if (testMode)   return true;
+    if (testMode) return true;
     if (currentDay === 9)  return fajr    !== null && now >= fajr;
     if (currentDay >= 10 && currentDay <= 12) return true;
     if (currentDay === 13) return maghrib !== null && now < maghrib;
     return false;
-  }, [testDayTen, testMode, currentDay, fajr, maghrib, now]);
+  }, [testMode, currentDay, fajr, maghrib, now]);
 
   const slides = useMemo(() => {
     const tashriq = isTashriqPeriod ? TASHRIQ_SLIDES : [];
@@ -628,7 +625,7 @@ export default function DhulHijjahInfoCarousel({ testMode = false, testDayTen = 
     }
   }, [slides.length]);
 
-  if (!dates && !testDayTen) return null;
+  if (!dates) return null;
   if (slides.length === 0) return null;
 
   const handleScroll = useCallback(

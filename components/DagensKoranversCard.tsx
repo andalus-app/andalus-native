@@ -71,7 +71,7 @@ function AccentDivider({ color, small }: { color: string; small?: boolean }) {
   );
 }
 
-function DagensKoranversCard({ testMode = false, testDayTen = false }: { testMode?: boolean; testDayTen?: boolean }) {
+function DagensKoranversCard({ testMode = false }: { testMode?: boolean }) {
   const { theme: T, isDark } = useTheme();
   const { hijriDate } = useApp();
   const router = useRouter();
@@ -91,7 +91,6 @@ function DagensKoranversCard({ testMode = false, testDayTen = false }: { testMod
   const verse = useMemo(() => getDailyQuranVerse(new Date()), [dateKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const dhulHijjahPhase = useMemo((): DhulHijjahPhase => {
-    if (testDayTen) return 'days10to13';
     if (testMode) return 'days1to5';
     if (!hijriDate || hijriDate.month?.number !== 12) return 'none';
     const day = parseInt(String(hijriDate.day), 10);
@@ -99,7 +98,7 @@ function DagensKoranversCard({ testMode = false, testDayTen = false }: { testMod
     if (day >= 6  && day <= 9)  return 'days6to9';
     if (day >= 10 && day <= 13) return 'days10to13';
     return 'none';
-  }, [hijriDate, testMode, testDayTen]);
+  }, [hijriDate, testMode]);
 
   // Pre-warm Quran page fonts + data for today's verse so the reader opens
   // instantly. Fires once per day (date-keyed session guard in the service),
