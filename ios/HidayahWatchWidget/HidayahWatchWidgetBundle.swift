@@ -5,5 +5,7 @@ import SwiftUI
 struct HidayahWatchWidgetBundle: WidgetBundle {
     var body: some Widget {
         HidayahWatchWidget()
+        HidayahNextPrayerLargeWidget()
+        HidayahPrayerTimelineLargeWidget()
     }
 }
