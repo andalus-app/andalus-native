@@ -56,3 +56,9 @@ scripts/prayer-import/.venv/
 Tatorter_2023.gpkg
 *.gpkg
 prayer_import.log
+ios/Pods_delete_me/
+ios/Pods/
+ios/Pods_delete_me/
+ios/Pods/
+ios/Pods_delete_me/
+ios/Pods/

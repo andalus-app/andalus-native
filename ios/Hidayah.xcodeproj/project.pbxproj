@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 60;
+	objectVersion = 70;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -13,7 +13,6 @@
 		6EBE6C5503E2E314FC98B217 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 35A82D2A37D138C858377FF8 /* PrivacyInfo.xcprivacy */; };
 		A66CA4B2F8039FB7C896D88B /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 35A82D2A37D138C858377FF8 /* PrivacyInfo.xcprivacy */; };
 		AC111006AABB00CC11223344 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DC96A8AB2F8B6BCF003994AE /* WidgetKit.framework */; };
-		EE111001AABB00CC11223344 /* HidayahWatchWidgetExtension.appex in Embed Watch Extensions */ = {isa = PBXBuildFile; fileRef = AC111001AABB00CC11223344 /* HidayahWatchWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		AC111007AABB00CC11223344 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DC96A8AD2F8B6BCF003994AE /* SwiftUI.framework */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
 		BD111004AABB00CC11223344 /* HidayahWatchApp.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = BD111001AABB00CC11223344 /* HidayahWatchApp.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -23,19 +22,13 @@
 		DC96A8AE2F8B6BCF003994AE /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DC96A8AD2F8B6BCF003994AE /* SwiftUI.framework */; };
 		DC96A8B92F8B6BD0003994AE /* HidayahWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = DC96A8AA2F8B6BCF003994AE /* HidayahWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		EA602CE1B423D1F099E668BD /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E3206337C8F5D442D9F2360 /* ExpoModulesProvider.swift */; };
+		EE111001AABB00CC11223344 /* HidayahWatchWidgetExtension.appex in Embed Watch Extensions */ = {isa = PBXBuildFile; fileRef = AC111001AABB00CC11223344 /* HidayahWatchWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
 		FA8B3D2E9C456F01230AABC2 /* LocationBackgroundManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA8B3D2E9C456F01230AABC1 /* LocationBackgroundManager.swift */; };
 		FB9C4D3E1A567B02340BBCD2 /* NativeNotificationScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB9C4D3E1A567B02340BBCD1 /* NativeNotificationScheduler.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
-		EE111003AABB00CC11223344 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 83CBB9F71A601CBA00E9B192 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = AC11100BAABB00CC11223344;
-			remoteInfo = HidayahWatchWidgetExtension;
-		};
 		BD11100BAABB00CC11223344 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 83CBB9F71A601CBA00E9B192 /* Project object */;
@@ -49,6 +42,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = DC96A8A92F8B6BCF003994AE;
 			remoteInfo = HidayahWidgetExtension;
+		};
+		EE111003AABB00CC11223344 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 83CBB9F71A601CBA00E9B192 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = AC11100BAABB00CC11223344;
+			remoteInfo = HidayahWatchWidgetExtension;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -64,17 +64,6 @@
 			name = "Embed Watch Content";
 			runOnlyForDeploymentPostprocessing = 1;
 		};
-		EE111002AABB00CC11223344 /* Embed Watch Extensions */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 8;
-			dstPath = "";
-			dstSubfolderSpec = 13;
-			files = (
-				EE111001AABB00CC11223344 /* HidayahWatchWidgetExtension.appex in Embed Watch Extensions */,
-			);
-			name = "Embed Watch Extensions";
-			runOnlyForDeploymentPostprocessing = 1;
-		};
 		DC96A8BE2F8B6BD0003994AE /* Embed Foundation Extensions */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 8;
@@ -84,6 +73,17 @@
 				DC96A8B92F8B6BD0003994AE /* HidayahWidgetExtension.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 1;
+		};
+		EE111002AABB00CC11223344 /* Embed Watch Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 8;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				EE111001AABB00CC11223344 /* HidayahWatchWidgetExtension.appex in Embed Watch Extensions */,
+			);
+			name = "Embed Watch Extensions";
 			runOnlyForDeploymentPostprocessing = 1;
 		};
 /* End PBXCopyFilesBuildPhase section */
@@ -621,11 +621,6 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
-		EE111004AABB00CC11223344 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = AC11100BAABB00CC11223344 /* HidayahWatchWidgetExtension */;
-			targetProxy = EE111003AABB00CC11223344 /* PBXContainerItemProxy */;
-		};
 		BD11100CAABB00CC11223344 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = BD11100AAABB00CC11223344 /* HidayahWatchApp */;
@@ -635,6 +630,11 @@
 			isa = PBXTargetDependency;
 			target = DC96A8A92F8B6BCF003994AE /* HidayahWidgetExtension */;
 			targetProxy = DC96A8B72F8B6BD0003994AE /* PBXContainerItemProxy */;
+		};
+		EE111004AABB00CC11223344 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = AC11100BAABB00CC11223344 /* HidayahWatchWidgetExtension */;
+			targetProxy = EE111003AABB00CC11223344 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -683,6 +683,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Hidayah/Hidayah.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CURRENT_PROJECT_VERSION = 32;
 				DEVELOPMENT_TEAM = EVP8ULXZUC;
 				INFOPLIST_FILE = Hidayah/Info.plist;
@@ -862,7 +863,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.anonymous.Hidayah.watchkitapp.HidayahWatchWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
-				SKIP_INSTALL = NO;
+				SKIP_INSTALL = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -887,6 +888,7 @@
 				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CODE_SIGN_ENTITLEMENTS = HidayahWatchWidget/HidayahWatchWidget.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 32;
@@ -910,7 +912,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.anonymous.Hidayah.watchkitapp.HidayahWatchWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
-				SKIP_INSTALL = NO;
+				SKIP_INSTALL = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -952,7 +954,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.anonymous.Hidayah.watchkitapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
-				SKIP_INSTALL = NO;
+				SKIP_INSTALL = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -972,6 +974,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_WEAK = YES;
 				CODE_SIGN_ENTITLEMENTS = HidayahWatchApp/HidayahWatchApp.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 32;
@@ -994,7 +997,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.anonymous.Hidayah.watchkitapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
-				SKIP_INSTALL = NO;
+				SKIP_INSTALL = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -1041,7 +1044,7 @@
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_DEBUG";
 				PRODUCT_BUNDLE_IDENTIFIER = com.anonymous.Hidayah.HidayahWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SKIP_INSTALL = NO;
+				SKIP_INSTALL = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -1068,6 +1071,8 @@
 				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CODE_SIGN_ENTITLEMENTS = HidayahWidgetExtension.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 32;
@@ -1091,7 +1096,7 @@
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_RELEASE";
 				PRODUCT_BUNDLE_IDENTIFIER = com.anonymous.Hidayah.HidayahWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SKIP_INSTALL = NO;
+				SKIP_INSTALL = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
