@@ -34,18 +34,19 @@ function getDates(hijriDate: any, testMode: boolean) {
   const today = new Date();
   if (testMode) {
     const day1 = addDays(today, -1); // dag 2 → dag 1 var igår
-    return { day1, day9: addDays(day1, 8), day10: addDays(day1, 9) };
+    return { day1, day9: addDays(day1, 8), day10: addDays(day1, 9), currentDay: 2 };
   }
   if (!hijriDate || hijriDate.month?.number !== 12) return null;
   const d = parseInt(String(hijriDate.day), 10);
-  if (isNaN(d) || d < 1 || d > 9) return null;
+  // Extend to day 13 so the component survives the Tashriq days
+  if (isNaN(d) || d < 1 || d > 13) return null;
   const day1 = addDays(today, -(d - 1));
-  return { day1, day9: addDays(day1, 8), day10: addDays(day1, 9) };
+  return { day1, day9: addDays(day1, 8), day10: addDays(day1, 9), currentDay: d };
 }
 
 // ── slide data ────────────────────────────────────────────────────────────────
 
-type SlideVariant = 'splash' | 'overview' | 'info' | 'quote' | 'dual-quote' | 'text' | 'deeds';
+type SlideVariant = 'splash' | 'overview' | 'info' | 'quote' | 'dual-quote' | 'text' | 'deeds' | 'tashriq';
 
 type Slide = {
   id: string;
@@ -61,6 +62,37 @@ type Slide = {
   bullets?: string[];
   footer?: string;
 };
+
+// Two Tashriq slides — shown from Fajr day 9 through Maghrib day 13.
+const TASHRIQ_SLIDES: Slide[] = [
+  {
+    id: 'tashriq-1',
+    variant: 'tashriq',
+    title: 'Tashriq-dagarna',
+    subtitle: 'Dagar fyllda med dhikr och tacksamhet',
+    body:
+      'Att minnas Allah under tashriq-dagarna är en stor handling av dyrkan. ' +
+      'Bland det bästa man kan göra är att recitera takbîr efter de obligatoriska bönerna:',
+    quote:
+      'Allahu Akbar Allahu Akbar, lâ ilâha illa-Allah,\n' +
+      'wa-Allahu Akbar, Allahu Akbar, wa lillâhil-hamd.',
+  },
+  {
+    id: 'tashriq-2',
+    variant: 'tashriq',
+    title: 'Tashriq-dagarna',
+    subtitle: 'Takbîrens betydelse',
+    body: 'Detta betyder:',
+    quote:
+      'Allah är större, Allah är större.\n' +
+      'Ingen har rätt att dyrkas förutom Allah.\n' +
+      'Allah är större, Allah är större, och all pris och tacksamhet tillhör Allah.',
+    secondQuote: 'Och prisa Allah under de [tre] fastställda dagarna.',
+    reference: 'Koranen 2:203',
+    footer:
+      'Takbîr reciteras direkt efter de obligatoriska bönerna från Fajr på Arafah-dagen fram till slutet av den tredje tashriq-dagen.',
+  },
+];
 
 function buildSlides(
   day1: Date | null,
@@ -426,15 +458,93 @@ function SlideSplash({ slide }: { slide: Slide }) {
   );
 }
 
+function SlideTashriq({ slide, isDark }: { slide: Slide; isDark: boolean }) {
+  const mutedText = isDark ? 'rgba(255,255,255,0.88)' : 'rgba(0,0,0,0.82)';
+  const quoteBg   = isDark ? 'rgba(201,168,76,0.07)' : 'rgba(201,168,76,0.06)';
+  const quoteLeft = isDark ? 'rgba(201,168,76,0.50)' : 'rgba(201,168,76,0.65)';
+
+  return (
+    <View style={{ flex: 1 }}>
+      {/* Title + subtitle */}
+      <View style={{ marginBottom: 6 }}>
+        <Text style={{ fontSize: 14, fontWeight: '700', color: GOLD, lineHeight: 18 }}>
+          {slide.title}
+        </Text>
+        {slide.subtitle ? (
+          <Text style={{ fontSize: 10.5, fontStyle: 'italic', color: GOLD, opacity: 0.75, lineHeight: 14, marginTop: 1 }}>
+            {slide.subtitle}
+          </Text>
+        ) : null}
+      </View>
+
+      {/* Body text */}
+      {slide.body ? (
+        <Text style={{ fontSize: 11, color: mutedText, lineHeight: 16, marginBottom: 6 }}>
+          {slide.body}
+        </Text>
+      ) : null}
+
+      {/* Quote block — takes remaining space */}
+      <View style={{
+        flex: 1,
+        backgroundColor: quoteBg,
+        borderLeftWidth: 2.5,
+        borderLeftColor: quoteLeft,
+        borderRadius: 6,
+        paddingHorizontal: 10,
+        paddingVertical: 8,
+        justifyContent: 'center',
+      }}>
+        <Text style={{ fontSize: 12, fontStyle: 'italic', color: mutedText, lineHeight: 19 }}>
+          {slide.quote}
+        </Text>
+      </View>
+
+      {/* Quran verse + citation */}
+      {slide.secondQuote ? (
+        <View style={{ marginTop: 6 }}>
+          <Text style={{
+            fontSize: 11.5, fontStyle: 'italic',
+            color: isDark ? 'rgba(201,168,76,0.92)' : 'rgba(160,120,40,0.95)',
+            lineHeight: 17, letterSpacing: 0.1,
+          }}>
+            {slide.secondQuote}
+          </Text>
+          {slide.reference ? (
+            <Text style={{
+              fontSize: 10, fontStyle: 'italic',
+              color: isDark ? 'rgba(201,168,76,0.55)' : 'rgba(160,120,40,0.65)',
+              marginTop: 2,
+            }}>
+              — {slide.reference}
+            </Text>
+          ) : null}
+        </View>
+      ) : slide.reference ? (
+        <Text style={{ fontSize: 10, color: GOLD, marginTop: 5, opacity: 0.8 }}>
+          {slide.reference}
+        </Text>
+      ) : null}
+      {slide.footer ? (
+        <Text style={{ fontSize: 10, color: mutedText, marginTop: 4, lineHeight: 14, opacity: 0.65 }}
+              numberOfLines={3}>
+          {slide.footer}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
 function SlideContent({ slide, T, isDark }: { slide: Slide; T: any; isDark: boolean }) {
   switch (slide.variant) {
     case 'splash':      return <SlideSplash      slide={slide} />;
-    case 'overview':    return <SlideOverview   slide={slide} T={T} isDark={isDark} />;
+    case 'overview':    return <SlideOverview    slide={slide} T={T} isDark={isDark} />;
     case 'info':        return <SlideInfo        slide={slide} T={T} isDark={isDark} />;
     case 'quote':       return <SlideQuote       slide={slide} T={T} isDark={isDark} />;
     case 'dual-quote':  return <SlideDualQuote   slide={slide} T={T} isDark={isDark} />;
     case 'text':        return <SlideText        slide={slide} T={T} isDark={isDark} />;
     case 'deeds':       return <SlideDeeds       slide={slide} T={T} isDark={isDark} />;
+    case 'tashriq':     return <SlideTashriq     slide={slide} isDark={isDark} />;
   }
 }
 
@@ -450,61 +560,80 @@ function cardAccent(variant: SlideVariant, T: any, isDark: boolean) {
         top:    GOLD,
       };
     case 'info':
-      return {
-        bg:     T.card,
-        border: T.border,
-        top:    T.accent,
-      };
+      return { bg: T.card, border: T.border, top: T.accent };
     case 'quote':
-      return {
-        bg:     T.card,
-        border: T.border,
-        top:    GOLD,
-      };
+      return { bg: T.card, border: T.border, top: GOLD };
     case 'dual-quote':
-      return {
-        bg:     T.card,
-        border: T.border,
-        top:    GOLD,
-      };
+      return { bg: T.card, border: T.border, top: GOLD };
     case 'text':
-      return {
-        bg:     T.card,
-        border: T.border,
-        top:    T.accent,
-      };
+      return { bg: T.card, border: T.border, top: T.accent };
     case 'deeds':
+      return { bg: T.card, border: T.border, top: T.accent };
+    case 'tashriq':
       return {
-        bg:     T.card,
-        border: T.border,
-        top:    T.accent,
+        bg:     isDark ? 'rgba(201,168,76,0.07)' : 'rgba(201,168,76,0.05)',
+        border: isDark ? 'rgba(201,168,76,0.20)' : 'rgba(201,168,76,0.25)',
+        top:    GOLD,
       };
   }
 }
 
 // ── main component ────────────────────────────────────────────────────────────
 
-type Props = { testMode?: boolean };
+type Props = {
+  testMode?:    boolean;
+  testDayTen?:  boolean;
+  fajr:         Date | null;
+  maghrib:      Date | null;
+  now:          Date;
+};
 
-export default function DhulHijjahInfoCarousel({ testMode = false }: Props) {
+export default function DhulHijjahInfoCarousel({ testMode = false, testDayTen = false, fajr, maghrib, now }: Props) {
   const { theme: T, isDark } = useTheme();
   const { hijriDate }         = useApp();
   const { width: screenWidth } = useWindowDimensions();
   const [activeIndex, setActiveIndex] = useState(0);
 
-  // Card width: leaves PEEK px of the next card visible on the right.
-  // Formula: screenWidth(full via -margin) − paddingLeft(16) − GAP(8) − PEEK(20)
   const CARD_W = Math.floor(screenWidth - 16 - GAP - PEEK);
 
   const dates = useMemo(() => getDates(hijriDate, testMode), [hijriDate, testMode]);
 
-  const slides = useMemo(
-    () => buildSlides(dates?.day1 ?? null, dates?.day9 ?? null, dates?.day10 ?? null),
-    [dates],
-  );
+  // testDayTen overrides everything: simulate being on day 10 with Tashriq period active.
+  const currentDay = testDayTen ? 10 : (dates?.currentDay ?? 0);
 
-  // Mirror DhulHijjahHighlightsCard: hide if grid would hide
-  if (!dates) return null;
+  // True when Tashriq slides should be visible:
+  //   day 9  — from Fajr onwards
+  //   day 10–12 — all day
+  //   day 13 — until Maghrib
+  const isTashriqPeriod = useMemo(() => {
+    if (testDayTen) return true;
+    if (testMode)   return true;
+    if (currentDay === 9)  return fajr    !== null && now >= fajr;
+    if (currentDay >= 10 && currentDay <= 12) return true;
+    if (currentDay === 13) return maghrib !== null && now < maghrib;
+    return false;
+  }, [testDayTen, testMode, currentDay, fajr, maghrib, now]);
+
+  const slides = useMemo(() => {
+    const tashriq = isTashriqPeriod ? TASHRIQ_SLIDES : [];
+    // Main slides only on days 1–9; from day 10 onwards only Tashriq slides show
+    const main = currentDay <= 9
+      ? buildSlides(dates?.day1 ?? null, dates?.day9 ?? null, dates?.day10 ?? null)
+      : [];
+    return [...tashriq, ...main];
+  }, [isTashriqPeriod, currentDay, dates]);
+
+  // Reset pagination when the slide list changes length (e.g. Tashriq slides appear)
+  const slidesLenRef = React.useRef(slides.length);
+  React.useEffect(() => {
+    if (slidesLenRef.current !== slides.length) {
+      slidesLenRef.current = slides.length;
+      setActiveIndex(0);
+    }
+  }, [slides.length]);
+
+  if (!dates && !testDayTen) return null;
+  if (slides.length === 0) return null;
 
   const handleScroll = useCallback(
     (e: { nativeEvent: { contentOffset: { x: number } } }) => {
@@ -525,7 +654,7 @@ export default function DhulHijjahInfoCarousel({ testMode = false }: Props) {
         fontSize: 12, fontWeight: '600', color: T.textMuted,
         letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 11,
       }}>
-        Lär dig om Dhul Hijjah
+        {isTashriqPeriod && currentDay >= 10 ? 'Tashriq-dagarna' : 'Lär dig om Dhul Hijjah'}
       </Text>
 
       {/* Carousel — negative margin lets it bleed to screen edges for peek + shadow room */}

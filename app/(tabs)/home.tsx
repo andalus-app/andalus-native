@@ -557,6 +557,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
   const [bellOpen, setBellOpen] = useState(false);
+  const [testDhulHijjahDay10, setTestDhulHijjahDay10] = useState(false);
 
   const { pendingCount, cancelledCount, pendingBookings, bookingNotifs, totalUnread: bookingUnread, isAdmin, isLoggedIn, dismissNotif, markAllSeen, refresh: refreshBookingNotif } = useBookingNotif();
   const { stream, isLive, isUpcoming, refresh: refreshYoutube } = useYoutubeLive();
@@ -736,6 +737,10 @@ export default function HomeScreen() {
     refreshBookingNotif();
     // Reload name on every focus so edits made in Settings are reflected instantly.
     AsyncStorage.getItem('andalus_preferred_name').then(n => setPreferredName(n ?? null));
+    // Reload dev test flag on every focus so toggling in Settings is reflected immediately.
+    if (__DEV__) {
+      AsyncStorage.getItem('andalus_test_dhulhijjah_day10').then(v => setTestDhulHijjahDay10(v === 'true'));
+    }
     // If the user tapped a YouTube LIVE notification, scroll to the YouTube card.
     // Two paths:
     //   Warm start: card already rendered → youtubeCardYRef.current > 0 → scroll immediately.
@@ -1231,14 +1236,19 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* ── Dhul Hijjah highlights — visas dag 1–9 Dhul Hijjah ── */}
-        <DhulHijjahHighlightsCard />
+        {/* ── Dhul Hijjah highlights — visas dag 1–9 Dhul Hijjah (döljs dag 10+) ── */}
+        {!testDhulHijjahDay10 && <DhulHijjahHighlightsCard />}
 
         {/* Dagens Koranvers — visar Dhul Hijjah-banner under dessa dagar */}
-        <DagensKoranversCard />
+        <DagensKoranversCard testDayTen={testDhulHijjahDay10} />
 
         {/* ── Dhul Hijjah info carousel — efter "Dhul-Hijjah är här", före Hadith ── */}
-        <DhulHijjahInfoCarousel />
+        <DhulHijjahInfoCarousel
+          fajr={prayerTimesForEngine.fajr}
+          maghrib={prayerTimesForEngine.maghrib}
+          now={now}
+          testDayTen={testDhulHijjahDay10}
+        />
 
         {/* Dagens Hadith */}
         <DagensHadithCard />
@@ -1248,6 +1258,7 @@ export default function HomeScreen() {
           fajr={prayerTimesForEngine.fajr}
           maghrib={prayerTimesForEngine.maghrib}
           now={now}
+          testDayTen={testDhulHijjahDay10}
         />
 
         {/* ── Fortsätt ── (items ordered by homeV2TimeEngine based on prayer time) */}
