@@ -55,14 +55,14 @@
 /* Begin PBXCopyFilesBuildPhase section */
 		AC11100EAABB00CC11223344 /* Embed Watch Content */ = {
 			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 8;
+			buildActionMask = 12;
 			dstPath = "";
 			dstSubfolderSpec = 16;
 			files = (
 				BD111004AABB00CC11223344 /* HidayahWatchApp.app in Embed Watch Content */,
 			);
 			name = "Embed Watch Content";
-			runOnlyForDeploymentPostprocessing = 1;
+			runOnlyForDeploymentPostprocessing = 0;
 		};
 		DC96A8BE2F8B6BD0003994AE /* Embed Foundation Extensions */ = {
 			isa = PBXCopyFilesBuildPhase;
@@ -77,14 +77,14 @@
 		};
 		EE111002AABB00CC11223344 /* Embed Watch Extensions */ = {
 			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 8;
+			buildActionMask = 12;
 			dstPath = "";
 			dstSubfolderSpec = 13;
 			files = (
 				EE111001AABB00CC11223344 /* HidayahWatchWidgetExtension.appex in Embed Watch Extensions */,
 			);
 			name = "Embed Watch Extensions";
-			runOnlyForDeploymentPostprocessing = 1;
+			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXCopyFilesBuildPhase section */
 
