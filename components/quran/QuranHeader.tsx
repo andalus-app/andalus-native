@@ -16,6 +16,7 @@ import {
 import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Haptics from 'expo-haptics';
 import SvgIcon from '../SvgIcon';
 import { useTheme } from '../../context/ThemeContext';
 import { useQuranContext } from '../../context/QuranContext';
@@ -135,6 +136,7 @@ function QuranHeader() {
   const router   = useRouter();
   const {
     openContentsMenu,
+    openContentsMenuOnBookmarks,
     toggleSettingsPanel,
     openSearch,
     settings,
@@ -155,6 +157,7 @@ function QuranHeader() {
   const { toastData, show: showToast, opacity: toastOpacity, translateY: toastTranslateY } = useSaveToast();
 
   const handleBookmarkPress = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (isPageSaved(currentPage)) {
       const saved = savedPages.find((p) => p.pageNumber === currentPage);
       if (saved) removeSavedPage(saved.id);
@@ -168,6 +171,15 @@ function QuranHeader() {
       showToast({ surahName: surah?.nameSimple ?? '', page: currentPage });
     }
   }, [isPageSaved, currentPage, savedPages, removeSavedPage, savePage, currentSurahId, showToast]);
+
+  const handleBookmarkLongPress = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).then(() => {
+      setTimeout(() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      }, 120);
+    });
+    openContentsMenuOnBookmarks();
+  }, [openContentsMenuOnBookmarks]);
 
   const paddingTop = insets.top + 6;
   const isSaved = isPageSaved(currentPage);
@@ -209,6 +221,8 @@ function QuranHeader() {
             <TouchableOpacity
               style={styles.iconBtn}
               onPress={handleBookmarkPress}
+              onLongPress={handleBookmarkLongPress}
+              delayLongPress={500}
               activeOpacity={0.7}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >

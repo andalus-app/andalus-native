@@ -44,7 +44,40 @@ const PRAYERS: Record<string, string> = {
   Isha:    'Isha',
 };
 
-const ID_PREFIX = 'andalus-prayer-';
+// Current format includes the local calendar date so each prayer×day combination
+// is a unique identifier: hidayah-prayer-YYYY-MM-DD-asr
+// This prevents a stale "tomorrow" slot from a previous schedule from silently
+// re-firing because its HH:MM happens to match a future day's prayer time.
+const PRAYER_ID_PREFIX        = 'hidayah-prayer-';
+// Old fixed-slot format (andalus-prayer-today-*, andalus-prayer-tomorrow-*).
+// Kept only for backwards-compat cancel — never used for new notifications.
+const LEGACY_PRAYER_ID_PREFIX = 'andalus-prayer-';
+
+// Exported so NativeNotificationScheduler.swift can do prefix-based cancel.
+// The exact identifiers are no longer predictable without the local date, so
+// native must filter getAllPendingNotificationRequests by this prefix instead
+// of using a fixed ID list.
+export const PRAYER_NOTIFICATION_PREFIX = PRAYER_ID_PREFIX;
+
+// Legacy exact IDs — kept so native code that has not yet migrated to prefix-
+// based cancel continues to remove old-format notifications on older builds.
+export const PRAYER_NOTIFICATION_IDS: string[] = (() => {
+  const slots   = ['today', 'tomorrow'];
+  const prayers = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
+  return slots.flatMap(s => prayers.map(p => `${LEGACY_PRAYER_ID_PREFIX}${s}-${p}`));
+})();
+
+// ── Generation counter — concurrent-call safety ──────────────────────────────
+// schedulePrayerNotifications increments this on every call. Any in-progress
+// older call checks the counter after each await and aborts if a newer call
+// has taken over. This prevents two concurrent calls (e.g. useEffect re-render
+// + background location task) from interleaving cancel/schedule operations and
+// leaving stale or duplicate notifications in the iOS scheduler.
+let _prayerScheduleGen = 0;
+
+function _localIsoDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 // ── Permission ───────────────────────────────────────────────────────────────
 export async function requestNotificationPermission(): Promise<boolean> {
@@ -56,14 +89,6 @@ export async function requestNotificationPermission(): Promise<boolean> {
     return status === 'granted';
   } catch { return false; }
 }
-
-// ── Stable prayer notification identifiers (shared with NativeNotificationScheduler.swift) ──
-// Both JS and native cancel only these before rescheduling, preventing duplicates.
-export const PRAYER_NOTIFICATION_IDS: string[] = (() => {
-  const slots   = ['today', 'tomorrow'];
-  const prayers = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
-  return slots.flatMap(s => prayers.map(p => `${ID_PREFIX}${s}-${p}`));
-})();
 
 function timeToMin(t: string | undefined): number {
   if (!t) return -1;
@@ -148,41 +173,98 @@ export async function schedulePrayerNotifications(
 ): Promise<void> {
   if (!N) return;
   try {
-    // Ensure permission is granted — this is a no-op if already granted.
-    // Critical: without this, scheduleNotificationAsync fails silently if
-    // the user never explicitly toggled the setting in Settings.
-    // Never auto-request here — onboarding/settings is responsible for that.
     const { status } = await N.getPermissionsAsync();
     if (status !== 'granted') return;
 
-    // Skip rescheduling if the existing schedule state (written by JS or native)
-    // already reflects these exact times — avoids a redundant cancel+reschedule
-    // cycle that would briefly clear notifications before restoring them.
+    // Skip rescheduling when the existing schedule already reflects these exact
+    // times — avoids a redundant cancel+reschedule cycle.
+    // Guard: also verify that at least one prayer notification is still pending
+    // in the iOS scheduler. If the user toggled notifications off/on in Settings
+    // (which clears all pending notifications), scheduleStateUnchanged would
+    // otherwise return true and silently skip rescheduling, leaving zero active
+    // prayer notifications until the next state-changing event.
     if (Platform.OS === 'ios') {
-      const existing = await getNotificationScheduleState().catch(() => null);
-      if (existing && scheduleStateUnchanged(todayTimes, tomorrowTimes, cityName, existing, context)) return;
+      const [existing, pending] = await Promise.all([
+        getNotificationScheduleState().catch(() => null),
+        N.getAllScheduledNotificationsAsync().catch(() => []),
+      ]);
+      const hasPrayerPending = (pending as Array<{ identifier: string }>)
+        .some(n => n.identifier.startsWith(PRAYER_ID_PREFIX));
+      if (existing && hasPrayerPending && scheduleStateUnchanged(todayTimes, tomorrowTimes, cityName, existing, context)) return;
     }
 
+    // Claim a generation so any older concurrent call aborts at its next await.
+    const gen = ++_prayerScheduleGen;
+
     await cancelPrayerNotifications();
+    if (_prayerScheduleGen !== gen) return; // newer call took over
 
-    const now    = new Date();
-    const today  = new Date();
-    const tomRow = new Date();
-    tomRow.setDate(tomRow.getDate() + 1);
+    const now = new Date();
 
-    const queue = async (key: string, timeStr: string, base: Date, slot: string) => {
+    // Build explicit Date objects for today and tomorrow using local calendar
+    // components so that fire dates are always anchored to the correct day —
+    // never derived from setHours() on a live new Date() which can place a
+    // tomorrowTimes entry on the current day if its HH:MM is still in the future.
+    const todayBase   = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const tomBase     = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    const todayStr    = _localIsoDate(todayBase);
+    const tomStr      = _localIsoDate(tomBase);
+
+    // Hard look-ahead limits: a today-slot prayer cannot be scheduled more than
+    // 26 h in the future (covers Fajr in extreme latitudes); tomorrow-slot is
+    // at most ~38 h away (Isha at midnight, next Fajr up to 38 h out).
+    const MAX_TODAY_MS    = 26 * 3_600_000;
+    const MAX_TOMORROW_MS = 50 * 3_600_000;
+
+    // Dedup guard: at most one notification per prayer × calendar date.
+    const scheduled = new Set<string>();
+
+    const queue = async (
+      key:        string,
+      timeStr:    string,
+      baseDate:   Date,
+      targetStr:  string,
+      maxAheadMs: number,
+    ) => {
       const [hh, mm] = timeStr.split(':').map(Number);
       if (isNaN(hh) || isNaN(mm)) return;
-      const fire = new Date(base);
-      fire.setHours(hh, mm, 0, 0);
+
+      // Construct fire from the target date's year/month/day + parsed HH:MM.
+      // This guarantees the fire date is always on targetStr regardless of when
+      // schedulePrayerNotifications is called (no reliance on base.setHours).
+      const fire = new Date(
+        baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate(),
+        hh, mm, 0, 0,
+      );
+
+      const prayerKey  = key.toLowerCase();
+      const dedupKey   = `${targetStr}-${prayerKey}`;
+      const identifier = `${PRAYER_ID_PREFIX}${targetStr}-${prayerKey}`;
+
+      if (__DEV__) {
+        const label = fire <= now ? 'SKIP-past' :
+          (fire.getTime() - now.getTime() > maxAheadMs) ? 'SKIP-far' :
+          (_localIsoDate(fire) !== targetStr) ? 'SKIP-date' :
+          scheduled.has(dedupKey) ? 'SKIP-dup' : 'SCHEDULE';
+        console.log(
+          `[PrayerNotif] ${label.padEnd(9)} | ${key.padEnd(7)} | target=${targetStr}` +
+          ` | fire=${fire.toISOString().slice(0, 19)}Z | now=${now.toISOString().slice(0, 19)}Z` +
+          ` | id=${identifier}`,
+        );
+      }
+
       if (fire <= now) return;
-      const name      = PRAYERS[key];
-      const notifCity = getNotificationDisplayName(cityName);
+      if (fire.getTime() - now.getTime() > maxAheadMs) return;
+      // Verify fire lands on targetStr — guards against DST edge-cases.
+      if (_localIsoDate(fire) !== targetStr) return;
+      if (scheduled.has(dedupKey)) return;
+      scheduled.add(dedupKey);
+
       await N!.scheduleNotificationAsync({
-        identifier: `${ID_PREFIX}${slot}-${key.toLowerCase()}`,
+        identifier,
         content: {
-          title: `Det är dags för ${name}`,
-          body:  `i ${notifCity}`,
+          title: `Det är dags för ${PRAYERS[key]}`,
+          body:  `i ${getNotificationDisplayName(cityName)}`,
           sound: true,
           data:  { screen: 'prayer' },
         },
@@ -194,42 +276,52 @@ export async function schedulePrayerNotifications(
     };
 
     for (const key of Object.keys(PRAYERS)) {
-      if (todayTimes[key])      await queue(key, todayTimes[key],    today,  'today');
-      if (tomorrowTimes?.[key]) await queue(key, tomorrowTimes[key], tomRow, 'tomorrow');
+      if (_prayerScheduleGen !== gen) return; // newer call, abort
+      if (todayTimes[key])
+        await queue(key, todayTimes[key], todayBase, todayStr, MAX_TODAY_MS);
+      if (_prayerScheduleGen !== gen) return;
+      if (tomorrowTimes?.[key])
+        await queue(key, tomorrowTimes[key], tomBase, tomStr, MAX_TOMORROW_MS);
     }
   } catch {}
 }
 
-// ── Cancel all our notifications ─────────────────────────────────────────────
-// Cancels current-format notifications (andalus-prayer-*) AND any legacy prayer
-// notifications from old builds that used different identifier formats.
-// Legacy notifications are identified by prayer-specific Swedish phrases in the
-// content (e.g. "Det är dags för" in title, or the old "träder in" in body).
-// Safe prefixes for other notification types are explicitly excluded.
+// ── Cancel all prayer notifications ──────────────────────────────────────────
+// Cancels:
+//   • New date-based format:  hidayah-prayer-YYYY-MM-DD-*
+//   • Legacy fixed-slot:      andalus-prayer-today/tomorrow-*
+//   • Pre-git legacy:         any notification whose title/body contains the
+//                             known Swedish prayer phrases
+// Explicitly excludes all other notification subsystems.
 export async function cancelPrayerNotifications(): Promise<void> {
   if (!N) return;
   try {
-    const all  = await N.getAllScheduledNotificationsAsync();
-    // Prefixes that belong to other notification systems — never cancel these here.
+    const all = await N.getAllScheduledNotificationsAsync();
+    // Prefixes that belong to other notification systems — never cancel these.
     const SAFE_PREFIXES = [
       'andalus-dhikr-', 'andalus-friday-dua-', 'andalus-allah-names-',
       'andalus-live-',  'andalus-announcement-', 'andalus-kahf-',
       'andalus-zakat-', 'hidayah-pre-prayer-',
     ];
     const ours = all.filter(n => {
-      // Primary: current-format prayer identifiers
-      if (n.identifier.startsWith(ID_PREFIX)) return true;
+      // New date-based format (hidayah-prayer-YYYY-MM-DD-*)
+      if (n.identifier.startsWith(PRAYER_ID_PREFIX)) return true;
+      // Legacy fixed-slot format (andalus-prayer-today/tomorrow-*)
+      if (n.identifier.startsWith(LEGACY_PRAYER_ID_PREFIX)) return true;
       // Never touch other known notification subsystems
       if (SAFE_PREFIXES.some(p => n.identifier.startsWith(p))) return false;
-      // Legacy: prayer notifications from pre-git builds with non-standard identifiers.
-      // Identified by prayer-specific Swedish phrases that only appear in prayer
-      // titles/bodies ("Det är dags för" is the current title prefix; "träder in"
-      // was used in old body text like "Maghrib träder in i Stockholm").
+      // Pre-git legacy: prayer notifications identified by Swedish content phrases.
       const title = n.content.title ?? '';
       const body  = n.content.body  ?? '';
       return title.includes('Det är dags för') || body.includes('träder in');
     });
-    await Promise.all(ours.map(n => N!.cancelScheduledNotificationAsync(n.identifier)));
+    // Cancel individually rather than Promise.all so a single failure does not
+    // abort the remaining cancels. Each cancel is fire-and-forget with its own
+    // error boundary so an iOS API hiccup on one identifier never leaves others
+    // uncancelled.
+    for (const n of ours) {
+      await N!.cancelScheduledNotificationAsync(n.identifier).catch(() => {});
+    }
   } catch {}
 }
 

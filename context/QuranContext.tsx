@@ -66,7 +66,9 @@ type QuranContextValue = {
   // Contents menu (full-screen, replaces sidebar drawer)
   contentsMenuOpen: boolean;
   openContentsMenu: () => void;
+  openContentsMenuOnBookmarks: () => void;
   closeContentsMenu: () => void;
+  contentsMenuInitialTabRef: React.MutableRefObject<'suror' | 'khatmah' | 'bokmärken'>;
 
   // Settings panel
   settingsPanelOpen: boolean;
@@ -195,6 +197,7 @@ export function QuranProvider({ children }: Props) {
   // useQuranSettings() is called below.
   const readingModeRef = useRef<ReadingMode>('page');
   const [contentsMenuOpen, setContentsMenuOpen] = useState(false);
+  const contentsMenuInitialTabRef = useRef<'suror' | 'khatmah' | 'bokmärken'>('suror');
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [reciterSelectorOpen, setReciterSelectorOpen] = useState(false);
@@ -379,6 +382,12 @@ export function QuranProvider({ children }: Props) {
 
   // Contents menu
   const openContentsMenu = useCallback(() => {
+    contentsMenuInitialTabRef.current = 'suror';
+    setChromeVisible(true);
+    setContentsMenuOpen(true);
+  }, []);
+  const openContentsMenuOnBookmarks = useCallback(() => {
+    contentsMenuInitialTabRef.current = 'bokmärken';
     setChromeVisible(true);
     setContentsMenuOpen(true);
   }, []);
@@ -442,7 +451,9 @@ export function QuranProvider({ children }: Props) {
       showChrome,
       contentsMenuOpen,
       openContentsMenu,
+      openContentsMenuOnBookmarks,
       closeContentsMenu,
+      contentsMenuInitialTabRef,
       settingsPanelOpen,
       toggleSettingsPanel,
       closeSettingsPanel,
@@ -490,6 +501,7 @@ export function QuranProvider({ children }: Props) {
       showChrome,
       contentsMenuOpen,
       openContentsMenu,
+      openContentsMenuOnBookmarks,
       closeContentsMenu,
       settingsPanelOpen,
       toggleSettingsPanel,

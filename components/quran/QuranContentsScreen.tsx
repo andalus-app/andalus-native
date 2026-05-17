@@ -439,6 +439,7 @@ function QuranContentsScreen() {
   const {
     contentsMenuOpen,
     closeContentsMenu,
+    contentsMenuInitialTabRef,
     goToSurah,
     goToPage,
     goToBookmark,
@@ -452,6 +453,13 @@ function QuranContentsScreen() {
   const { width: screenW } = useWindowDimensions();
 
   const [tab, setTab] = useState<Tab>('suror');
+
+  useEffect(() => {
+    if (contentsMenuOpen) {
+      setTab(contentsMenuInitialTabRef.current);
+    }
+  }, [contentsMenuOpen, contentsMenuInitialTabRef]);
+
   const [activeJuz, setActiveJuz] = useState<number>(() => juzForPage(currentPage));
   const activeJuzRef = useRef(juzForPage(currentPage));
   const programmaticScrollRef = useRef(false);

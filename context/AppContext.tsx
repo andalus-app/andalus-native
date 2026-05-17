@@ -310,7 +310,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // show up-to-date location without the user having to visit the prayer tab.
         // Cached data is already displayed above — this only updates if location changed.
         const autoLocation = savedSettings?.autoLocation ?? DEFAULT_SETTINGS.autoLocation;
-        if (autoLocation) {
+        const alreadyOnboarded = await AsyncStorage.getItem('islamnu_onboarding_completed');
+        if (autoLocation && alreadyOnboarded) {
           refreshLocation().catch(() => {});
         }
       } catch {}
@@ -339,7 +340,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const sub = AppState.addEventListener('change', nextState => {
       if (appStateRef.current.match(/inactive|background/) && nextState === 'active') {
-        if (autoLocationRef.current) refreshLocation().catch(() => {});
+        if (autoLocationRef.current) {
+          AsyncStorage.getItem('islamnu_onboarding_completed')
+            .then(onboarded => { if (onboarded) refreshLocation().catch(() => {}); })
+            .catch(() => {});
+        }
       }
       appStateRef.current = nextState;
     });
