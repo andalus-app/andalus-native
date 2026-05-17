@@ -12,8 +12,8 @@
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
 		6EBE6C5503E2E314FC98B217 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 35A82D2A37D138C858377FF8 /* PrivacyInfo.xcprivacy */; };
 		A66CA4B2F8039FB7C896D88B /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 35A82D2A37D138C858377FF8 /* PrivacyInfo.xcprivacy */; };
-		AC111005AABB00CC11223344 /* HidayahWatchWidgetExtension.appex in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = AC111001AABB00CC11223344 /* HidayahWatchWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		AC111006AABB00CC11223344 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DC96A8AB2F8B6BCF003994AE /* WidgetKit.framework */; };
+		EE111001AABB00CC11223344 /* HidayahWatchWidgetExtension.appex in Embed Watch Extensions */ = {isa = PBXBuildFile; fileRef = AC111001AABB00CC11223344 /* HidayahWatchWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		AC111007AABB00CC11223344 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DC96A8AD2F8B6BCF003994AE /* SwiftUI.framework */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
 		BD111004AABB00CC11223344 /* HidayahWatchApp.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = BD111001AABB00CC11223344 /* HidayahWatchApp.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -29,7 +29,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
-		AC11100CAABB00CC11223344 /* PBXContainerItemProxy */ = {
+		EE111003AABB00CC11223344 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 83CBB9F71A601CBA00E9B192 /* Project object */;
 			proxyType = 1;
@@ -59,10 +59,20 @@
 			dstPath = "";
 			dstSubfolderSpec = 16;
 			files = (
-				AC111005AABB00CC11223344 /* HidayahWatchWidgetExtension.appex in Embed Watch Content */,
 				BD111004AABB00CC11223344 /* HidayahWatchApp.app in Embed Watch Content */,
 			);
 			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 1;
+		};
+		EE111002AABB00CC11223344 /* Embed Watch Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 8;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				EE111001AABB00CC11223344 /* HidayahWatchWidgetExtension.appex in Embed Watch Extensions */,
+			);
+			name = "Embed Watch Extensions";
 			runOnlyForDeploymentPostprocessing = 1;
 		};
 		DC96A8BE2F8B6BD0003994AE /* Embed Foundation Extensions */ = {
@@ -291,7 +301,6 @@
 			);
 			dependencies = (
 				DC96A8B82F8B6BD0003994AE /* PBXTargetDependency */,
-				AC11100DAABB00CC11223344 /* PBXTargetDependency */,
 				BD11100CAABB00CC11223344 /* PBXTargetDependency */,
 			);
 			name = Hidayah;
@@ -326,10 +335,12 @@
 				BD111009AABB00CC11223344 /* Sources */,
 				BD111007AABB00CC11223344 /* Frameworks */,
 				BD111008AABB00CC11223344 /* Resources */,
+				EE111002AABB00CC11223344 /* Embed Watch Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				EE111004AABB00CC11223344 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				BD111002AABB00CC11223344 /* HidayahWatchApp */,
@@ -610,10 +621,10 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
-		AC11100DAABB00CC11223344 /* PBXTargetDependency */ = {
+		EE111004AABB00CC11223344 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = AC11100BAABB00CC11223344 /* HidayahWatchWidgetExtension */;
-			targetProxy = AC11100CAABB00CC11223344 /* PBXContainerItemProxy */;
+			targetProxy = EE111003AABB00CC11223344 /* PBXContainerItemProxy */;
 		};
 		BD11100CAABB00CC11223344 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
