@@ -8,7 +8,7 @@ private let kWatchDataKey = "watch_prayer_data"
 // MARK: - Data models
 private struct StoredPrayer: Decodable {
     let name: String
-    let time: String   // "HH:mm"
+    let time: String
 }
 
 private struct StoredHijri: Decodable {
@@ -21,20 +21,14 @@ private struct StoredHijri: Decodable {
 private struct StoredData: Decodable {
     let city:    String
     let prayers: [StoredPrayer]
-    let date:    String         // "yyyy-MM-dd"
-    let hijri:   StoredHijri?  // absent in older payloads
+    let date:    String
+    let hijri:   StoredHijri?
 }
 
 // MARK: - Domain models
 struct WatchPrayer {
     let name: String
     let time: Date
-}
-
-struct WatchEntry: TimelineEntry {
-    let date: Date
-    let next: WatchPrayer?
-    let city: String
 }
 
 struct LargeWatchEntry: TimelineEntry {
@@ -61,7 +55,6 @@ private let dateFmt: DateFormatter = {
 }()
 
 private func fmtDate(_ date: Date) -> String {
-    // "17 maj" → "17 Maj"
     let s = dateFmt.string(from: date)
     let parts = s.components(separatedBy: " ")
     guard parts.count == 2 else { return s }
@@ -69,7 +62,7 @@ private func fmtDate(_ date: Date) -> String {
     return "\(parts[0]) \(month)"
 }
 
-// MARK: - Hidayah brand colors (matches iOS widget kGold / kBgTop / kBgBottom)
+// MARK: - Hidayah brand colors
 private let wGold   = Color(red: 202/255, green: 180/255, blue: 136/255) // #cab488
 private let wBgTop  = Color(red:  18/255, green:  30/255, blue:  25/255)
 private let wBgBot  = Color(red:   8/255, green:  16/255, blue:  13/255)
@@ -102,12 +95,12 @@ private func prayerIcon(_ name: String) -> String {
     case "Isha":        return "moon.stars.fill"
     default:
         let n = name.lowercased()
-        if n.hasPrefix("faj")                        { return "cloud.sun.fill" }
-        if n.hasPrefix("sol") || n.hasPrefix("sun")  { return "sunrise.fill" }
-        if n.hasPrefix("dh")  || n.hasPrefix("zu")   { return "sun.max.fill" }
-        if n.hasPrefix("as")                         { return "sun.max.fill" }
-        if n.hasPrefix("ma")                         { return "sunset.fill" }
-        if n.hasPrefix("is")                         { return "moon.stars.fill" }
+        if n.hasPrefix("faj")                       { return "cloud.sun.fill" }
+        if n.hasPrefix("sol") || n.hasPrefix("sun") { return "sunrise.fill" }
+        if n.hasPrefix("dh")  || n.hasPrefix("zu")  { return "sun.max.fill" }
+        if n.hasPrefix("as")                        { return "sun.max.fill" }
+        if n.hasPrefix("ma")                        { return "sunset.fill" }
+        if n.hasPrefix("is")                        { return "moon.stars.fill" }
         return "sun.max.fill"
     }
 }
@@ -116,7 +109,7 @@ private func shortPrayerLabel(_ name: String) -> String {
     name == "Soluppgång" ? "Sol." : name
 }
 
-// "{day} / {monthNum} {Abbrev.}"  e.g.  "6 / 9 Rmdn."
+// "{day} / {monthNum} {Abbrev.}"  e.g. "6 / 9 Rmdn."
 private func hijriStr(day: Int?, monthNum: Int?, monthEn: String?) -> String? {
     guard let d = day else { return nil }
     let abbrev: String
@@ -137,19 +130,15 @@ private func hijriStr(day: Int?, monthNum: Int?, monthEn: String?) -> String? {
     } else {
         abbrev = ""
     }
-    if let n = monthNum, !abbrev.isEmpty {
-        return "\(d) / \(n) \(abbrev)"
-    } else if let n = monthNum {
-        return "\(d) / \(n)"
-    } else if !abbrev.isEmpty {
-        return "\(d) \(abbrev)"
-    }
+    if let n = monthNum, !abbrev.isEmpty { return "\(d) / \(n) \(abbrev)" }
+    if let n = monthNum                  { return "\(d) / \(n)" }
+    if !abbrev.isEmpty                   { return "\(d) \(abbrev)" }
     return "\(d)"
 }
 
-// Custom symbol from Assets.xcassets — rendered as template so foregroundColor applies
+// Custom SVG symbol from Assets.xcassets, tinted via foregroundColor
 private struct PrayerSymbol: View {
-    let name: String   // e.g. "cloud.sun.fill"
+    let name: String
     let size: CGFloat
     var body: some View {
         Image(name)
@@ -160,7 +149,7 @@ private struct PrayerSymbol: View {
     }
 }
 
-// MARK: - Cache readers
+// MARK: - Small complication cache reader
 private func readWatchCache() -> (next: WatchPrayer, city: String)? {
     guard
         let defaults = UserDefaults(suiteName: kAppGroup),
@@ -168,7 +157,6 @@ private func readWatchCache() -> (next: WatchPrayer, city: String)? {
         let stored   = try? JSONDecoder().decode(StoredData.self, from: raw),
         stored.date  == localISODate(.now)
     else { return nil }
-
     let now = Date()
     let prayers = stored.prayers.compactMap { p -> WatchPrayer? in
         guard let t = parseTime(p.time, on: now) else { return nil }
@@ -179,6 +167,7 @@ private func readWatchCache() -> (next: WatchPrayer, city: String)? {
     return (next, stored.city)
 }
 
+// MARK: - Large widget cache reader
 private func readWatchCacheFull() -> LargeWatchEntry? {
     guard
         let defaults = UserDefaults(suiteName: kAppGroup),
@@ -207,31 +196,7 @@ private func readWatchCacheFull() -> LargeWatchEntry? {
     )
 }
 
-// MARK: - Providers
-struct WatchProvider: TimelineProvider {
-    func placeholder(in context: Context) -> WatchEntry {
-        WatchEntry(date: .now, next: nil, city: "")
-    }
-    func getSnapshot(in context: Context, completion: @escaping (WatchEntry) -> Void) {
-        if let (next, city) = readWatchCache() {
-            completion(WatchEntry(date: .now, next: next, city: city))
-        } else {
-            completion(WatchEntry(date: .now, next: nil, city: ""))
-        }
-    }
-    func getTimeline(in context: Context, completion: @escaping (Timeline<WatchEntry>) -> Void) {
-        if let (next, city) = readWatchCache() {
-            let entry  = WatchEntry(date: .now, next: next, city: city)
-            let reload = next.time.addingTimeInterval(2 * 60)
-            completion(Timeline(entries: [entry], policy: .after(reload)))
-        } else {
-            let entry  = WatchEntry(date: .now, next: nil, city: "")
-            let reload = Date().addingTimeInterval(5 * 60)
-            completion(Timeline(entries: [entry], policy: .after(reload)))
-        }
-    }
-}
-
+// MARK: - Provider
 struct LargeWatchProvider: TimelineProvider {
     private func emptyEntry() -> LargeWatchEntry {
         LargeWatchEntry(
@@ -248,27 +213,48 @@ struct LargeWatchProvider: TimelineProvider {
             let nextTime = entry.allPrayers.indices.contains(entry.nextIndex)
                 ? entry.allPrayers[entry.nextIndex].time
                 : Date().addingTimeInterval(5 * 60)
-            let reload = nextTime.addingTimeInterval(2 * 60)
-            completion(Timeline(entries: [entry], policy: .after(reload)))
+            completion(Timeline(entries: [entry], policy: .after(nextTime.addingTimeInterval(2 * 60))))
         } else {
-            let reload = Date().addingTimeInterval(5 * 60)
-            completion(Timeline(entries: [emptyEntry()], policy: .after(reload)))
+            completion(Timeline(entries: [emptyEntry()], policy: .after(Date().addingTimeInterval(5 * 60))))
         }
     }
 }
 
-// ================================================================================
-// MARK: - Small complication views (existing widget — unchanged)
-// ================================================================================
+// MARK: - Small complication provider
+struct WatchEntry: TimelineEntry {
+    let date: Date
+    let next: WatchPrayer?
+    let city: String
+}
 
-private struct NoDataView: View {
+struct WatchProvider: TimelineProvider {
+    func placeholder(in context: Context) -> WatchEntry {
+        WatchEntry(date: .now, next: nil, city: "")
+    }
+    func getSnapshot(in context: Context, completion: @escaping (WatchEntry) -> Void) {
+        if let (next, city) = readWatchCache() {
+            completion(WatchEntry(date: .now, next: next, city: city))
+        } else {
+            completion(WatchEntry(date: .now, next: nil, city: ""))
+        }
+    }
+    func getTimeline(in context: Context, completion: @escaping (Timeline<WatchEntry>) -> Void) {
+        if let (next, city) = readWatchCache() {
+            let entry  = WatchEntry(date: .now, next: next, city: city)
+            completion(Timeline(entries: [entry], policy: .after(next.time.addingTimeInterval(2 * 60))))
+        } else {
+            completion(Timeline(entries: [WatchEntry(date: .now, next: nil, city: "")],
+                                policy: .after(Date().addingTimeInterval(5 * 60))))
+        }
+    }
+}
+
+// Small complication views
+private struct SmallNoDataView: View {
     var body: some View {
         VStack(spacing: 2) {
-            Image(systemName: "iphone")
-                .font(.system(size: 10))
-            Text("Öppna\nHidayah")
-                .font(.system(size: 9))
-                .multilineTextAlignment(.center)
+            Image(systemName: "iphone").font(.system(size: 10))
+            Text("Öppna\nHidayah").font(.system(size: 9)).multilineTextAlignment(.center)
         }
         .foregroundStyle(.secondary)
     }
@@ -281,37 +267,12 @@ private struct CircularView: View {
             VStack(spacing: 1) {
                 Text(next.name)
                     .font(.system(size: 10, weight: .semibold))
-                    .minimumScaleFactor(0.7)
-                    .lineLimit(1)
+                    .minimumScaleFactor(0.7).lineLimit(1)
                 Text(timeFmt.string(from: next.time))
                     .font(.system(size: 14, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                    .minimumScaleFactor(0.7)
+                    .monospacedDigit().minimumScaleFactor(0.7)
             }
-        } else { NoDataView() }
-    }
-}
-
-private struct RectangularView: View {
-    let entry: WatchEntry
-    var body: some View {
-        if let next = entry.next {
-            HStack(alignment: .center) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(next.name)
-                        .font(.headline).fontWeight(.semibold).lineLimit(1)
-                    Text(entry.city)
-                        .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
-                }
-                Spacer()
-                Text(timeFmt.string(from: next.time))
-                    .font(.title2).fontWeight(.bold).monospacedDigit()
-            }
-        } else {
-            Text("Öppna Hidayah på iPhone")
-                .font(.caption2).foregroundStyle(.secondary)
-                .lineLimit(2).multilineTextAlignment(.center)
-        }
+        } else { SmallNoDataView() }
     }
 }
 
@@ -348,14 +309,14 @@ struct WatchEntryView: View {
     @Environment(\.widgetFamily) private var family
     var body: some View {
         switch family {
-        case .accessoryCircular:   CircularView(entry: entry)
-        case .accessoryInline:     InlineView(entry: entry)
-        case .accessoryCorner:     CornerView(entry: entry)
-        default:                   RectangularView(entry: entry)
+        case .accessoryCircular: CircularView(entry: entry)
+        case .accessoryInline:   InlineView(entry: entry)
+        default:                 CornerView(entry: entry)
         }
     }
 }
 
+// Liten komplikation — circular, inline, corner (INTE rectangular)
 struct HidayahWatchWidget: Widget {
     let kind = "HidayahWatchWidget"
     var body: some WidgetConfiguration {
@@ -363,20 +324,16 @@ struct HidayahWatchWidget: Widget {
             WatchEntryView(entry: entry)
         }
         .configurationDisplayName("Hidayah – Bönetid")
-        .description("Visar nästa bönetid från din iPhone.")
+        .description("Visar nästa bönetid.")
         .supportedFamilies([
             .accessoryCircular,
-            .accessoryRectangular,
             .accessoryInline,
             .accessoryCorner,
         ])
     }
 }
 
-// ================================================================================
-// MARK: - Widget 1: Nästa bön + lista
-// ================================================================================
-
+// MARK: - Shared no-data view
 private struct LargeNoDataView: View {
     var body: some View {
         VStack(spacing: 6) {
@@ -391,51 +348,9 @@ private struct LargeNoDataView: View {
     }
 }
 
-private struct PrayerListRowView: View {
-    let prayer: WatchPrayer
-    let isNext: Bool
-    let isPast: Bool
-
-    var body: some View {
-        HStack(spacing: 6) {
-            PrayerSymbol(name: prayerIcon(prayer.name), size: 13)
-                .frame(width: 15, alignment: .center)
-                .foregroundColor(
-                    isNext ? wGold :
-                    isPast ? wGold.opacity(0.25) :
-                             .white.opacity(0.35)
-                )
-
-            Text(prayer.name)
-                .font(.system(size: 11, weight: isNext ? .bold : .regular))
-                .foregroundColor(
-                    isNext ? .white :
-                    isPast ? .white.opacity(0.28) :
-                             .white.opacity(0.60)
-                )
-                .lineLimit(1)
-
-            Spacer()
-
-            Text(timeFmt.string(from: prayer.time))
-                .font(.system(size: 11, weight: isNext ? .semibold : .regular, design: .monospaced))
-                .foregroundColor(
-                    isNext ? wGold :
-                    isPast ? wGold.opacity(0.25) :
-                             .white.opacity(0.45)
-                )
-        }
-        .padding(.horizontal, 6)
-        .padding(.vertical, isNext ? 3 : 2)
-        .background(
-            isNext
-                ? RoundedRectangle(cornerRadius: 7)
-                    .fill(wAccent.opacity(0.40))
-                    .overlay(RoundedRectangle(cornerRadius: 7).stroke(wGold.opacity(0.30), lineWidth: 0.5))
-                : nil
-        )
-    }
-}
+// ================================================================================
+// MARK: - Widget 1: Nästa bön
+// ================================================================================
 
 private struct NextPrayerLargeBodyView: View {
     let entry: LargeWatchEntry
@@ -447,15 +362,11 @@ private struct NextPrayerLargeBodyView: View {
         return entry.allPrayers[entry.nextIndex]
     }
 
-    // "23 Feb | 6 / 9 Rmdn."
-    private var headerDateLine: String {
+    // "17 Maj  ·  30 Dhul-Qa'dah"
+    private var dateLine: String? {
         let gregorian = fmtDate(entry.date)
-        if let h = hijriStr(
-            day:      entry.hijriDay,
-            monthNum: entry.hijriMonthNum,
-            monthEn:  entry.hijriMonthEn
-        ) {
-            return "\(gregorian) | \(h)"
+        if let d = entry.hijriDay, let m = entry.hijriMonthEn, !m.isEmpty {
+            return "\(gregorian)  ·  \(d) \(m)"
         }
         return gregorian
     }
@@ -465,89 +376,55 @@ private struct NextPrayerLargeBodyView: View {
             LinearGradient(colors: [wBgTop, wBgBot], startPoint: .top, endPoint: .bottom)
                 .ignoresSafeArea()
 
-            VStack(alignment: .leading, spacing: 0) {
+            if let next = nextPrayer {
+                VStack(spacing: 0) {
+                    Spacer()
 
-                // ── Line 1: City (left) + time (right) ────────────────────────
-                HStack(spacing: 4) {
-                    Text(entry.city.isEmpty ? "Hidayah" : entry.city)
-                        .font(.system(size: 11, weight: .regular))
-                        .foregroundColor(.white.opacity(0.78))
-                        .lineLimit(1)
-                    Spacer(minLength: 0)
-                    Text(timeFmt.string(from: entry.date))
-                        .font(.system(size: 12, weight: .bold, design: .monospaced))
-                        .foregroundColor(.white)
-                }
-
-                // ── Line 2: "23 Feb | 6 / 9 Rmdn." all in gold ───────────────
-                Text(headerDateLine)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(wGold)
-                    .lineLimit(1)
-                    .padding(.top, 1)
-                    .padding(.bottom, 6)
-
-                if let next = nextPrayer {
-
-                    // ── Next prayer name ──────────────────────────────────────
+                    // Bönenamn
                     Text(next.name)
-                        .font(.system(size: 20, weight: .bold))
+                        .font(.system(size: 22, weight: .bold))
                         .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
 
-                    // ── Countdown pill: "in 1:21:35" ─────────────────────────
-                    HStack(spacing: 3) {
-                        Text("in")
-                            .font(.system(size: 14, weight: .bold, design: .rounded))
-                            .foregroundColor(wGold)
-                        Text(next.time, style: .timer)
-                            .font(.system(size: 14, weight: .bold, design: .rounded))
-                            .monospacedDigit()
-                            .foregroundColor(wGold)
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 5)
-                    .background(
-                        Capsule()
-                            .fill(wAccent.opacity(0.38))
-                            .overlay(Capsule().stroke(wGold.opacity(0.22), lineWidth: 0.5))
-                    )
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 3)
-                    .padding(.bottom, 6)
+                    Spacer().frame(height: 6)
 
-                    // Divider
-                    Rectangle()
-                        .fill(Color.white.opacity(0.09))
-                        .frame(height: 0.5)
-                        .padding(.bottom, 4)
+                    // Live-timer i guld pill
+                    Text(next.time, style: .timer)
+                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundColor(wGold)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 6)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(wAccent.opacity(0.40))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(wGold.opacity(0.25), lineWidth: 0.5)
+                                )
+                        )
 
-                    // ── Prayer list ───────────────────────────────────────────
-                    VStack(spacing: 1) {
-                        ForEach(entry.allPrayers.indices, id: \.self) { i in
-                            PrayerListRowView(
-                                prayer: entry.allPrayers[i],
-                                isNext: i == entry.nextIndex,
-                                isPast: i < entry.nextIndex
-                            )
-                        }
-                    }
-
-                } else {
                     Spacer()
-                    LargeNoDataView().frame(maxWidth: .infinity)
-                    Spacer()
+
+                    // Datum + hijri
+                    if let line = dateLine {
+                        Text(line)
+                            .font(.system(size: 9, weight: .regular))
+                            .foregroundColor(.white.opacity(0.42))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
+                    }
                 }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+            } else {
+                LargeNoDataView()
             }
-            .padding(.horizontal, 10)
-            .padding(.top, 8)
-            .padding(.bottom, 6)
         }
     }
 }
 
 // ================================================================================
-// MARK: - Widget 4: Bönetidslinje
+// MARK: - Widget 2: Bönetidslinje
 // ================================================================================
 
 private struct PrayerStepView: View {
@@ -605,14 +482,12 @@ private struct TimelineProgressBar: View {
             let step: CGFloat = count > 1 ? w / CGFloat(count - 1) : 0
 
             ZStack(alignment: .leading) {
-                // Base line
                 Capsule()
                     .fill(Color.white.opacity(0.10))
                     .frame(height: 1.5)
                     .frame(maxWidth: .infinity)
                     .offset(y: 3.5)
 
-                // Filled portion (past + current)
                 if nextIndex > 0 && step > 0 {
                     Capsule()
                         .fill(wGold.opacity(0.55))
@@ -620,15 +495,12 @@ private struct TimelineProgressBar: View {
                         .offset(y: 3.5)
                 }
 
-                // Dots
                 ForEach(0 ..< count, id: \.self) { i in
                     let cx: CGFloat = step * CGFloat(i)
                     let active = i == nextIndex
-                    let past   = i < nextIndex
                     let sz: CGFloat = active ? 8 : 5
-
                     Circle()
-                        .fill(active ? wGold : (past ? wGold.opacity(0.40) : Color.white.opacity(0.14)))
+                        .fill(active ? wGold : (i < nextIndex ? wGold.opacity(0.40) : Color.white.opacity(0.14)))
                         .frame(width: sz, height: sz)
                         .offset(x: cx - sz / 2, y: (8 - sz) / 2)
                 }
@@ -641,17 +513,11 @@ private struct TimelineProgressBar: View {
 private struct PrayerTimelineLargeBodyView: View {
     let entry: LargeWatchEntry
 
-    // "Idag 23 Feb | 6 / 9 Rmdn."
-    private var headerLeft: String {
-        let gregorian = fmtDate(entry.date)
-        if let h = hijriStr(
-            day:      entry.hijriDay,
-            monthNum: entry.hijriMonthNum,
-            monthEn:  entry.hijriMonthEn
-        ) {
-            return "Idag \(gregorian) | \(h)"
-        }
-        return "Idag \(gregorian)"
+    private var nextPrayer: WatchPrayer? {
+        guard !entry.allPrayers.isEmpty,
+              entry.allPrayers.indices.contains(entry.nextIndex)
+        else { return nil }
+        return entry.allPrayers[entry.nextIndex]
     }
 
     var body: some View {
@@ -661,19 +527,27 @@ private struct PrayerTimelineLargeBodyView: View {
 
             VStack(alignment: .leading, spacing: 0) {
 
-                // ── Header: date+hijri (gold) + time (white) ──────────────────
-                HStack(alignment: .firstTextBaseline, spacing: 0) {
-                    Text(headerLeft)
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(wGold)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
+                // Header: "Tid kvar till Asr" + nedräkning
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    if let next = nextPrayer {
+                        Text("Tid kvar till \(next.name)")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(wGold)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
 
-                    Spacer(minLength: 4)
+                        Spacer(minLength: 4)
 
-                    Text(timeFmt.string(from: entry.date))
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
-                        .foregroundColor(.white)
+                        Text(next.time, style: .timer)
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .monospacedDigit()
+                            .foregroundColor(wGold)
+                    } else {
+                        Text("Hidayah")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(wGold)
+                        Spacer()
+                    }
                 }
                 .padding(.bottom, 8)
 
@@ -682,7 +556,6 @@ private struct PrayerTimelineLargeBodyView: View {
                     LargeNoDataView().frame(maxWidth: .infinity)
                     Spacer()
                 } else {
-                    // ── Prayer step columns ───────────────────────────────────
                     HStack(spacing: 2) {
                         ForEach(entry.allPrayers.indices, id: \.self) { i in
                             PrayerStepView(
@@ -694,7 +567,6 @@ private struct PrayerTimelineLargeBodyView: View {
                     }
                     .padding(.bottom, 7)
 
-                    // ── Timeline progress ─────────────────────────────────────
                     TimelineProgressBar(
                         count:     entry.allPrayers.count,
                         nextIndex: entry.nextIndex
@@ -709,7 +581,7 @@ private struct PrayerTimelineLargeBodyView: View {
 }
 
 // ================================================================================
-// MARK: - Large widget definitions
+// MARK: - Widget definitions
 // ================================================================================
 
 struct HidayahNextPrayerLargeWidget: Widget {
@@ -719,7 +591,7 @@ struct HidayahNextPrayerLargeWidget: Widget {
             NextPrayerLargeBodyView(entry: entry)
         }
         .configurationDisplayName("Nästa bön")
-        .description("Se nästa bön och dagens bönetider.")
+        .description("Se nästa bön och nedräkning.")
         .supportedFamilies([.accessoryRectangular])
     }
 }
