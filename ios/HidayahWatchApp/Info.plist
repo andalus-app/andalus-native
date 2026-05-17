@@ -4,15 +4,25 @@
 <dict>
 	<key>CFBundleDisplayName</key>
 	<string>Hidayah</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIconName</key>
+	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.anonymous.Hidayah.watchkitapp</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.7.5</string>
+	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
-	<string>32</string>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>RCTNewArchEnabled</key>
 	<true/>
 	<key>WKApplication</key>
 	<true/>
+	<key>WKCompanionAppBundleIdentifier</key>
+	<string>com.anonymous.Hidayah</string>
 </dict>
 </plist>
