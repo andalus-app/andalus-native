@@ -87,18 +87,18 @@ private func parseTime(_ raw: String, on day: Date) -> Date? {
 
 private func prayerIcon(_ name: String) -> String {
     switch name {
-    case "Fajr":        return "cloud.sun.fill"
+    case "Fajr":        return "fajr.fill"
     case "Soluppgång":  return "sunrise.fill"
     case "Dhuhr":       return "sun.max.fill"
-    case "Asr":         return "sun.max.fill"
+    case "Asr":         return "asr.fill"
     case "Maghrib":     return "sunset.fill"
     case "Isha":        return "moon.stars.fill"
     default:
         let n = name.lowercased()
-        if n.hasPrefix("faj")                       { return "cloud.sun.fill" }
+        if n.hasPrefix("faj")                       { return "fajr.fill" }
         if n.hasPrefix("sol") || n.hasPrefix("sun") { return "sunrise.fill" }
         if n.hasPrefix("dh")  || n.hasPrefix("zu")  { return "sun.max.fill" }
-        if n.hasPrefix("as")                        { return "sun.max.fill" }
+        if n.hasPrefix("as")                        { return "asr.fill" }
         if n.hasPrefix("ma")                        { return "sunset.fill" }
         if n.hasPrefix("is")                        { return "moon.stars.fill" }
         return "sun.max.fill"
@@ -355,6 +355,9 @@ private struct LargeNoDataView: View {
 private struct NextPrayerLargeBodyView: View {
     let entry: LargeWatchEntry
 
+    // Detects always-on / ambient display (klockan ej aktiv)
+    @Environment(\.isLuminanceReduced) private var isLuminanceReduced
+
     private var nextPrayer: WatchPrayer? {
         guard !entry.allPrayers.isEmpty,
               entry.allPrayers.indices.contains(entry.nextIndex)
@@ -369,6 +372,15 @@ private struct NextPrayerLargeBodyView: View {
             return "\(gregorian)  ·  \(d) \(m)"
         }
         return gregorian
+    }
+
+    // Kompakt format för ambient-läge: "1t 5m" eller "45m"
+    private func compactRemaining(to prayerTime: Date) -> String {
+        let remaining = max(prayerTime.timeIntervalSince(entry.date), 0)
+        let totalMin  = Int(remaining) / 60
+        let h = totalMin / 60
+        let m = totalMin % 60
+        return h > 0 ? "\(h)t \(m)m" : "\(m)m"
     }
 
     var body: some View {
@@ -387,21 +399,32 @@ private struct NextPrayerLargeBodyView: View {
 
                     Spacer().frame(height: 6)
 
-                    // Live-timer i guld pill
-                    Text(next.time, style: .timer)
-                        .font(.system(size: 20, weight: .bold, design: .rounded))
-                        .monospacedDigit()
-                        .foregroundColor(wGold)
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 6)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(wAccent.opacity(0.40))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(wGold.opacity(0.25), lineWidth: 0.5)
-                                )
-                        )
+                    // Timer — centrerad i pill
+                    // · Aktivt läge (klockan vaken):  live countdown "0:45:22"
+                    // · Ambient/always-on:             kompakt statisk "1t 5m"
+                    Group {
+                        if isLuminanceReduced {
+                            Text(compactRemaining(to: next.time))
+                        } else {
+                            Text(next.time, style: .timer)
+                        }
+                    }
+                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundColor(wGold)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 6)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(wAccent.opacity(0.40))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(wGold.opacity(0.25), lineWidth: 0.5)
+                            )
+                    )
+                    .padding(.horizontal, 20)   // ← luft runt pillret så det inte fyller hela bredden
 
                     Spacer()
 
@@ -435,29 +458,17 @@ private struct PrayerStepView: View {
     var body: some View {
         VStack(spacing: 2) {
             PrayerSymbol(name: prayerIcon(prayer.name), size: 14)
-                .foregroundColor(
-                    isNext ? wGold :
-                    isPast ? wGold.opacity(0.40) :
-                             .white.opacity(0.28)
-                )
+                .foregroundColor(isNext ? wGold : .white)
 
             Text(shortPrayerLabel(prayer.name))
                 .font(.system(size: 7, weight: isNext ? .bold : .regular))
-                .foregroundColor(
-                    isNext ? .white :
-                    isPast ? .white.opacity(0.48) :
-                             .white.opacity(0.30)
-                )
+                .foregroundColor(.white)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
 
             Text(timeFmt.string(from: prayer.time))
                 .font(.system(size: 7, weight: isNext ? .semibold : .regular, design: .monospaced))
-                .foregroundColor(
-                    isNext ? wGold :
-                    isPast ? wGold.opacity(0.38) :
-                             .white.opacity(0.28)
-                )
+                .foregroundColor(wGold)
                 .lineLimit(1)
         }
         .frame(maxWidth: .infinity)
