@@ -10,6 +10,7 @@ import HidayahLogo from '../../components/HidayahLogo';
 import SvgIcon from '../../components/SvgIcon';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getPrayerTimesWithFallback } from '../../services/monthlyCache';
+import { getIfisTodayAndTomorrow, getIfisCityDisplayName } from '../../services/ifisApi';
 
 import { SvgXml } from 'react-native-svg';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -270,15 +271,20 @@ export default function PrayerTimesScreen() {
       const raw = await AsyncStorage.getItem(PRAYER_CACHE_KEY);
       if (!raw) return false;
       const c = JSON.parse(raw);
-      if (!c.timings) return false;
-      timingsRef.current         = c.timings;
-      tomorrowTimingsRef.current = c.tomorrowTimings ?? null;
+      // Handle both tab format (timings) and AppContext IFIS format (todayT)
+      const timingsData    = c.timings ?? c.todayT ?? null;
+      const tomTimingsData = c.tomorrowTimings ?? c.tomT ?? null;
+      if (!timingsData) return false;
+      timingsRef.current         = timingsData;
+      tomorrowTimingsRef.current = tomTimingsData;
       loadedDateRef.current      = c.date;
-      setTimings(c.timings);
-      setTomorrowTimings(c.tomorrowTimings);
+      setTimings(timingsData);
+      setTomorrowTimings(tomTimingsData);
       setHijri(c.hijri);
       setSuburb(c.suburb || '');
-      setCityName(c.cityName || '');
+      // AppContext IFIS cache stores city in the key field ("ifis:stockholm") — extract it
+      const cityFromIfisKey = c.key?.startsWith?.('ifis:') ? getIfisCityDisplayName(c.key.split(':')[1] ?? '') : '';
+      setCityName(c.cityName || cityFromIfisKey || '');
       setCountry(c.country || '');
       setTomorrowLabel(c.tomorrowLabel || '');
       const np = getNextPrayer(c.timings);
@@ -311,20 +317,44 @@ export default function PrayerTimesScreen() {
   async function loadPrayerTimes() {
     // Guard 1: skip if a fetch is already in flight
     if (reloadingRef.current) return;
-    // Guard 2: skip if last fetch attempt was less than 10 minutes ago
-    if (Date.now() - lastFetchRef.current < FETCH_COOLDOWN_MS) return;
-    reloadingRef.current = true;
 
     const [settingsRaw, locationRaw] = await Promise.all([
       AsyncStorage.getItem('andalus_settings'),
       AsyncStorage.getItem('andalus_location'),
     ]);
-    const saved             = settingsRaw ? JSON.parse(settingsRaw) : {};
-    const method: number    = saved.calculationMethod ?? 3;
-    const school: number    = saved.school ?? 0;
-    const autoLocation: boolean = saved.autoLocation ?? true;
+    const saved                  = settingsRaw ? JSON.parse(settingsRaw) : {};
+    const method: number         = saved.calculationMethod ?? 3;
+    const school: number         = saved.school ?? 0;
+    const autoLocation: boolean  = saved.autoLocation ?? true;
+    const prayerSource           = (saved.prayerSource ?? 'aladhan') as 'aladhan' | 'ifis';
+    const ifisCity: string       = saved.ifisCity ?? 'stockholm';
     autoLocationRef.current = autoLocation;
 
+    // Guard 2: respect 10-minute cooldown, but bypass it when settings were
+    // changed after the last fetch (e.g. user switched AlAdhan ↔ IFIS).
+    if (Date.now() - lastFetchRef.current < FETCH_COOLDOWN_MS) {
+      try {
+        const updatedRaw = await AsyncStorage.getItem('andalus_settings_updated');
+        const updatedAt  = updatedRaw ? parseInt(updatedRaw, 10) : 0;
+        if (updatedAt <= lastFetchRef.current) return; // no settings change — keep cooldown
+        // Settings changed since last fetch — fall through and re-fetch
+      } catch { return; }
+    }
+
+    reloadingRef.current = true;
+
+    // ── IFIS path: no GPS needed — city is set by settings/auto-match in AppContext ──
+    if (prayerSource === 'ifis') {
+      try {
+        await restoreCache();
+        await fetchAndSetIfisTimesForTab(ifisCity);
+      } catch { /* IFIS failure — stale data from restoreCache() stays visible */ }
+      lastFetchRef.current = Date.now();
+      reloadingRef.current = false;
+      return;
+    }
+
+    // ── AlAdhan path ──
     if (!autoLocation && !locationRaw) {
       setShowNoLocation(true);
       reloadingRef.current = false;
@@ -410,6 +440,52 @@ export default function PrayerTimesScreen() {
     } catch { /* GPS/location failure — silently keep whatever cache was loaded */ }
     lastFetchRef.current = Date.now();
     reloadingRef.current = false;
+  }
+
+  async function fetchAndSetIfisTimesForTab(city: string) {
+    const { todayT, tomT } = await getIfisTodayAndTomorrow(city);
+    const displayName = getIfisCityDisplayName(city);
+
+    timingsRef.current         = todayT;
+    tomorrowTimingsRef.current = tomT ?? null;
+    loadedDateRef.current      = new Date().toDateString();
+    setTimings(todayT);
+    setTomorrowTimings(tomT ?? null);
+    setSuburb('');
+    setCityName(displayName);
+    setCountry('Sverige');
+
+    const tomorrowDate = new Date();
+    tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+    const tomorrowLbl = tomorrowDate
+      .toLocaleDateString('sv-SE', { weekday: 'long', day: 'numeric', month: 'long' })
+      .toUpperCase();
+    setTomorrowLabel(tomorrowLbl);
+
+    AsyncStorage.setItem(PRAYER_CACHE_KEY, JSON.stringify({
+      date:           new Date().toDateString(),
+      timings:        todayT,
+      tomorrowTimings: tomT ?? null,
+      hijri:          app.hijriDate ?? null,
+      suburb:         '',
+      cityName:       displayName,
+      country:        'Sverige',
+      tomorrowLabel:  tomorrowLbl,
+      prayerSource:   'ifis',
+    })).catch(() => {});
+
+    const np          = getNextPrayer(todayT);
+    const todayFajrMin = todayT['Fajr'] ? timeToMinutes(todayT['Fajr']) : -1;
+    const isPostMidnight = np === 'Fajr' && todayFajrMin >= 0 && todayFajrMin <= nowMinutes();
+    const initTime    = isPostMidnight && tomT?.['Fajr'] ? tomT['Fajr'] : (todayT[np] || '');
+    setNextPrayer(np);
+    setActivePrayer(getActivePrayer(todayT));
+    setCountdown(getTimeUntil(initTime));
+    startCountdownInterval();
+
+    // Sync AppContext so home screen reflects these IFIS times if the tab fetches first
+    appDispatch({ type: 'SET_PRAYER_TIMES',   payload: todayT });
+    if (tomT) appDispatch({ type: 'SET_TOMORROW_TIMES', payload: tomT });
   }
 
   async function handleEmptyStateCitySelected(r: CityResult) {

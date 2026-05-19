@@ -116,7 +116,7 @@ export default function DhulHijjahHighlightsCard({ testMode = false }: Props) {
           const labelClr       = isPast ? T.textMuted : accent;
 
           return (
-            <View key={hijriDay} style={{ width: CARD_W, opacity: isPast ? 0.5 : 1 }}>
+            <View key={hijriDay} style={{ width: CARD_W }}>
               {/* Card */}
               <View style={{
                 backgroundColor: cardBg,

@@ -7,7 +7,7 @@ import { startBackgroundLocationUpdates, stopBackgroundLocationUpdates } from '.
 import { warmupNativeCache } from '../services/nativeCacheWarmup';
 import { buildYearlyCache, getPrayerTimesWithFallback } from '../services/monthlyCache';
 import {
-  getIfisTodayAndTomorrow, warmIfisCache, matchIfisCity,
+  getIfisTodayAndTomorrow, warmIfisCache, matchIfisCity, fetchIfisCities,
   getIfisCityDisplayNames, getIfisCityDisplayName, normalizeIfisCity,
 } from '../services/ifisApi';
 import { schedulePrayerNotifications, cancelPrayerNotifications, scheduleDhikrReminder, cancelDhikrReminder, scheduleFridayDuaReminder, cancelFridayDuaReminder, refreshPrePrayerReminderNotifications, getNotificationDisplayName } from '../services/notifications';
@@ -406,6 +406,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     // Auto-match IFIS city from geocoded location when IFIS is active
     let effectiveIfisCity = ifisCity;
     if (isIfis) {
+      // Populate full city list from API before matching — fetchIfisCities updates
+      // the in-memory map; without this call only 3 base cities (stockholm/goteborg/malmo)
+      // are available, so any other city falls through to the Stockholm default.
+      try { await fetchIfisCities(); } catch {}
       const geocodedCity   = getEffectivePrayerCity(loc.city);
       const normalizedGeo  = normalizeIfisCity(geocodedCity);
       const knownCities    = Object.keys(getIfisCityDisplayNames());
