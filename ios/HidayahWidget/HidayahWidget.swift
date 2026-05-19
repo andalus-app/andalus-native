@@ -1900,7 +1900,7 @@ struct LockTimelineView: View {
     private var accentClr:  Color { dimmed ? .primary                      : kGold }
     private var mainClr:    Color { dimmed ? .primary                      : .white.opacity(0.88) }
     private var mutedClr:   Color { dimmed ? .secondary                    : .white.opacity(0.40) }
-    private var passedClr:  Color { dimmed ? .tertiary                     : .white.opacity(0.28) }
+    private var passedClr:  Color { dimmed ? Color(white: 0.38)            : .white.opacity(0.28) }
     private var dividerClr: Color { dimmed ? Color.secondary.opacity(0.22) : kGold.opacity(0.24) }
     private var dotClr:     Color { dimmed ? Color.secondary               : kGold.opacity(0.48) }
     private var chevronClr: Color { dimmed ? Color.secondary               : .white.opacity(0.26) }
