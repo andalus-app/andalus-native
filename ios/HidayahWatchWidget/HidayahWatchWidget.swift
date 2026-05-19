@@ -605,3 +605,386 @@ struct HidayahPrayerTimelineLargeWidget: Widget {
         .supportedFamilies([.accessoryRectangular])
     }
 }
+
+// ================================================================================
+// MARK: - Widget 3: Bönetider Tidslinje (premium — focus + 6-prayer timeline)
+// ================================================================================
+//
+// Design DNA matches the iOS lock-screen "Bönetider Tidslinje" widget:
+//   • dark teal gradient background
+//   • gold accent + subtle glow on hero icon
+//   • gold divider
+//   • 6-prayer timeline with abbreviations, times, checkmarks
+//   • isLuminanceReduced (always-on) → neutral adaptive colours
+//
+// State machine (same rules as lock-screen widget):
+//   Before Shuruq  → Shuruq highlighted, sunrise.fill icon
+//   Shuruq–Dhuhr   → Dhuhr is focus, Shuruq marked past
+//   After Isha     → "Halva natten om Xt Ym", moon.fill icon
+//   After halvaNatten → "Fajr om Zt Wm"
+//   Halva natten is NEVER shown in the 6-prayer timeline row.
+//
+// Countdown format: "om 57s" / "om 18m" / "om 3t 05m"  (Swedish, t not h)
+
+// MARK: - Constants
+
+private let kWatchTLPrayerKeys   = ["Fajr", "Soluppgång", "Dhuhr", "Asr", "Maghrib", "Isha"]
+private let kWatchTLPrayerAbbrevs = ["FJR",  "SHR",        "DHR",  "ASR",  "MGR",     "ISH"]
+// All six use custom SVG assets from Assets.xcassets — rendered via Image(name).
+private let kWatchTLPrayerSymbols: [String] = [
+    "fajr.fill",      "sunrise.fill", "sun.max.fill",
+    "cloud.sun.fill", "sunset.fill",  "moon.stars.fill"
+]
+private let kWatchTLPrayerIsCustomAsset = [true, true, true, true, true, true]
+private let kWatchTLFivePrayers = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"]
+
+// MARK: - Helpers
+
+private func wTLCountdown(from now: Date, to target: Date) -> String {
+    let secs = max(0, Int(target.timeIntervalSince(now).rounded()))
+    if secs < 60  { return "om \(secs)s" }
+    let mins = secs / 60
+    if mins < 60  { return "om \(mins)m" }
+    let h = mins / 60; let m = mins % 60
+    return String(format: "om %dt %02dm", h, m)
+}
+
+private func wTLSymbol(for name: String) -> String {
+    if let i = kWatchTLPrayerKeys.firstIndex(of: name) { return kWatchTLPrayerSymbols[i] }
+    return "clock"
+}
+
+private func wTLIsCustomAsset(for name: String) -> Bool {
+    if let i = kWatchTLPrayerKeys.firstIndex(of: name) { return kWatchTLPrayerIsCustomAsset[i] }
+    return false
+}
+
+private func wTLOrderedSix(from prayers: [WatchPrayer]) -> [WatchPrayer] {
+    kWatchTLPrayerKeys.compactMap { name in prayers.first { $0.name == name } }
+}
+
+// MARK: - Hero state
+
+private enum WatchTLHeroState {
+    case prayer(WatchPrayer)
+    case shuruq(Date)
+    case halvaNatten(Date)
+}
+
+private func wTLHeroState(prayers: [WatchPrayer], now: Date) -> WatchTLHeroState {
+    let five = prayers.filter { kWatchTLFivePrayers.contains($0.name) }
+
+    let nextFive: WatchPrayer = five.first { $0.time > now }
+        ?? five.first.map { WatchPrayer(name: $0.name, time: $0.time.addingTimeInterval(86_400)) }
+        ?? WatchPrayer(name: "Fajr", time: now.addingTimeInterval(3_600))
+
+    let halvaNattenTime: Date? = {
+        guard let maghrib = five.first(where: { $0.name == "Maghrib" }),
+              let fajr    = five.first(where: { $0.name == "Fajr" })
+        else { return nil }
+        var fajrAdj = fajr.time
+        if fajrAdj <= maghrib.time { fajrAdj = fajrAdj.addingTimeInterval(86_400) }
+        return maghrib.time.addingTimeInterval(fajrAdj.timeIntervalSince(maghrib.time) / 2)
+    }()
+
+    let shuruqTime = prayers.first { $0.name == "Soluppgång" }?.time
+
+    var candidates: [(WatchTLHeroState, Date)] = [(.prayer(nextFive), nextFive.time)]
+    if let s = shuruqTime,      s > now { candidates.append((.shuruq(s),      s)) }
+    if let h = halvaNattenTime, h > now { candidates.append((.halvaNatten(h), h)) }
+
+    return candidates.min(by: { $0.1 < $1.1 })?.0 ?? .prayer(nextFive)
+}
+
+// MARK: - Entry & provider
+
+struct WatchTimelineEntry: TimelineEntry {
+    let date:         Date
+    let prayers:      [WatchPrayer]   // 6 ordered: Fajr…Isha
+    let nextIndex:    Int             // index of next prayer; -1 = all passed
+    let countdownStr: String          // "om Xs" / "om Ym" / "om Zt Wm"
+}
+
+struct WatchTimelineProvider: TimelineProvider {
+
+    private func empty() -> WatchTimelineEntry {
+        WatchTimelineEntry(date: .now, prayers: [], nextIndex: 0, countdownStr: "–")
+    }
+
+    func placeholder(in context: Context) -> WatchTimelineEntry { empty() }
+
+    func getSnapshot(in context: Context, completion: @escaping (WatchTimelineEntry) -> Void) {
+        completion(loadEntry(at: .now) ?? empty())
+    }
+
+    func getTimeline(in context: Context, completion: @escaping (Timeline<WatchTimelineEntry>) -> Void) {
+        guard let all = loadAllPrayers() else {
+            completion(Timeline(entries: [empty()], policy: .after(Date().addingTimeInterval(5 * 60))))
+            return
+        }
+        let midnight = Calendar.current.startOfDay(for: .now).addingTimeInterval(86_400 + 60)
+        completion(Timeline(entries: buildEntries(from: all), policy: .after(midnight)))
+    }
+
+    // ── Private ───────────────────────────────────────────────────────────────
+
+    private func loadAllPrayers() -> [WatchPrayer]? {
+        guard
+            let defaults = UserDefaults(suiteName: kAppGroup),
+            let raw      = defaults.data(forKey: kWatchDataKey),
+            let stored   = try? JSONDecoder().decode(StoredData.self, from: raw),
+            stored.date  == localISODate(.now)
+        else { return nil }
+        let now = Date()
+        let prayers = stored.prayers.compactMap { p -> WatchPrayer? in
+            guard let t = parseTime(p.time, on: now) else { return nil }
+            return WatchPrayer(name: p.name, time: t)
+        }
+        return prayers.isEmpty ? nil : prayers
+    }
+
+    private func loadEntry(at date: Date) -> WatchTimelineEntry? {
+        guard let all = loadAllPrayers() else { return nil }
+        return makeEntry(from: all, at: date)
+    }
+
+    private func makeEntry(from all: [WatchPrayer], at date: Date) -> WatchTimelineEntry {
+        let six     = wTLOrderedSix(from: all)
+        let nextIdx = six.firstIndex { $0.time > date } ?? -1
+        let hero    = wTLHeroState(prayers: all, now: date)
+        let heroT: Date = {
+            switch hero {
+            case .prayer(let p):      return p.time
+            case .shuruq(let t):      return t
+            case .halvaNatten(let t): return t
+            }
+        }()
+        return WatchTimelineEntry(
+            date:         date,
+            prayers:      six,
+            nextIndex:    nextIdx,
+            countdownStr: wTLCountdown(from: date, to: heroT)
+        )
+    }
+
+    private func buildEntries(from all: [WatchPrayer]) -> [WatchTimelineEntry] {
+        let now = Date()
+        var dates = Set<Date>()
+        dates.insert(now)
+
+        for p in all where p.time > now { dates.insert(p.time) }
+
+        // Halva natten transition
+        let five = all.filter { kWatchTLFivePrayers.contains($0.name) }
+        if let maghrib = five.first(where: { $0.name == "Maghrib" }),
+           let fajr    = five.first(where: { $0.name == "Fajr" }) {
+            var adj = fajr.time
+            if adj <= maghrib.time { adj = adj.addingTimeInterval(86_400) }
+            let hn = maghrib.time.addingTimeInterval(adj.timeIntervalSince(maghrib.time) / 2)
+            if hn > now { dates.insert(hn) }
+        }
+
+        // Coarse near-hero entries + per-second final 60 s
+        let heroT: Date? = {
+            switch wTLHeroState(prayers: all, now: now) {
+            case .prayer(let p):      return p.time
+            case .shuruq(let t):      return t
+            case .halvaNatten(let t): return t
+            }
+        }()
+        if let ht = heroT, ht > now {
+            for off: TimeInterval in [-300, -240, -180, -120, -60, -30, -20, -10] {
+                let t = ht.addingTimeInterval(off); if t > now { dates.insert(t) }
+            }
+            for s in 1...60 {
+                let t = ht.addingTimeInterval(-Double(s)); if t > now { dates.insert(t) }
+            }
+        }
+
+        return dates.sorted().map { makeEntry(from: all, at: $0) }
+    }
+}
+
+// MARK: - View
+
+private struct WatchTimelineBodyView: View {
+    let entry: WatchTimelineEntry
+    @Environment(\.isLuminanceReduced) private var dimmed
+
+    private var accentClr:  Color { dimmed ? Color(white: 0.85)           : wGold }
+    private var mainClr:    Color { dimmed ? Color(white: 0.72)           : .white.opacity(0.90) }
+    private var mutedClr:   Color { dimmed ? Color(white: 0.52)           : .white.opacity(0.45) }
+    private var passedClr:  Color { dimmed ? Color(white: 0.38)           : .white.opacity(0.28) }
+    private var dividerClr: Color { dimmed ? Color(white: 0.22).opacity(0.50) : wGold.opacity(0.25) }
+    private var dotClr:     Color { dimmed ? Color(white: 0.38)           : wGold.opacity(0.40) }
+
+    private var hero: WatchTLHeroState {
+        guard !entry.prayers.isEmpty else {
+            return .prayer(WatchPrayer(name: "Fajr", time: entry.date))
+        }
+        return wTLHeroState(prayers: entry.prayers, now: entry.date)
+    }
+
+    private var heroIcon: String {
+        switch hero {
+        case .shuruq:        return "sunrise.fill"
+        case .halvaNatten:   return "moon.stars.fill"
+        case .prayer(let p): return wTLSymbol(for: p.name)
+        }
+    }
+
+    // All hero states use custom assets from Assets.xcassets.
+    private var heroIsCustomAsset: Bool { true }
+
+    // Renders the hero icon, using the correct Image initializer for the asset type.
+    @ViewBuilder
+    private func heroIconView(color: Color, size: CGFloat = 16) -> some View {
+        if heroIsCustomAsset {
+            Image(heroIcon)
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: size, height: size)
+                .foregroundColor(color)
+        } else {
+            Image(systemName: heroIcon)
+                .font(.system(size: size, weight: .medium))
+                .foregroundColor(color)
+        }
+    }
+
+    private var heroName: String {
+        switch hero {
+        case .shuruq:        return "Shuruq"
+        case .halvaNatten:   return "Halva natten"
+        case .prayer(let p): return p.name
+        }
+    }
+
+    private var heroTime: Date {
+        switch hero {
+        case .shuruq(let t):      return t
+        case .halvaNatten(let t): return t
+        case .prayer(let p):      return p.time
+        }
+    }
+
+    // ── Focus row ─────────────────────────────────────────────────────────────
+
+    private var focusRow: some View {
+        HStack(alignment: .center, spacing: 7) {
+            ZStack {
+                if !dimmed {
+                    heroIconView(color: wGold.opacity(0.22))
+                        .blur(radius: 3)
+                }
+                heroIconView(color: accentClr)
+            }
+            .frame(width: 20, alignment: .center)
+
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(alignment: .lastTextBaseline, spacing: 5) {
+                    Text(heroName)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(accentClr)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.78)
+                    Text(entry.countdownStr)
+                        .font(.system(size: 11, weight: .regular).monospacedDigit())
+                        .foregroundColor(mainClr)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.78)
+                }
+                Text(timeFmt.string(from: heroTime))
+                    .font(.system(size: 10, weight: .regular).monospacedDigit())
+                    .foregroundColor(mutedClr)
+            }
+
+            Spacer(minLength: 0)
+        }
+    }
+
+    // ── Prayer column ─────────────────────────────────────────────────────────
+
+    @ViewBuilder
+    private func prayerColumn(_ prayer: WatchPrayer, idx: Int) -> some View {
+        let isPast = entry.nextIndex == -1 || idx < entry.nextIndex
+        let isNext = idx == entry.nextIndex
+        let clr: Color = isPast ? passedClr : (isNext ? accentClr : mainClr.opacity(0.75))
+
+        VStack(alignment: .center, spacing: 2) {
+            Text(kWatchTLPrayerAbbrevs[idx])
+                .font(.system(size: 7.5, weight: isNext ? .bold : .regular))
+                .foregroundColor(clr)
+                .lineLimit(1)
+            Text(timeFmt.string(from: prayer.time))
+                .font(.system(size: 9, weight: isNext ? .bold : .regular, design: .monospaced))
+                .foregroundColor(clr)
+                .lineLimit(1)
+            if isPast {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 6, weight: .bold))
+                    .foregroundColor(passedClr)
+            } else {
+                Color.clear.frame(height: 7)
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    // ── Timeline row ──────────────────────────────────────────────────────────
+
+    private var timelineRow: some View {
+        HStack(alignment: .top, spacing: 0) {
+            ForEach(Array(entry.prayers.enumerated()), id: \.offset) { idx, prayer in
+                if idx > 0 {
+                    Text("•")
+                        .font(.system(size: 5.5, weight: .bold))
+                        .foregroundColor(dotClr)
+                        .frame(maxHeight: .infinity, alignment: .top)
+                        .padding(.top, 2)
+                }
+                prayerColumn(prayer, idx: idx)
+            }
+        }
+    }
+
+    // ── Root ──────────────────────────────────────────────────────────────────
+
+    var body: some View {
+        ZStack {
+            LinearGradient(colors: [wBgTop, wBgBot], startPoint: .top, endPoint: .bottom)
+                .ignoresSafeArea()
+
+            if entry.prayers.isEmpty {
+                LargeNoDataView()
+            } else {
+                VStack(alignment: .leading, spacing: 0) {
+                    focusRow
+                    Rectangle()
+                        .fill(dividerClr)
+                        .frame(height: 1)
+                        .padding(.vertical, 4)
+                    timelineRow
+                }
+                .padding(.horizontal, 10)
+                .padding(.top, 8)
+                .padding(.bottom, 6)
+            }
+        }
+    }
+}
+
+// MARK: - Widget definition
+
+struct HidayahWatchTimelineWidget: Widget {
+    let kind = "HidayahWatchTimelineWidget"
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: kind, provider: WatchTimelineProvider()) { entry in
+            WatchTimelineBodyView(entry: entry)
+        }
+        .configurationDisplayName("Bönetider Tidslinje")
+        .description("Fokus på nästa bön med tidslinje för hela dagen.")
+        .supportedFamilies([.accessoryRectangular])
+    }
+}

@@ -19,10 +19,12 @@ struct HidayahWidgetBundle: WidgetBundle {
         HidayahLockFocusWidget()       // lock screen – countdown timer
         HidayahLockOverviewWidget()    // lock screen – daily overview
         HidayahLockArcWidget()         // lock screen – prayer arc timeline
+        HidayahLockTimelineWidget()    // lock screen – prayer timeline (ny)
 #endif
-        HidayahAllahNameWidget()       // small + medium – daily Allah name
-        HidayahDailyVerseWidget()      // small + medium – daily Quran verse
-        HidayahDailyHadithWidget()     // medium – daily Hadith
+        HidayahAllahNameWidget()             // small + medium – daily Allah name
+        HidayahDailyVerseWidget()            // small + medium – daily Quran verse
+        HidayahDailyVerseArabicWidget()      // medium – Arabic-first Quran verse
+        HidayahDailyHadithWidget()           // medium – daily Hadith
         // Apple Watch complications & Smart Stack
 #if !os(macOS)
         HidayahWatchCircularWidget()   // accessoryCircular – Watch/lock-screen complication

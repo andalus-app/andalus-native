@@ -1727,6 +1727,327 @@ struct HidayahLockArcWidget: Widget {
     }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// MARK: - Bönetider Tidslinje — Lock Screen Timeline Widget
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// New widget — does NOT modify any existing widget.
+// Kind: "HidayahLockTimelineWidget"   Family: accessoryRectangular
+//
+// Layout (stable across all states — only colors/text change):
+//   [ICON]  [Prayer/event name]  [countdown]                [>]
+//           [HH:MM]
+//   ─── gold divider 1pt ──────────────────────────────────────
+//   FJR  •  SHR  •  DHR  •  ASR  •  MGR  •  ISH
+//  02:06    03:41   12:45   17:12   21:24   23:18
+//    ✓        ✓
+//
+// States driven by computeHeroState() (reused from existing widgets):
+//   .shuruq(t)      → sunrise.fill, "Shuruq om Xm"
+//   .halvaNatten(t) → moon.fill (Isha icon), "Halva natten om Xt Ym"
+//   .prayer(p)      → icon per prayer, "PrayerName om …"
+//
+// Always-On Display: isLuminanceReduced neutralises colors, keeps dark background.
+
+// MARK: - Countdown helper
+
+/// "om 57s" / "om 18m" / "om 9t 04m" — Swedish (t not h), zero-padded minutes ≥ 1h.
+private func timelineCountdown(from now: Date, to target: Date) -> String {
+    let secs = max(0, Int(target.timeIntervalSince(now).rounded()))
+    if secs < 60  { return "om \(secs)s" }
+    let mins = secs / 60
+    if mins < 60  { return "om \(mins)m" }
+    let h = mins / 60; let m = mins % 60
+    return String(format: "om %dt %02dm", h, m)
+}
+
+// MARK: - Six-prayer configuration
+
+private let kTimelinePrayerNames   = ["Fajr",            "Shuruq",       "Dhuhr",
+                                      "Asr",             "Maghrib",      "Isha"]
+private let kTimelinePrayerAbbrevs = ["FJR",             "SHR",          "DHR",
+                                      "ASR",             "MGR",          "ISH"]
+private let kTimelinePrayerSymbols = ["moon.stars.fill", "sunrise.fill", "sun.max.fill",
+                                      "sun.dust.fill",   "sunset.fill",  "moon.fill"]
+
+/// Re-orders allPrayers to canonical 6-prayer display order.
+/// Normalises "Soluppgång" → "Shuruq" so lookups are consistent.
+private func orderedSixPrayers(from allPrayers: [Prayer]) -> [Prayer] {
+    let normalized = allPrayers.map { p in
+        p.name == "Soluppgång" ? Prayer(name: "Shuruq", time: p.time) : p
+    }
+    return kTimelinePrayerNames.compactMap { name in normalized.first { $0.name == name } }
+}
+
+/// Returns the SF Symbol name for a prayer by its display name.
+private func timelineSymbol(for name: String) -> String {
+    let n = name == "Soluppgång" ? "Shuruq" : name
+    if let i = kTimelinePrayerNames.firstIndex(of: n) { return kTimelinePrayerSymbols[i] }
+    return "clock"
+}
+
+// MARK: - Entry
+
+struct LockTimelineEntry: TimelineEntry {
+    let date:         Date
+    /// Six ordered prayers: Fajr, Shuruq, Dhuhr, Asr, Maghrib, Isha.
+    let prayers:      [Prayer]
+    /// Index of next upcoming prayer (0–5); -1 = all passed (Halva natten / Fajr imorgon state).
+    let nextIndex:    Int
+    /// Pre-formatted Swedish countdown string, e.g. "om 18m" or "om 9t 04m".
+    let countdownStr: String
+}
+
+// MARK: - Provider
+
+struct LockTimelineProvider: TimelineProvider {
+
+    func placeholder(in context: Context) -> LockTimelineEntry {
+        makeEntry(allPrayers: PrayerEntry.placeholder().allPrayers, at: .now)
+    }
+
+    func getSnapshot(in context: Context,
+                     completion: @escaping (LockTimelineEntry) -> Void) {
+        completion(makeEntry(allPrayers: loadPrayers(), at: .now))
+    }
+
+    func getTimeline(in context: Context,
+                     completion: @escaping (Timeline<LockTimelineEntry>) -> Void) {
+        let prayers  = loadPrayers()
+        let entries  = buildTimelineEntries(allPrayers: prayers)
+        let midnight = Calendar.current.startOfDay(for: .now).addingTimeInterval(86_400 + 60)
+        completion(Timeline(entries: entries, policy: .after(midnight)))
+    }
+
+    // ── Private helpers ───────────────────────────────────────────────────────
+
+    private func loadPrayers() -> [Prayer] {
+        if let stored = readAppGroupData() {
+            let parsed = parsePrayers(stored.prayers)
+            if !parsed.isEmpty { return parsed }
+        }
+        return PrayerEntry.placeholder().allPrayers
+    }
+
+    private func makeEntry(allPrayers: [Prayer], at date: Date) -> LockTimelineEntry {
+        let six     = orderedSixPrayers(from: allPrayers)
+        let nextIdx = six.firstIndex { $0.time > date } ?? -1
+        let hero    = computeHeroState(allPrayers: allPrayers, now: date)
+        let target: Date? = {
+            switch hero {
+            case .prayer(let p):      return p.time
+            case .shuruq(let t):      return t
+            case .halvaNatten(let t): return t
+            }
+        }()
+        let countdown = target.map { timelineCountdown(from: date, to: $0) } ?? "–"
+        return LockTimelineEntry(date: date, prayers: six,
+                                 nextIndex: nextIdx, countdownStr: countdown)
+    }
+
+    private func buildTimelineEntries(allPrayers: [Prayer]) -> [LockTimelineEntry] {
+        let now = Date()
+        var dates = Set<Date>()
+        dates.insert(now)
+
+        // One entry at each prayer-time and halva natten transition for the rest of the day.
+        for p in allPrayers where p.time > now { dates.insert(p.time) }
+        let five = allPrayers.filter { kFivePrayers.contains($0.name) }
+        if let maghrib = five.first(where: { $0.name == "Maghrib" }),
+           let fajr    = five.first(where: { $0.name == "Fajr" }) {
+            var fajrAdj = fajr.time
+            if fajrAdj <= maghrib.time { fajrAdj = fajrAdj.addingTimeInterval(86_400) }
+            let halvaNatten = maghrib.time.addingTimeInterval(
+                fajrAdj.timeIntervalSince(maghrib.time) / 2)
+            if halvaNatten > now { dates.insert(halvaNatten) }
+        }
+
+        // Coarse near-hero entries (−5 min → −10 s) for smooth countdown.
+        let heroTime: Date? = {
+            switch computeHeroState(allPrayers: allPrayers, now: now) {
+            case .prayer(let p):      return p.time
+            case .shuruq(let t):      return t
+            case .halvaNatten(let t): return t
+            }
+        }()
+        if let ht = heroTime, ht > now {
+            for offset: TimeInterval in [-300, -240, -180, -120, -60, -30, -20, -10] {
+                let t = ht.addingTimeInterval(offset); if t > now { dates.insert(t) }
+            }
+            // Per-second entries for the final 60 s (accurate "om Xs" display).
+            for s in 1...60 {
+                let t = ht.addingTimeInterval(-Double(s)); if t > now { dates.insert(t) }
+            }
+        }
+
+        return dates.sorted().map { makeEntry(allPrayers: allPrayers, at: $0) }
+    }
+}
+
+// MARK: - View
+
+struct LockTimelineView: View {
+    let entry: LockTimelineEntry
+    /// Always-On Display: dimmed = true → neutralise accent colors, keep dark background.
+    @Environment(\.isLuminanceReduced) private var dimmed
+
+    // ── Hero state (reuses existing computeHeroState) ─────────────────────────
+    private var hero: HeroState {
+        computeHeroState(allPrayers: entry.prayers, now: entry.date)
+    }
+
+    // ── Adaptive colours ──────────────────────────────────────────────────────
+    private var accentClr:  Color { dimmed ? .primary                      : kGold }
+    private var mainClr:    Color { dimmed ? .primary                      : .white.opacity(0.88) }
+    private var mutedClr:   Color { dimmed ? .secondary                    : .white.opacity(0.40) }
+    private var passedClr:  Color { dimmed ? .tertiary                     : .white.opacity(0.28) }
+    private var dividerClr: Color { dimmed ? Color.secondary.opacity(0.22) : kGold.opacity(0.24) }
+    private var dotClr:     Color { dimmed ? Color.secondary               : kGold.opacity(0.48) }
+    private var chevronClr: Color { dimmed ? Color.secondary               : .white.opacity(0.26) }
+
+    // ── Hero accessors ────────────────────────────────────────────────────────
+    private var heroIcon: String {
+        switch hero {
+        case .shuruq:        return "sunrise.fill"
+        case .halvaNatten:   return "moon.fill"            // Isha icon — consistent
+        case .prayer(let p): return timelineSymbol(for: p.name)
+        }
+    }
+    private var heroName: String {
+        switch hero {
+        case .shuruq:        return "Shuruq"
+        case .halvaNatten:   return "Halva natten"
+        case .prayer(let p): return p.name
+        }
+    }
+    private var heroTimeStr: String {
+        switch hero {
+        case .shuruq(let t):      return timeFmt.string(from: t)
+        case .halvaNatten(let t): return timeFmt.string(from: t)
+        case .prayer(let p):      return timeFmt.string(from: p.time)
+        }
+    }
+
+    // ── Focus row ─────────────────────────────────────────────────────────────
+    private var focusRow: some View {
+        HStack(alignment: .center, spacing: 9) {
+
+            // Icon — subtle glow only in active mode
+            ZStack {
+                if !dimmed {
+                    Image(systemName: heroIcon)
+                        .font(.system(size: 19, weight: .medium))
+                        .foregroundColor(kGold.opacity(0.18))
+                        .blur(radius: 3.5)
+                }
+                Image(systemName: heroIcon)
+                    .font(.system(size: 19, weight: .medium))
+                    .foregroundColor(accentClr)
+            }
+            .frame(width: 24, alignment: .center)
+
+            // Name + countdown / time
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(alignment: .lastTextBaseline, spacing: 5) {
+                    Text(heroName)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(accentClr)
+                        .lineLimit(1)
+                    Text(entry.countdownStr)
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundColor(mainClr)
+                        .lineLimit(1)
+                }
+                .minimumScaleFactor(0.78)
+                Text(heroTimeStr)
+                    .font(.system(size: 11, weight: .regular).monospacedDigit())
+                    .foregroundColor(mutedClr)
+            }
+
+            Spacer(minLength: 0)
+            Image(systemName: "chevron.right")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(chevronClr)
+        }
+    }
+
+    // ── Prayer column in timeline row ─────────────────────────────────────────
+    @ViewBuilder
+    private func prayerColumn(_ prayer: Prayer, idx: Int) -> some View {
+        let isPast = entry.nextIndex == -1 || idx < entry.nextIndex
+        let isNext = idx == entry.nextIndex
+        let clr: Color = isPast ? passedClr : (isNext ? accentClr : mainClr.opacity(0.78))
+        VStack(alignment: .center, spacing: 2) {
+            Text(kTimelinePrayerAbbrevs[idx])
+                .font(.system(size: 8, weight: isNext ? .bold : .regular))
+                .foregroundColor(clr)
+                .lineLimit(1)
+            Text(timeFmt.string(from: prayer.time))
+                .font(.system(size: 10, weight: isNext ? .bold : .regular).monospacedDigit())
+                .foregroundColor(clr)
+                .lineLimit(1)
+            if isPast {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 6.5, weight: .bold))
+                    .foregroundColor(passedClr)
+            } else {
+                Color.clear.frame(height: 8)   // reserve space so row height never shifts
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    // ── Timeline row — 6 columns separated by gold dots ───────────────────────
+    private var timelineRow: some View {
+        HStack(alignment: .top, spacing: 0) {
+            ForEach(Array(entry.prayers.enumerated()), id: \.offset) { idx, prayer in
+                if idx > 0 {
+                    Text("•")
+                        .font(.system(size: 6, weight: .bold))
+                        .foregroundColor(dotClr)
+                        .frame(maxHeight: .infinity, alignment: .top)
+                        .padding(.top, 2)
+                }
+                prayerColumn(prayer, idx: idx)
+            }
+        }
+    }
+
+    // ── Root body ─────────────────────────────────────────────────────────────
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            focusRow
+            Rectangle()
+                .fill(dividerClr)
+                .frame(height: 1)
+                .padding(.vertical, 5)
+            timelineRow
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+}
+
+// MARK: - Widget definition
+
+struct HidayahLockTimelineWidget: Widget {
+    let kind = "HidayahLockTimelineWidget"
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: kind, provider: LockTimelineProvider()) { entry in
+            LockTimelineView(entry: entry)
+                .containerBackground(
+                    LinearGradient(colors: [kBgTop, kBgBottom],
+                                   startPoint: .top, endPoint: .bottom),
+                    for: .widget)
+                .widgetURL(URL(string: "hidayah://"))
+        }
+        .configurationDisplayName("Bönetider Tidslinje")
+        .description("Bönetider i en elegant tidslinje med fokus på nästa bön.")
+        .supportedFamilies([.accessoryRectangular])
+    }
+}
+
 #endif // os(iOS) — closes block opened before LockScreenFocusView
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1746,6 +2067,7 @@ private struct DailyCache: Decodable {
     struct VerseData: Decodable {
         let swedish: String; let surahName: String
         let surahNumber: Int; let ayahNumber: Int; let reference: String
+        let arabic: String?
     }
     struct HadithData: Decodable {
         let hadith_nr: Int?
@@ -1926,11 +2248,14 @@ struct QuranVerseEntry: TimelineEntry {
     let date: Date
     let swedish: String; let surahName: String
     let surahNumber: Int; let ayahNumber: Int; let reference: String
+    /// Uthmani Arabic text — empty string when not yet cached (widget degrades gracefully).
+    let arabic: String
 
     static let placeholder = QuranVerseEntry(
         date: .now,
         swedish: "Allah - det finns ingen [sann] gud utom honom, den Levande, den evige Vidmakthållaren.",
-        surahName: "Al-Baqarah", surahNumber: 2, ayahNumber: 255, reference: "2:255"
+        surahName: "Al-Baqarah", surahNumber: 2, ayahNumber: 255, reference: "2:255",
+        arabic: "ٱللَّهُ لَآ إِلَٰهَ إِلَّا هُوَ ٱلْحَىُّ ٱلْقَيُّومُ"
     )
 }
 
@@ -1952,13 +2277,14 @@ struct QuranVerseProvider: TimelineProvider {
                                    surahName: c.quranVerse.surahName,
                                    surahNumber: c.quranVerse.surahNumber,
                                    ayahNumber: c.quranVerse.ayahNumber,
-                                   reference: c.quranVerse.reference)
+                                   reference: c.quranVerse.reference,
+                                   arabic: c.quranVerse.arabic ?? "")
         }
         // Fallback: curated verses, epoch 2024-01-01 matching JS dailyReminder.ts
         let v = kFallbackVerses[epochDayIndex(year: 2024, month: 1, day: 1, count: kFallbackVerses.count)]
         return QuranVerseEntry(date: .now, swedish: v.swedish, surahName: v.surahName,
                                surahNumber: v.surahNumber, ayahNumber: v.ayahNumber,
-                               reference: v.reference)
+                               reference: v.reference, arabic: "")
     }
 }
 
@@ -2036,6 +2362,96 @@ struct HidayahDailyVerseWidget: Widget {
         .configurationDisplayName("Dagens Koranvers")
         .description("Läs en ny Koranvers varje dag.")
         .supportedFamilies([.systemSmall, .systemMedium])
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MARK: - Koranvers Arabisk Widget (medium only, Arabic-first premium layout)
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// Reuses QuranVerseEntry and QuranVerseProvider — all data fetching is shared.
+// Arabic text (Uthmani Unicode via quran.com API) is the primary visual element.
+// Swedish translation is secondary and may truncate. Surah info is pinned bottom.
+// Font: Amiri-Regular (bundled in HidayahWidget extension, registered in Info.plist).
+// When arabic field is empty (first app open / offline fallback) the Swedish text
+// is promoted to primary so the widget is never blank.
+
+private struct ArabicVerseMedium: View {
+    let entry: QuranVerseEntry
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+
+            if entry.arabic.isEmpty {
+                // Graceful fallback: Swedish as primary when Arabic not yet cached
+                Text(entry.swedish)
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundColor(.white.opacity(0.85))
+                    .lineLimit(6)
+                    .minimumScaleFactor(0.82)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .layoutPriority(1)
+            } else {
+                // Arabic — primary, Amiri Naskh, center-aligned
+                Text(entry.arabic)
+                    .font(Font.custom("Amiri-Regular", size: 19))
+                    .foregroundColor(.white)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(5)
+                    .minimumScaleFactor(0.68)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .layoutPriority(1)
+
+                // Subtle gold separator
+                Rectangle()
+                    .fill(kGold.opacity(0.35))
+                    .frame(height: 1)
+                    .padding(.top, 8)
+                    .padding(.bottom, 7)
+
+                // Swedish — secondary, truncated
+                Text(entry.swedish)
+                    .font(.system(size: 10, weight: .regular))
+                    .foregroundColor(.white.opacity(0.65))
+                    .lineLimit(2)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            Spacer(minLength: 4)
+
+            // Surah name + verse reference — pinned to bottom
+            HStack(alignment: .center) {
+                Text(entry.surahName)
+                    .font(.system(size: 10, weight: .regular))
+                    .foregroundColor(.white.opacity(0.38))
+                    .lineLimit(1)
+                Spacer()
+                Text(entry.reference)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(kGold.opacity(0.80))
+                    .lineLimit(1)
+            }
+        }
+        .padding(EdgeInsets(top: 14, leading: 14, bottom: 12, trailing: 14))
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+}
+
+struct HidayahDailyVerseArabicWidget: Widget {
+    let kind = "HidayahDailyVerseArabicWidget"
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: kind, provider: QuranVerseProvider()) { entry in
+            ArabicVerseMedium(entry: entry)
+                .containerBackground(
+                    LinearGradient(colors: [kBgTop, kBgBottom],
+                                   startPoint: .topLeading, endPoint: .bottomTrailing),
+                    for: .widget)
+                .widgetURL(URL(string: "hidayah://quran?verseKey=\(entry.surahNumber):\(entry.ayahNumber)"))
+        }
+        .configurationDisplayName("Koranvers (Arabisk)")
+        .description("Koranvers med arabisk text och svensk översättning.")
+        .supportedFamilies([.systemMedium])
     }
 }
 
@@ -2611,15 +3027,17 @@ private let kFallbackHadiths: [FallbackHadith] = [
 #Preview(as: .systemLarge)           { HidayahLargeWidget()         } timeline: { PrayerEntry.placeholder() }
 #Preview(as: .systemLarge)           { HidayahOverviewWidget()      } timeline: { PrayerEntry.placeholder() }
 #if os(iOS)
-#Preview(as: .accessoryRectangular)  { HidayahLockFocusWidget()     } timeline: { PrayerEntry.placeholder() }
-#Preview(as: .accessoryRectangular)  { HidayahLockOverviewWidget()  } timeline: { PrayerEntry.placeholder() }
-#Preview(as: .accessoryRectangular)  { HidayahLockArcWidget()       } timeline: { PrayerEntry.placeholder() }
+#Preview(as: .accessoryRectangular)  { HidayahLockFocusWidget()      } timeline: { PrayerEntry.placeholder() }
+#Preview(as: .accessoryRectangular)  { HidayahLockOverviewWidget()   } timeline: { PrayerEntry.placeholder() }
+#Preview(as: .accessoryRectangular)  { HidayahLockArcWidget()        } timeline: { PrayerEntry.placeholder() }
+#Preview(as: .accessoryRectangular)  { HidayahLockTimelineWidget()   } timeline: { LockTimelineEntry(date: .now, prayers: orderedSixPrayers(from: PrayerEntry.placeholder().allPrayers), nextIndex: 1, countdownStr: "om 18m") }
 #endif
 #Preview(as: .systemSmall)           { HidayahAllahNameWidget()     } timeline: { AllahNameEntry.placeholder }
 #Preview(as: .systemMedium)          { HidayahAllahNameWidget()     } timeline: { AllahNameEntry.placeholder }
-#Preview(as: .systemSmall)           { HidayahDailyVerseWidget()    } timeline: { QuranVerseEntry.placeholder }
-#Preview(as: .systemMedium)          { HidayahDailyVerseWidget()    } timeline: { QuranVerseEntry.placeholder }
-#Preview(as: .systemMedium)          { HidayahDailyHadithWidget()   } timeline: { HadithEntry.placeholder }
+#Preview(as: .systemSmall)           { HidayahDailyVerseWidget()         } timeline: { QuranVerseEntry.placeholder }
+#Preview(as: .systemMedium)          { HidayahDailyVerseWidget()         } timeline: { QuranVerseEntry.placeholder }
+#Preview(as: .systemMedium)          { HidayahDailyVerseArabicWidget()   } timeline: { QuranVerseEntry.placeholder }
+#Preview(as: .systemMedium)          { HidayahDailyHadithWidget()        } timeline: { HadithEntry.placeholder }
 #if !os(macOS)
 #Preview(as: .accessoryCircular)     { HidayahWatchCircularWidget() } timeline: { PrayerEntry.placeholder() }
 #endif

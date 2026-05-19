@@ -7,5 +7,6 @@ struct HidayahWatchWidgetBundle: WidgetBundle {
         HidayahWatchWidget()
         HidayahNextPrayerLargeWidget()
         HidayahPrayerTimelineLargeWidget()
+        HidayahWatchTimelineWidget()
     }
 }
