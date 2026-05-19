@@ -30,7 +30,7 @@ import {
   type NotificationScheduleState,
   type EffectivePrayerSchedule,
 } from '../modules/WidgetData';
-import { getDailyWidgetPayload } from '../services/dailyWidgetContent';
+import { getDailyWidgetPayload, updateVerse30DayCache } from '../services/dailyWidgetContent';
 import { refreshVisitedPlaceMultiDayCache } from '../services/visitedPlacesRefresh';
 import { getEffectivePrayerCity } from '../services/monthlyCache';
 import { getPrayerMonthFromSupabaseFallback } from '../services/supabasePrayerFallback';
@@ -540,6 +540,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }).catch(() => {});
 
         getDailyWidgetPayload().then(updateDailyContent).catch(() => {});
+        updateVerse30DayCache().catch(() => {});
 
         const effectiveCity = isIfis
           ? getIfisCityDisplayName(effectiveIfisCity)

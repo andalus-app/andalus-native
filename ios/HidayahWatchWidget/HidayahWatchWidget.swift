@@ -904,47 +904,44 @@ private struct WatchTimelineBodyView: View {
         }
     }
 
-    // ── Prayer column ─────────────────────────────────────────────────────────
+    // ── Prayer cell — "FJR 02:05" inline, used in 2×3 grid ──────────────────
 
     @ViewBuilder
-    private func prayerColumn(_ prayer: WatchPrayer, idx: Int) -> some View {
+    private func prayerCell(_ prayer: WatchPrayer, idx: Int) -> some View {
         let isPast = entry.nextIndex == -1 || idx < entry.nextIndex
         let isNext = idx == entry.nextIndex
-        let clr: Color = isPast ? passedClr : (isNext ? accentClr : mainClr.opacity(0.75))
+        let clr: Color = isPast ? passedClr : (isNext ? accentClr : mainClr.opacity(0.85))
 
-        VStack(alignment: .center, spacing: 2) {
+        HStack(spacing: 3) {
             Text(kWatchTLPrayerAbbrevs[idx])
-                .font(.system(size: 7.5, weight: isNext ? .bold : .regular))
+                .font(.system(size: 8, weight: isNext ? .bold : .regular))
                 .foregroundColor(clr)
-                .lineLimit(1)
             Text(timeFmt.string(from: prayer.time))
-                .font(.system(size: 9, weight: isNext ? .bold : .regular, design: .monospaced))
+                .font(.system(size: 8.5, weight: isNext ? .semibold : .regular, design: .monospaced))
                 .foregroundColor(clr)
-                .lineLimit(1)
             if isPast {
                 Image(systemName: "checkmark")
                     .font(.system(size: 6, weight: .bold))
                     .foregroundColor(passedClr)
-            } else {
-                Color.clear.frame(height: 7)
             }
         }
-        .frame(maxWidth: .infinity)
+        .lineLimit(1)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    // ── Timeline row ──────────────────────────────────────────────────────────
+    // ── Timeline grid — 2 rows × 3 columns ───────────────────────────────────
 
-    private var timelineRow: some View {
-        HStack(alignment: .top, spacing: 0) {
-            ForEach(Array(entry.prayers.enumerated()), id: \.offset) { idx, prayer in
-                if idx > 0 {
-                    Text("•")
-                        .font(.system(size: 5.5, weight: .bold))
-                        .foregroundColor(dotClr)
-                        .frame(maxHeight: .infinity, alignment: .top)
-                        .padding(.top, 2)
+    private var timelineGrid: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 0) {
+                ForEach(0..<3, id: \.self) { idx in
+                    if idx < entry.prayers.count { prayerCell(entry.prayers[idx], idx: idx) }
                 }
-                prayerColumn(prayer, idx: idx)
+            }
+            HStack(spacing: 0) {
+                ForEach(3..<6, id: \.self) { idx in
+                    if idx < entry.prayers.count { prayerCell(entry.prayers[idx], idx: idx) }
+                }
             }
         }
     }
@@ -952,25 +949,20 @@ private struct WatchTimelineBodyView: View {
     // ── Root ──────────────────────────────────────────────────────────────────
 
     var body: some View {
-        ZStack {
-            LinearGradient(colors: [wBgTop, wBgBot], startPoint: .top, endPoint: .bottom)
-                .ignoresSafeArea()
-
-            if entry.prayers.isEmpty {
-                LargeNoDataView()
-            } else {
-                VStack(alignment: .leading, spacing: 0) {
-                    focusRow
-                    Rectangle()
-                        .fill(dividerClr)
-                        .frame(height: 1)
-                        .padding(.vertical, 4)
-                    timelineRow
-                }
-                .padding(.horizontal, 10)
-                .padding(.top, 8)
-                .padding(.bottom, 6)
+        if entry.prayers.isEmpty {
+            LargeNoDataView()
+        } else {
+            VStack(alignment: .leading, spacing: 0) {
+                focusRow
+                Rectangle()
+                    .fill(dividerClr)
+                    .frame(height: 1)
+                    .padding(.vertical, 4)
+                timelineGrid
             }
+            .padding(.horizontal, 10)
+            .padding(.top, 8)
+            .padding(.bottom, 6)
         }
     }
 }

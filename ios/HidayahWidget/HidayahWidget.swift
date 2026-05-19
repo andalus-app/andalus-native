@@ -1950,65 +1950,64 @@ struct LockTimelineView: View {
             VStack(alignment: .leading, spacing: 1) {
                 HStack(alignment: .lastTextBaseline, spacing: 5) {
                     Text(heroName)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(size: 13, weight: .bold))
                         .foregroundColor(accentClr)
                         .lineLimit(1)
                     Text(entry.countdownStr)
-                        .font(.system(size: 12, weight: .regular))
+                        .font(.system(size: 11, weight: .regular))
                         .foregroundColor(mainClr)
                         .lineLimit(1)
                 }
-                .minimumScaleFactor(0.78)
+                .minimumScaleFactor(0.75)
                 Text(heroTimeStr)
-                    .font(.system(size: 11, weight: .regular).monospacedDigit())
-                    .foregroundColor(mutedClr)
+                    .font(.system(size: 10, weight: .semibold).monospacedDigit())
+                    .foregroundColor(mainClr)
             }
 
             Spacer(minLength: 0)
-            Image(systemName: "chevron.right")
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundColor(chevronClr)
         }
     }
 
-    // ── Prayer column in timeline row ─────────────────────────────────────────
+    // ── Prayer cell — "FJR 02:05" inline, used in 2×3 grid ──────────────────
     @ViewBuilder
-    private func prayerColumn(_ prayer: Prayer, idx: Int) -> some View {
+    private func prayerCell(_ prayer: Prayer, idx: Int) -> some View {
         let isPast = entry.nextIndex == -1 || idx < entry.nextIndex
         let isNext = idx == entry.nextIndex
-        let clr: Color = isPast ? passedClr : (isNext ? accentClr : mainClr.opacity(0.78))
-        VStack(alignment: .center, spacing: 2) {
+        let clr: Color = isPast ? passedClr : (isNext ? accentClr : mainClr.opacity(0.85))
+
+        HStack(spacing: 3) {
             Text(kTimelinePrayerAbbrevs[idx])
-                .font(.system(size: 8, weight: isNext ? .bold : .regular))
+                .font(.system(size: 8.5, weight: isNext ? .bold : .regular))
                 .foregroundColor(clr)
-                .lineLimit(1)
             Text(timeFmt.string(from: prayer.time))
-                .font(.system(size: 10, weight: isNext ? .bold : .regular).monospacedDigit())
+                .font(.system(size: 9, weight: isNext ? .semibold : .regular).monospacedDigit())
                 .foregroundColor(clr)
-                .lineLimit(1)
             if isPast {
                 Image(systemName: "checkmark")
-                    .font(.system(size: 6.5, weight: .bold))
+                    .font(.system(size: 6, weight: .bold))
                     .foregroundColor(passedClr)
-            } else {
-                Color.clear.frame(height: 8)   // reserve space so row height never shifts
             }
         }
-        .frame(maxWidth: .infinity)
+        .lineLimit(1)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    // ── Timeline row — 6 columns separated by gold dots ───────────────────────
+    // ── Timeline grid — 2 rows × 3 columns ───────────────────────────────────
     private var timelineRow: some View {
-        HStack(alignment: .top, spacing: 0) {
-            ForEach(Array(entry.prayers.enumerated()), id: \.offset) { idx, prayer in
-                if idx > 0 {
-                    Text("•")
-                        .font(.system(size: 6, weight: .bold))
-                        .foregroundColor(dotClr)
-                        .frame(maxHeight: .infinity, alignment: .top)
-                        .padding(.top, 2)
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 0) {
+                ForEach(0..<3, id: \.self) { idx in
+                    if idx < entry.prayers.count {
+                        prayerCell(entry.prayers[idx], idx: idx)
+                    }
                 }
-                prayerColumn(prayer, idx: idx)
+            }
+            HStack(spacing: 0) {
+                ForEach(3..<6, id: \.self) { idx in
+                    if idx < entry.prayers.count {
+                        prayerCell(entry.prayers[idx], idx: idx)
+                    }
+                }
             }
         }
     }
@@ -2020,11 +2019,11 @@ struct LockTimelineView: View {
             Rectangle()
                 .fill(dividerClr)
                 .frame(height: 1)
-                .padding(.vertical, 5)
+                .padding(.vertical, 4)
             timelineRow
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 8)
+        .padding(.vertical, 6)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
@@ -2271,7 +2270,7 @@ struct QuranVerseProvider: TimelineProvider {
     }
 
     private func buildVerseEntry() -> QuranVerseEntry {
-        // Prefer App Group cache (written by JS with exact Bernström translation)
+        // 1. Daily cache — written by JS on every app open (today only)
         if let c = readDailyCache() {
             return QuranVerseEntry(date: .now, swedish: c.quranVerse.swedish,
                                    surahName: c.quranVerse.surahName,
@@ -2280,11 +2279,33 @@ struct QuranVerseProvider: TimelineProvider {
                                    reference: c.quranVerse.reference,
                                    arabic: c.quranVerse.arabic ?? "")
         }
-        // Fallback: curated verses, epoch 2024-01-01 matching JS dailyReminder.ts
+        // 2. 30-day cache — written by JS on app open, covers today up to 30 days ahead
+        if let entry = readVerse30DayCache() { return entry }
+        // 3. Hardcoded fallback — used only before first app open
         let v = kFallbackVerses[epochDayIndex(year: 2024, month: 1, day: 1, count: kFallbackVerses.count)]
         return QuranVerseEntry(date: .now, swedish: v.swedish, surahName: v.surahName,
                                surahNumber: v.surahNumber, ayahNumber: v.ayahNumber,
-                               reference: v.reference, arabic: "")
+                               reference: v.reference, arabic: v.arabic)
+    }
+
+    private func readVerse30DayCache() -> QuranVerseEntry? {
+        struct Item: Decodable {
+            let swedish: String; let arabic: String; let surahName: String
+            let surahNumber: Int; let ayahNumber: Int; let reference: String
+        }
+        struct Cache: Decodable { let verses: [String: Item] }
+        guard
+            let defaults = UserDefaults(suiteName: kAppGroup),
+            let raw      = defaults.data(forKey: "hidayah_verse_30day_cache"),
+            let cache    = try? JSONDecoder().decode(Cache.self, from: raw),
+            let item     = cache.verses[localISODate(.now)]
+        else { return nil }
+        return QuranVerseEntry(date: .now, swedish: item.swedish,
+                               surahName: item.surahName,
+                               surahNumber: item.surahNumber,
+                               ayahNumber: item.ayahNumber,
+                               reference: item.reference,
+                               arabic: item.arabic)
     }
 }
 
@@ -2381,46 +2402,25 @@ private struct ArabicVerseMedium: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-
-            if entry.arabic.isEmpty {
-                // Graceful fallback: Swedish as primary when Arabic not yet cached
-                Text(entry.swedish)
-                    .font(.system(size: 12, weight: .regular))
-                    .foregroundColor(.white.opacity(0.85))
-                    .lineLimit(6)
-                    .minimumScaleFactor(0.82)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .layoutPriority(1)
-            } else {
-                // Arabic — primary, Amiri Naskh, center-aligned
-                Text(entry.arabic)
-                    .font(Font.custom("Amiri-Regular", size: 19))
-                    .foregroundColor(.white)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(5)
-                    .minimumScaleFactor(0.68)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .layoutPriority(1)
-
-                // Subtle gold separator
-                Rectangle()
-                    .fill(kGold.opacity(0.35))
-                    .frame(height: 1)
-                    .padding(.top, 8)
-                    .padding(.bottom, 7)
-
-                // Swedish — secondary, truncated
-                Text(entry.swedish)
-                    .font(.system(size: 10, weight: .regular))
-                    .foregroundColor(.white.opacity(0.65))
-                    .lineLimit(2)
-                    .truncationMode(.tail)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-
-            Spacer(minLength: 4)
-
-            // Surah name + verse reference — pinned to bottom
+            Text("Dagens Koranvers")
+                .font(.system(size: 10, weight: .semibold)).foregroundColor(kGold)
+            Spacer(minLength: 6)
+            // Arabic — always fully displayed, highest layout priority
+            Text(entry.arabic)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(.white.opacity(0.75))
+                .multilineTextAlignment(.trailing)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .layoutPriority(1)
+            Spacer(minLength: 5)
+            // Swedish — shows as much as fits, ends with "..." to signal more exists
+            Text(entry.swedish)
+                .font(.system(size: 11, weight: .regular))
+                .foregroundColor(.white.opacity(0.85))
+                .lineLimit(3)
+                .truncationMode(.tail)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Spacer(minLength: 5)
             HStack(alignment: .center) {
                 Text(entry.surahName)
                     .font(.system(size: 10, weight: .regular))
@@ -2566,70 +2566,90 @@ private let kAllahNames: [(arabic: String, transliteration: String, swedish: Str
 // translations via hidayah_daily_content_cache (App Group), which takes priority.
 
 private struct FallbackVerse {
-    let swedish: String; let surahName: String
+    let swedish: String; let arabic: String; let surahName: String
     let surahNumber: Int; let ayahNumber: Int; let reference: String
 }
 
 private let kFallbackVerses: [FallbackVerse] = [
     FallbackVerse(
         swedish: "I Allahs, den Nåderikes, den Barmhärtiges namn. All lovprisning tillkommer Allah, världarnas Herre. Den Nåderike, den Barmhärtige. Han som råder på Domens dag. Dig dyrkar vi och till dig vänder vi oss om hjälp. Led oss på den raka vägen – vägen för dem som du har välsignat.",
+        arabic: "بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ ٱلْحَمْدُ لِلَّهِ رَبِّ ٱلْعَٰلَمِينَ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ مَٰلِكِ يَوْمِ ٱلدِّينِ",
         surahName: "Al-Fatiha", surahNumber: 1, ayahNumber: 1, reference: "1:1–7"),
     FallbackVerse(
         swedish: "Allah - det finns ingen [sann] gud utom honom, den Levande, den evige Vidmakthållaren. Slummer griper honom inte och inte heller sömn. Honom tillhör allt i himlarna och på jorden.",
+        arabic: "ٱللَّهُ لَآ إِلَٰهَ إِلَّا هُوَ ٱلْحَىُّ ٱلْقَيُّومُ ۚ لَا تَأْخُذُهُۥ سِنَةٌ وَلَا نَوْمٌ",
         surahName: "Al-Baqarah", surahNumber: 2, ayahNumber: 255, reference: "2:255"),
     FallbackVerse(
         swedish: "Allah belastar inte en människa med mer än hon orkar. Hon [skördar] det [gott] som hon vinner och drabbas av det [onda] som hon förvärvar.",
+        arabic: "لَا يُكَلِّفُ ٱللَّهُ نَفْسًا إِلَّا وُسْعَهَا ۚ لَهَا مَا كَسَبَتْ وَعَلَيْهَا مَا ٱكْتَسَبَتْ",
         surahName: "Al-Baqarah", surahNumber: 2, ayahNumber: 286, reference: "2:286"),
     FallbackVerse(
         swedish: "Allah är tillräcklig för oss och han är den bäste förvaltaren.",
+        arabic: "حَسْبُنَا ٱللَّهُ وَنِعْمَ ٱلْوَكِيلُ",
         surahName: "Al-Imran", surahNumber: 3, ayahNumber: 173, reference: "3:173"),
     FallbackVerse(
         swedish: "Varje levande varelse måste smaka döden, och på Domens dag skall ni få er fulla lön.",
+        arabic: "كُلُّ نَفْسٍ ذَآئِقَةُ ٱلْمَوْتِ ۗ وَإِنَّمَا تُوَفَّوْنَ أُجُورَكُمْ يَوْمَ ٱلْقِيَٰمَةِ",
         surahName: "Al-Imran", surahNumber: 3, ayahNumber: 185, reference: "3:185"),
     FallbackVerse(
         swedish: "Minns mig, och jag skall minnas er. Var tacksamma mot mig och var inte otacksamma.",
+        arabic: "فَٱذْكُرُونِىٓ أَذْكُرْكُمْ وَٱشْكُرُوا۟ لِى وَلَا تَكْفُرُونِ",
         surahName: "Al-Baqarah", surahNumber: 2, ayahNumber: 152, reference: "2:152"),
     FallbackVerse(
         swedish: "Och om mina tjänare frågar dig om mig – jag är nära. Jag besvarar den bedjandes bön när han åkallar mig.",
+        arabic: "وَإِذَا سَأَلَكَ عِبَادِى عَنِّى فَإِنِّى قَرِيبٌ ۖ أُجِيبُ دَعْوَةَ ٱلدَّاعِ إِذَا دَعَانِ",
         surahName: "Al-Baqarah", surahNumber: 2, ayahNumber: 186, reference: "2:186"),
     FallbackVerse(
         swedish: "Om ni är tacksamma ökar jag er välsignelse, men om ni är otacksamma – mitt straff är hårt.",
+        arabic: "لَئِن شَكَرْتُمْ لَأَزِيدَنَّكُمْ ۖ وَلَئِن كَفَرْتُمْ إِنَّ عَذَابِى لَشَدِيدٌ",
         surahName: "Ibrahim", surahNumber: 14, ayahNumber: 7, reference: "14:7"),
     FallbackVerse(
         swedish: "Vår Herre! Skänk oss nåd från din sida och ordna de bästa förutsättningarna för oss i det vi har för händer.",
+        arabic: "رَبَّنَآ ءَاتِنَا مِن لَّدُنكَ رَحْمَةً وَهَيِّئْ لَنَا مِنْ أَمْرِنَا رَشَدًا",
         surahName: "Al-Kahf", surahNumber: 18, ayahNumber: 10, reference: "18:10"),
     FallbackVerse(
         swedish: "Jag är Allah – det finns ingen [sann] gud utom jag! Dyrka mig och förrätta bönen till min åminnelse.",
+        arabic: "إِنَّنِىٓ أَنَا ٱللَّهُ لَآ إِلَٰهَ إِلَّآ أَنَا۠ فَٱعْبُدْنِى وَأَقِمِ ٱلصَّلَوٰةَ لِذِكْرِىٓ",
         surahName: "Ta-Ha", surahNumber: 20, ayahNumber: 14, reference: "20:14"),
     FallbackVerse(
         swedish: "Det finns ingen gud utom dig. Ära vare dig! Jag var sannerligen bland dem som handlar orättfärdigt mot sig själva.",
+        arabic: "لَّآ إِلَٰهَ إِلَّآ أَنتَ سُبْحَٰنَكَ إِنِّى كُنتُ مِنَ ٱلظَّٰلِمِينَ",
         surahName: "Al-Anbiya", surahNumber: 21, ayahNumber: 87, reference: "21:87"),
     FallbackVerse(
         swedish: "Med svårigheten finns lättnad. Med svårigheten finns lättnad.",
+        arabic: "فَإِنَّ مَعَ ٱلْعُسْرِ يُسْرًا إِنَّ مَعَ ٱلْعُسْرِ يُسْرًا",
         surahName: "Al-Inshirah", surahNumber: 94, ayahNumber: 5, reference: "94:5–6"),
     FallbackVerse(
         swedish: "Säg: O mina tjänare, som handlat orättfärdigt mot er själva – förtvivla aldrig om Allahs nåd. Allah förlåter alla synder. Han är den som förlåter, den Barmhärtige.",
+        arabic: "قُلْ يَٰعِبَادِىَ ٱلَّذِينَ أَسْرَفُوا۟ عَلَىٰٓ أَنفُسِهِمْ لَا تَقْنَطُوا۟ مِن رَّحْمَةِ ٱللَّهِ",
         surahName: "Az-Zumar", surahNumber: 39, ayahNumber: 53, reference: "39:53"),
     FallbackVerse(
         swedish: "Han är Allah; det finns ingen gud utom han; Konungen, den Helige, den Felfrie, den som skänker trygghet, Beskyddaren, den Mäktige, den Oemotstånglige, den som besitter all storhet.",
+        arabic: "هُوَ ٱللَّهُ ٱلَّذِى لَآ إِلَٰهَ إِلَّا هُوَ ٱلْمَلِكُ ٱلْقُدُّوسُ ٱلسَّلَٰمُ ٱلْمُؤْمِنُ ٱلْمُهَيْمِنُ ٱلْعَزِيزُ ٱلْجَبَّارُ ٱلْمُتَكَبِّرُ",
         surahName: "Al-Hashr", surahNumber: 59, ayahNumber: 23, reference: "59:23"),
     FallbackVerse(
         swedish: "Han som skapade döden och livet för att pröva er – vem av er som handlar bäst. Han är den Allmäktige, den som förlåter.",
+        arabic: "ٱلَّذِى خَلَقَ ٱلْمَوْتَ وَٱلْحَيَوٰةَ لِيَبْلُوَكُمْ أَيُّكُمْ أَحْسَنُ عَمَلًا",
         surahName: "Al-Mulk", surahNumber: 67, ayahNumber: 2, reference: "67:2"),
     FallbackVerse(
         swedish: "Vid tidernas lopp! Sannerligen, [hela] mänskligheten är på väg mot fördärvet, utom de som tror och lever rättskaffens och råder varandra till sanningen och råder varandra till tålamod.",
+        arabic: "وَٱلْعَصْرِ إِنَّ ٱلْإِنسَٰنَ لَفِى خُسْرٍ إِلَّا ٱلَّذِينَ ءَامَنُوا۟ وَعَمِلُوا۟ ٱلصَّٰلِحَٰتِ",
         surahName: "Al-Asr", surahNumber: 103, ayahNumber: 1, reference: "103:1–3"),
     FallbackVerse(
         swedish: "Säg: Han är Allah, den Ende. Allah, den Suveräne. Han har inte avlat och inte heller blivit avlad. Och ingen är hans like.",
+        arabic: "قُلْ هُوَ ٱللَّهُ أَحَدٌ ٱللَّهُ ٱلصَّمَدُ لَمْ يَلِدْ وَلَمْ يُولَدْ وَلَمْ يَكُن لَّهُۥ كُفُوًا أَحَدٌ",
         surahName: "Al-Ikhlas", surahNumber: 112, ayahNumber: 1, reference: "112:1–4"),
     FallbackVerse(
         swedish: "O ni människor! Vi har sannerligen skapat er av man och kvinna och gjort er till folk och stammar för att ni skall lära känna varandra.",
+        arabic: "يَٰٓأَيُّهَا ٱلنَّاسُ إِنَّا خَلَقْنَٰكُم مِّن ذَكَرٍ وَأُنثَىٰ وَجَعَلْنَٰكُمْ شُعُوبًا وَقَبَآئِلَ لِتَعَارَفُوٓا۟",
         surahName: "Al-Hujurat", surahNumber: 49, ayahNumber: 13, reference: "49:13"),
     FallbackVerse(
         swedish: "Nådens Herres sanna tjänare är de som vandrar ödmjukt på jorden och som, när okunniga människor tilltalar dem, svarar: Fred!",
+        arabic: "وَعِبَادُ ٱلرَّحْمَٰنِ ٱلَّذِينَ يَمْشُونَ عَلَى ٱلْأَرْضِ هَوْنًا",
         surahName: "Al-Furqan", surahNumber: 25, ayahNumber: 63, reference: "25:63"),
     FallbackVerse(
         swedish: "Dyrka Allah och sätt ingenting vid hans sida, och visa godhet mot era föräldrar och mot närstående och faderlösa och fattiga och grannar.",
+        arabic: "وَٱعْبُدُوا۟ ٱللَّهَ وَلَا تُشْرِكُوا۟ بِهِۦ شَيْـًٔا ۖ وَبِٱلْوَٰلِدَيْنِ إِحْسَٰنًا",
         surahName: "An-Nisa", surahNumber: 4, ayahNumber: 36, reference: "4:36"),
 ]
 

@@ -100,6 +100,40 @@ export interface DailyWidgetPayload {
   };
 }
 
+/**
+ * Builds and writes a 30-day verse lookup cache to App Group.
+ * Called fire-and-forget on every app open alongside getDailyWidgetPayload().
+ * Uses the existing per-date AsyncStorage Arabic cache so only new dates
+ * require a network round-trip to quran.com.
+ */
+export async function updateVerse30DayCache(): Promise<void> {
+  const { setVerse30DayCache } = await import('../modules/WidgetData');
+  const today   = new Date();
+  const dateStr = today.toISOString().slice(0, 10);
+  const verses: Record<string, {
+    swedish: string; arabic: string; surahName: string;
+    surahNumber: number; ayahNumber: number; reference: string;
+  }> = {};
+
+  for (let i = 0; i < 30; i++) {
+    const d  = new Date(today);
+    d.setDate(d.getDate() + i);
+    const ds    = d.toISOString().slice(0, 10);
+    const verse = getDailyQuranVerse(d);
+    const arabic = await fetchDailyVerseArabic(verse.refs, ds);
+    verses[ds] = {
+      swedish:     verse.swedish,
+      arabic,
+      surahName:   verse.surahName,
+      surahNumber: verse.surahNumber,
+      ayahNumber:  verse.ayahNumber,
+      reference:   verse.displayRef,
+    };
+  }
+
+  await setVerse30DayCache({ version: 1, writtenAt: dateStr, verses });
+}
+
 export async function getDailyWidgetPayload(): Promise<DailyWidgetPayload> {
   const idx    = todayAllahNameIndex();
   const name   = ALLAH_NAMES_DATA[idx];

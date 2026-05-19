@@ -110,6 +110,21 @@ public class WidgetDataModule: Module {
             promise.resolve(nil)
         }
 
+        // setVerse30DayCache(payload: Object) → void
+        // Writes a 30-day verse lookup map to App Group so the widget can show
+        // the correct verse even if the app hasn't been opened for up to 30 days.
+        AsyncFunction("setVerse30DayCache") { (payload: [String: Any], promise: Promise) in
+            guard let defaults = UserDefaults(suiteName: self.appGroupID) else {
+                promise.resolve(nil); return
+            }
+            if let data = try? JSONSerialization.data(withJSONObject: payload) {
+                defaults.set(data, forKey: "hidayah_verse_30day_cache")
+                defaults.synchronize()
+                NSLog("[WidgetData] verse 30-day cache updated")
+            }
+            promise.resolve(nil)
+        }
+
         // setAutoLocation(enabled: Bool) → void
         // Mirrors the JS autoLocation setting to App Group so the native
         // LocationBackgroundManager can respect it without the JS runtime.

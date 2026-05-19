@@ -349,6 +349,29 @@ export async function clearPrayerCachesForMigration(): Promise<void> {
   return NativeModule.clearPrayerCachesForMigration();
 }
 
+export interface VerseDay {
+  swedish:     string;
+  arabic:      string;
+  surahName:   string;
+  surahNumber: number;
+  ayahNumber:  number;
+  reference:   string;
+}
+
+/**
+ * Writes a 30-day verse lookup map to App Group (key: hidayah_verse_30day_cache).
+ * The widget reads today's entry from this map, so it shows the correct verse
+ * even if the app hasn't been opened for up to 30 days.
+ */
+export async function setVerse30DayCache(payload: {
+  version:   number;
+  writtenAt: string;
+  verses:    Record<string, VerseDay>;
+}): Promise<void> {
+  if (!NativeModule) return;
+  return NativeModule.setVerse30DayCache(payload);
+}
+
 /**
  * Writes today's Allah name and Quran verse to the App Group daily content
  * cache (key: hidayah_daily_content_cache) and triggers timeline reloads for
