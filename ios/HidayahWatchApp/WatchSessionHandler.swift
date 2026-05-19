@@ -1,25 +1,31 @@
 import WatchConnectivity
 import WidgetKit
 
-// Singleton WCSession delegate for the Watch app.
-// Receives prayer payload from the iPhone app and writes it to the shared
-// watchOS App Group so the HidayahWatchWidget can read it.
+struct DayPrayer: Identifiable {
+    let id:   String
+    let name: String
+    let time: String
+}
+
 final class WatchSessionHandler: NSObject, ObservableObject, WCSessionDelegate {
     static let shared = WatchSessionHandler()
 
-    private let appGroup    = "group.com.anonymous.Hidayah"
+    private let appGroup     = "group.com.anonymous.Hidayah"
     private let watchDataKey = "watch_prayer_data"
+
+    @Published var dayPrayers: [DayPrayer] = []
+    @Published var city: String = ""
 
     private override init() { super.init() }
 
     func activate() {
+        loadFromDefaults()
         guard WCSession.isSupported() else { return }
         WCSession.default.delegate = self
         WCSession.default.activate()
         NSLog("[WatchSession] WCSession activation requested")
     }
 
-    // Called when new context arrives while the app is running.
     func session(_ session: WCSession,
                  didReceiveApplicationContext applicationContext: [String: Any]) {
         if let prayerData = applicationContext["watchPrayerData"] as? [String: Any] {
@@ -27,7 +33,6 @@ final class WatchSessionHandler: NSObject, ObservableObject, WCSessionDelegate {
         }
     }
 
-    // Called when activation completes — pick up any context sent while app was inactive.
     func session(_ session: WCSession,
                  activationDidCompleteWith activationState: WCSessionActivationState,
                  error: Error?) {
@@ -50,7 +55,30 @@ final class WatchSessionHandler: NSObject, ObservableObject, WCSessionDelegate {
         defaults.synchronize()
         NSLog("[WatchSession] prayer data persisted: city=%@",
               (data["city"] as? String) ?? "?")
+        updatePublished(from: data)
         WidgetCenter.shared.reloadAllTimelines()
         WidgetCenter.shared.reloadTimelines(ofKind: "HidayahWatchWidget")
+    }
+
+    private func loadFromDefaults() {
+        guard let defaults = UserDefaults(suiteName: appGroup),
+              let raw  = defaults.data(forKey: watchDataKey),
+              let json = try? JSONSerialization.jsonObject(with: raw) as? [String: Any]
+        else { return }
+        updatePublished(from: json)
+    }
+
+    private func updatePublished(from data: [String: Any]) {
+        DispatchQueue.main.async { [weak self] in
+            self?.city = (data["city"] as? String) ?? ""
+            if let prayers = data["prayers"] as? [[String: Any]] {
+                self?.dayPrayers = prayers.compactMap { p in
+                    guard let name = p["name"] as? String,
+                          let time = p["time"] as? String
+                    else { return nil }
+                    return DayPrayer(id: name, name: name, time: time)
+                }
+            }
+        }
     }
 }

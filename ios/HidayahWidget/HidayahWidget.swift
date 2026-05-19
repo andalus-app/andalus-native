@@ -1288,16 +1288,26 @@ struct LockScreenFocusView: View {
         computeHeroState(allPrayers: entry.allPrayers, now: entry.date)
     }
 
-    /// Live countdown timer — updates every second on AOD without WidgetKit entries.
-    /// Text(.timer) renders correctly on both regular lock screen and Always On Display.
+    /// Countdown timer for the lock screen.
+    /// Above 60 s: Text(.timer) live-updates on the active screen.
+    /// Below 60 s: Text(.timer) freezes at "<1 min" in sleep mode, so use a static
+    /// "0:ss" string instead — per-second WidgetKit entries (built in buildEntries)
+    /// swap in a fresh entry each second, keeping the display accurate while sleeping.
     @ViewBuilder
     private func lockCountdown(to target: Date) -> some View {
-        Text(target, style: .timer)
-            .font(.system(size: 22, weight: .bold).monospacedDigit())
-            .foregroundStyle(.primary)
-            .lineLimit(1)
-            .minimumScaleFactor(0.75)
-            .frame(maxWidth: .infinity, alignment: .leading)
+        let remaining = target.timeIntervalSince(entry.date)
+        Group {
+            if remaining < 60 {
+                Text(String(format: "0:%02d", max(0, Int(remaining.rounded()))))
+            } else {
+                Text(target, style: .timer)
+            }
+        }
+        .font(.system(size: 22, weight: .bold).monospacedDigit())
+        .foregroundStyle(.primary)
+        .lineLimit(1)
+        .minimumScaleFactor(0.75)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder

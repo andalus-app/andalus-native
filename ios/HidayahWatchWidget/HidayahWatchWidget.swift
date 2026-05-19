@@ -493,19 +493,6 @@ private struct TimelineProgressBar: View {
             let step: CGFloat = count > 1 ? w / CGFloat(count - 1) : 0
 
             ZStack(alignment: .leading) {
-                Capsule()
-                    .fill(Color.white.opacity(0.10))
-                    .frame(height: 1.5)
-                    .frame(maxWidth: .infinity)
-                    .offset(y: 3.5)
-
-                if nextIndex > 0 && step > 0 {
-                    Capsule()
-                        .fill(wGold.opacity(0.55))
-                        .frame(width: min(step * CGFloat(nextIndex), w), height: 1.5)
-                        .offset(y: 3.5)
-                }
-
                 ForEach(0 ..< count, id: \.self) { i in
                     let cx: CGFloat = step * CGFloat(i)
                     let active = i == nextIndex
