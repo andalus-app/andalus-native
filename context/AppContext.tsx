@@ -9,6 +9,7 @@ import { buildYearlyCache, getPrayerTimesWithFallback } from '../services/monthl
 import {
   getIfisTodayAndTomorrow, warmIfisCache, matchIfisCity, fetchIfisCities,
   getIfisCityDisplayNames, getIfisCityDisplayName, normalizeIfisCity,
+  refreshIfisVisitedPlaceCache,
 } from '../services/ifisApi';
 import { schedulePrayerNotifications, cancelPrayerNotifications, scheduleDhikrReminder, cancelDhikrReminder, scheduleFridayDuaReminder, cancelFridayDuaReminder, refreshPrePrayerReminderNotifications, getNotificationDisplayName } from '../services/notifications';
 import {
@@ -418,6 +419,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (matched && matched !== ifisCity) {
         effectiveIfisCity = matched;
         dispatch({ type: 'SET_SETTINGS', payload: { ifisCity: matched } });
+        // Keep 'andalus_settings' in sync — Bönetider tab reads ifisCity from there,
+        // not from 'andalus_app_state' where AppContext normally persists settings.
+        AsyncStorage.getItem('andalus_settings').then(raw => {
+          const s = raw ? JSON.parse(raw) : {};
+          return AsyncStorage.setItem('andalus_settings', JSON.stringify({ ...s, ifisCity: matched }));
+        }).catch(() => {});
       }
     }
 
@@ -574,7 +581,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           source:                  'js_precise_location',
         } as EffectivePrayerSchedule).catch(() => {});
 
-        if (!isIfis) {
+        if (isIfis) {
+          // Write IFIS city to visited-place App Group cache with 7-day rolling
+          // window so native can reschedule notifications + update widget when the
+          // user returns to a known IFIS city without opening the app.
+          // Days 2–6 are read from the already-warmed local IFIS year cache —
+          // no network needed. method/school must match native settings filter.
+          refreshIfisVisitedPlaceCache(
+            effectiveIfisCity,
+            loc.latitude,
+            loc.longitude,
+            method,
+            school,
+            todayT,
+            tomT ?? null,
+          ).catch(() => {});
+        } else {
           refreshVisitedPlaceMultiDayCache(
             {
               locationKey:             makeLocationKey(fullDisplayName),

@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { calcMidnight } from './prayerApi';
 import { SWEDISH_DAYS } from './monthlyCache';
+import { upsertVisitedPrayerLocation } from '../modules/WidgetData';
 
 const IFIS_BASE = 'https://api.xn--bnetider-n4a.nu/v1';
 
@@ -457,6 +458,93 @@ export function findNearestIfisCity(
   }
   if (!best || best.distanceKm > IFIS_MAX_DISTANCE_KM) return null;
   return best;
+}
+
+/**
+ * Writes an IFIS city to the visited-prayer-locations App Group cache with a
+ * 7-day rolling prayer time window sourced from the local IFIS year cache.
+ *
+ * This is the IFIS equivalent of refreshVisitedPlaceMultiDayCache for AlAdhan.
+ * Without this call, native NativeNotificationScheduler cannot find any visited
+ * place entry for IFIS cities and falls back to needsPrayerRefresh — meaning
+ * widget and notifications are NOT updated when the user returns to a known city
+ * without opening the app.
+ *
+ * After writing, the native module triggers HidayahVisitedPlacesUpdated which
+ * causes LocationBackgroundManager to add a 500m CLCircularRegion for this city.
+ * On region entry native reads the stored IFIS times and reschedules notifications
+ * + reloads widget timelines — without the JS runtime.
+ *
+ * Days 2–6 are read directly from the local IFIS year cache (AsyncStorage) —
+ * no network requests needed since warmIfisCache already ran.
+ */
+export async function refreshIfisVisitedPlaceCache(
+  city:   string,                      // IFIS city slug, e.g. 'goteborg'
+  lat:    number,
+  lng:    number,
+  method: number,                      // user's calculationMethod — must match native settings filter
+  school: number,                      // user's school — must match native settings filter
+  todayT: Record<string, string>,
+  tomT:   Record<string, string> | null,
+): Promise<void> {
+  const todayDate   = new Date();
+  todayDate.setHours(0, 0, 0, 0);
+  const todayStr    = localIsoDate(todayDate);
+  const tomorrowStr = addDays(todayStr, 1);
+
+  const locationKey = `ifis_${city}`;
+  const displayName = getIfisCityDisplayName(city);
+  const nowSec      = Date.now() / 1000;
+
+  // Build daily dict — seed today + tomorrow from already-fetched data (no network)
+  const dailyDict: Record<string, Record<string, string>> = {};
+  if (Object.keys(todayT).length > 0)  dailyDict[todayStr]    = todayT;
+  if (tomT && Object.keys(tomT).length > 0) dailyDict[tomorrowStr] = tomT;
+
+  // Immediate write so native has at least today + tomorrow within milliseconds
+  await upsertVisitedPrayerLocation({
+    locationKey,
+    displayName,
+    notificationDisplayName: displayName,
+    lat, lng, method, school,
+    source:          'js_precise_location',
+    date:            todayStr,
+    tomorrowDate:    tomorrowStr,
+    todayTimes:      todayT,
+    tomorrowTimes:   tomT,
+    dailyTimesByDate: dailyDict,
+    updatedAt:       nowSec,
+    lastUsedAt:      nowSec,
+  });
+
+  // Fill days 2–6 from the local IFIS year cache — warmIfisCache() already ran so
+  // no network is needed. Missing days (e.g. first launch) are silently skipped.
+  for (let i = 2; i < 7; i++) {
+    const ds = addDays(todayStr, i);
+    if (!dailyDict[ds]) {
+      try {
+        const t = await getIfisTimesFromYearCache(city, ds);
+        if (t) dailyDict[ds] = t;
+      } catch {}
+    }
+  }
+
+  // Final write with all available days
+  const nowSec2 = Date.now() / 1000;
+  await upsertVisitedPrayerLocation({
+    locationKey,
+    displayName,
+    notificationDisplayName: displayName,
+    lat, lng, method, school,
+    source:          'js_precise_location',
+    date:            todayStr,
+    tomorrowDate:    tomorrowStr,
+    todayTimes:      todayT,
+    tomorrowTimes:   tomT,
+    dailyTimesByDate: dailyDict,
+    updatedAt:       nowSec2,
+    lastUsedAt:      nowSec2,
+  });
 }
 
 export function matchIfisCity(
