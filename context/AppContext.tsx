@@ -9,7 +9,7 @@ import { buildYearlyCache, getPrayerTimesWithFallback } from '../services/monthl
 import {
   getIfisTodayAndTomorrow, warmIfisCache, matchIfisCity, fetchIfisCities,
   getIfisCityDisplayNames, getIfisCityDisplayName, normalizeIfisCity,
-  refreshIfisVisitedPlaceCache,
+  refreshIfisVisitedPlaceCache, getIfisCitiesForMatching,
 } from '../services/ifisApi';
 import { schedulePrayerNotifications, cancelPrayerNotifications, scheduleDhikrReminder, cancelDhikrReminder, scheduleFridayDuaReminder, cancelFridayDuaReminder, refreshPrePrayerReminderNotifications, getNotificationDisplayName } from '../services/notifications';
 import {
@@ -413,7 +413,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       try { await fetchIfisCities(); } catch {}
       const geocodedCity   = getEffectivePrayerCity(loc.city);
       const normalizedGeo  = normalizeIfisCity(geocodedCity);
-      const knownCities    = Object.keys(getIfisCityDisplayNames());
+      const knownCities    = getIfisCitiesForMatching();
       const matched        = knownCities.find(c => c === normalizedGeo)
                           || matchIfisCity(geocodedCity, knownCities, { latitude: loc.latitude, longitude: loc.longitude });
       if (matched && matched !== ifisCity) {

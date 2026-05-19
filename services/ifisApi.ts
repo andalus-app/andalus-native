@@ -70,6 +70,22 @@ const BASE_CITY_NAMES: Record<string, string> = {
 
 let IFIS_CITY_DISPLAY_NAMES: Record<string, string> = { ...BASE_CITY_NAMES };
 
+// Cities confirmed by the most recent fetchIfisCities() API call.
+// null = fetchIfisCities() has not yet run in this JS session.
+// Used to guard against BASE_CITY_NAMES entries (e.g. 'jarfalla') that are
+// pre-loaded for display-name purposes but are not actually served by the API.
+let IFIS_CONFIRMED_CITIES: string[] | null = null;
+
+/**
+ * Returns the city list to use for IFIS city matching.
+ * After fetchIfisCities() runs: the API-confirmed list only (no phantom cities).
+ * Before fetchIfisCities() runs (e.g. background task): falls back to
+ * Object.keys(IFIS_CITY_COORDS), which was built from real API slugs.
+ */
+export function getIfisCitiesForMatching(): string[] {
+  return IFIS_CONFIRMED_CITIES ?? Object.keys(IFIS_CITY_COORDS);
+}
+
 export function getIfisCityDisplayNames(): Record<string, string> {
   return IFIS_CITY_DISPLAY_NAMES;
 }
@@ -181,10 +197,10 @@ export async function fetchIfisCities(): Promise<string[]> {
   if (!cities.length) return Object.keys(IFIS_CITY_DISPLAY_NAMES);
   cities.forEach(city => {
     if (!IFIS_CITY_DISPLAY_NAMES[city]) {
-      // Simple capitalization; cities like "goteborg" become "Goteborg" (display name)
       IFIS_CITY_DISPLAY_NAMES[city] = city.charAt(0).toUpperCase() + city.slice(1);
     }
   });
+  IFIS_CONFIRMED_CITIES = cities;
   return cities;
 }
 

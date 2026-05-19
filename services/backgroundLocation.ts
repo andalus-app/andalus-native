@@ -7,7 +7,7 @@ import { schedulePrayerNotifications, refreshPrePrayerReminderNotifications, get
 import { nativeReverseGeocode } from './geocoding';
 import {
   getIfisTodayAndTomorrow, matchIfisCity, getIfisCityDisplayName,
-  getIfisCityDisplayNames, normalizeIfisCity,
+  normalizeIfisCity, getIfisCitiesForMatching,
 } from './ifisApi';
 import {
   updateWidgetData,
@@ -119,7 +119,7 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }: TaskMan
     if (prayerSource === 'ifis') {
       isIfis = true;
       // Try to match geocoded city to IFIS city list
-      const knownCities  = Object.keys(getIfisCityDisplayNames());
+      const knownCities  = getIfisCitiesForMatching();
       const normalizedGeo = normalizeIfisCity(geo.city || city);
       const autoMatched   = knownCities.find(c => c === normalizedGeo)
                          || matchIfisCity(geo.city || city, knownCities);
