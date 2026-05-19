@@ -572,7 +572,7 @@ export async function refreshIfisVisitedPlaceCache(
 
   // Fill days 2–6 from the local IFIS year cache — warmIfisCache() already ran so
   // no network is needed. Missing days (e.g. first launch) are silently skipped.
-  for (let i = 2; i < 7; i++) {
+  for (let i = 2; i < 30; i++) {
     const ds = addDays(todayStr, i);
     if (!dailyDict[ds]) {
       try {

@@ -155,18 +155,28 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }: TaskMan
     }
 
     // Persist resolved location — read by notifications and pre-prayer reminder scheduler.
+    // Use separate city/subLocality fields (same format as the foreground prayer-tab write)
+    // so the prayer tab can read cachedLoc.subLocality without having to split the string.
     await AsyncStorage.setItem('andalus_location', JSON.stringify({
-      lat: coords.latitude,
-      lng: coords.longitude,
-      city,
+      lat:         coords.latitude,
+      lng:         coords.longitude,
+      city:        geo.city        || city,
+      subLocality: geo.subLocality || '',
       country,
     }));
 
     // Persist app state so AppContext hydrates the correct location on next foreground open.
+    // Include suburb separately so prayer tab seed (_initCity) gets the right split.
     const appStateRaw = await AsyncStorage.getItem('andalus_app_state');
     if (appStateRaw) {
       const appState = JSON.parse(appStateRaw);
-      appState.location = { latitude: coords.latitude, longitude: coords.longitude, city, country };
+      appState.location = {
+        latitude:  coords.latitude,
+        longitude: coords.longitude,
+        city:      geo.city        || city,
+        suburb:    geo.subLocality || '',
+        country,
+      };
       await AsyncStorage.setItem('andalus_app_state', JSON.stringify(appState));
     }
 

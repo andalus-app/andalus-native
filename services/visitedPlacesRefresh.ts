@@ -21,7 +21,7 @@ import { fetchPrayerTimes } from './prayerApi';
 import { upsertVisitedPrayerLocation } from '../modules/WidgetData';
 
 const MULTI_DAY_KEY  = 'andalus_visited_multi_day_v1';
-const DAYS_AHEAD     = 7;
+const DAYS_AHEAD     = 30;
 const MAX_CONCURRENT = 2;
 
 type Timings      = Record<string, string>;

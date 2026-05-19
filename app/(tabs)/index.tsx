@@ -281,20 +281,24 @@ export default function PrayerTimesScreen() {
       setTimings(timingsData);
       setTomorrowTimings(tomTimingsData);
       setHijri(c.hijri);
-      setSuburb(c.suburb || '');
-      // AppContext IFIS cache stores city in the key field ("ifis:stockholm") — extract it
+      // Only update location display when the cache includes location fields.
+      // AppContext writes to the same key without suburb/cityName — blanking these
+      // would leave the city empty until the subsequent network fetch completes.
       const cityFromIfisKey = c.key?.startsWith?.('ifis:') ? getIfisCityDisplayName(c.key.split(':')[1] ?? '') : '';
-      setCityName(c.cityName || cityFromIfisKey || '');
-      setCountry(c.country || '');
-      setTomorrowLabel(c.tomorrowLabel || '');
-      const np = getNextPrayer(c.timings);
-      const todayFajrMinC = c.timings['Fajr'] ? timeToMinutes(c.timings['Fajr']) : -1;
+      if ('suburb' in c) setSuburb(c.suburb || '');
+      if ('cityName' in c || cityFromIfisKey) setCityName(c.cityName || cityFromIfisKey || '');
+      if ('country' in c) setCountry(c.country || '');
+      if ('tomorrowLabel' in c) setTomorrowLabel(c.tomorrowLabel || '');
+      // Use timingsData (normalised above) instead of c.timings directly — AppContext-format
+      // caches use todayT rather than timings, so c.timings would be undefined here.
+      const np = getNextPrayer(timingsData);
+      const todayFajrMinC = timingsData['Fajr'] ? timeToMinutes(timingsData['Fajr']) : -1;
       const isPostMidnightC = np === 'Fajr' && todayFajrMinC >= 0 && todayFajrMinC <= nowMinutes();
-      const initTimeC = isPostMidnightC && c.tomorrowTimings?.['Fajr']
-        ? c.tomorrowTimings['Fajr']
-        : (c.timings[np] || '');
+      const initTimeC = isPostMidnightC && tomTimingsData?.['Fajr']
+        ? tomTimingsData['Fajr']
+        : (timingsData[np] || '');
       setNextPrayer(np);
-      setActivePrayer(getActivePrayer(c.timings));
+      setActivePrayer(getActivePrayer(timingsData));
       setCountdown(getTimeUntil(initTimeC));
       startCountdownInterval();
       return true;
