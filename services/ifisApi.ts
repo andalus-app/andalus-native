@@ -315,9 +315,159 @@ export async function fetchIfisMonthRows(
   throw new Error(`IFIS data unavailable for ${city} ${year}-${month}`);
 }
 
-export function matchIfisCity(geocodedCity: string, ifisCities: string[]): string | null {
+// ── Geographic proximity matching ────────────────────────────────────────────
+
+// Max distance (km) for auto-selecting a nearby IFIS city.
+// Beyond this threshold we return null so the caller can warn the user.
+export const IFIS_MAX_DISTANCE_KM = 80;
+
+// Coordinates for every city in the IFIS city list (lat, lng).
+const IFIS_CITY_COORDS: Record<string, [number, number]> = {
+  alingsas:      [57.931,  12.533],
+  amal:          [59.052,  12.706],
+  angelholm:     [56.243,  12.859],
+  avesta:        [60.144,  16.168],
+  bengtsfors:    [59.033,  12.233],
+  boden:         [65.825,  21.689],
+  bollnas:       [61.348,  16.393],
+  boras:         [57.721,  12.940],
+  borlange:      [60.486,  15.437],
+  eksjo:         [57.667,  14.967],
+  enkoping:      [59.635,  17.077],
+  eskilstuna:    [59.371,  16.509],
+  eslov:         [55.838,  13.304],
+  falkenberg:    [56.906,  12.491],
+  falkoping:     [58.170,  13.549],
+  filipstad:     [59.712,  14.163],
+  flen:          [59.058,  16.588],
+  gallivare:     [67.133,  20.657],
+  gavle:         [60.675,  17.141],
+  gislaved:      [57.305,  13.538],
+  gnosjo:        [57.358,  13.742],
+  goteborg:      [57.709,  11.975],
+  halmstad:      [56.675,  12.858],
+  haparanda:     [65.835,  24.138],
+  harnosand:     [62.633,  17.933],
+  hassleholm:    [56.158,  13.767],
+  helsingborg:   [56.047,  12.695],
+  hogsby:        [57.167,  16.017],
+  horby:         [55.857,  13.662],
+  hudiksvall:    [61.728,  17.107],
+  hultsfred:     [57.488,  15.848],
+  jokkmokk:      [66.607,  19.828],
+  jonkoping:     [57.783,  14.162],
+  kalmar:        [56.663,  16.357],
+  kalrshamn:     [56.171,  14.863], // API slug for Karlshamn
+  karlskoga:     [59.326,  14.524],
+  karlskrona:    [56.161,  15.587],
+  karlstad:      [59.379,  13.504],
+  katrineholm:   [58.995,  16.207],
+  kiruna:        [67.856,  20.225],
+  koping:        [59.514,  15.997],
+  kristianstad:  [56.029,  14.157],
+  kristinehamn:  [59.312,  14.107],
+  laholm:        [56.514,  13.046],
+  landskrona:    [55.871,  12.830],
+  lessebo:       [56.752,  15.265],
+  lidkoping:     [58.505,  13.158],
+  linkoping:     [58.411,  15.621],
+  ludvika:       [60.148,  15.188],
+  lulea:         [65.585,  22.157],
+  lund:          [55.705,  13.191],
+  lysekil:       [58.274,  11.436],
+  malmo:         [55.605,  13.004],
+  mariestad:     [58.709,  13.826],
+  marsta:        [59.621,  17.858],
+  mellerud:      [58.701,  12.458],
+  mjolby:        [58.327,  15.129],
+  monsteras:     [57.042,  16.442],
+  munkedal:      [58.469,  11.669],
+  nassjo:        [57.653,  14.694],
+  norrkoping:    [58.588,  16.192],
+  norrtalje:     [59.758,  18.706],
+  nybro:         [56.746,  15.909],
+  nykoping:      [58.753,  17.008],
+  nynashamn:     [58.903,  17.946],
+  orebro:        [59.274,  15.207],
+  ornskoldsvik:  [63.291,  18.717],
+  oskarshamn:    [57.265,  16.448],
+  ostersund:     [63.179,  14.636],
+  oxelosund:     [58.670,  17.100],
+  pajala:        [67.212,  23.398],
+  pitea:         [65.317,  21.480],
+  ronneby:       [56.208,  15.276],
+  saffle:        [59.132,  12.925],
+  sala:          [59.919,  16.604],
+  savsjo:        [57.403,  14.669],
+  simrishamn:    [55.557,  14.358],
+  skara:         [58.387,  13.438],
+  skelleftea:    [64.750,  20.950],
+  skovde:        [58.389,  13.844],
+  soderhamn:     [61.302,  17.056],
+  sodertalje:    [59.195,  17.625],
+  solleftea:     [63.167,  17.267],
+  solvesborg:    [56.052,  14.574],
+  stockholm:     [59.329,  18.069],
+  strangnas:     [59.378,  17.031],
+  sundsvall:     [62.391,  17.307],
+  tierp:         [60.342,  17.517],
+  tranemo:       [57.483,  13.350],
+  trelleborg:    [55.376,  13.157],
+  trollhattan:   [58.284,  12.289],
+  uddevalla:     [58.349,  11.938],
+  ulricehamn:    [57.792,  13.421],
+  umea:          [63.826,  20.263],
+  uppsala:       [59.859,  17.639],
+  vanersborg:    [58.381,  12.323],
+  varberg:       [57.106,  12.250],
+  varnamo:       [57.184,  14.044],
+  vasteras:      [59.610,  16.545],
+  vastervik:     [57.758,  16.637],
+  vaxjo:         [56.878,  14.809],
+  vetlanda:      [57.429,  15.078],
+  vimmerby:      [57.666,  15.855],
+  visby:         [57.635,  18.295],
+  ystad:         [55.430,  13.820],
+};
+
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R    = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a    = Math.sin(dLat / 2) ** 2
+             + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180)
+             * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+export type NearestIfisCity = { city: string; distanceKm: number };
+
+/** Returns the closest IFIS city within IFIS_MAX_DISTANCE_KM, or null if none qualifies. */
+export function findNearestIfisCity(
+  latitude: number,
+  longitude: number,
+  ifisCities: string[],
+): NearestIfisCity | null {
+  let best: NearestIfisCity | null = null;
+  for (const city of ifisCities) {
+    const coords = IFIS_CITY_COORDS[city];
+    if (!coords) continue;
+    const distanceKm = haversineKm(latitude, longitude, coords[0], coords[1]);
+    if (!best || distanceKm < best.distanceKm) best = { city, distanceKm };
+  }
+  if (!best || best.distanceKm > IFIS_MAX_DISTANCE_KM) return null;
+  return best;
+}
+
+export function matchIfisCity(
+  geocodedCity: string,
+  ifisCities: string[],
+  coords?: { latitude: number; longitude: number },
+): string | null {
   const normalized = normalizeIfisCity(geocodedCity);
   if (ifisCities.includes(normalized)) return normalized;
   const partial = ifisCities.find(c => normalized.includes(c) || c.includes(normalized));
-  return partial ?? null;
+  if (partial) return partial;
+  if (coords) return findNearestIfisCity(coords.latitude, coords.longitude, ifisCities)?.city ?? null;
+  return null;
 }

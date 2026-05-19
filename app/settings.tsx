@@ -17,7 +17,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useApp, CALC_METHODS } from '../context/AppContext';
 import {
   IFIS_METHOD_DISPLAY_NAME, getIfisCityDisplayName, getIfisSourceDisplayName,
-  fetchIfisCities,
+  fetchIfisCities, matchIfisCity, normalizeIfisCity,
 } from '../services/ifisApi';
 import { reverseGeocode } from '../services/prayerApi';
 import {
@@ -324,10 +324,30 @@ export default function SettingsScreen() {
   async function handleSelectCity(r: { latitude: number; longitude: number; city: string; country: string }) {
     const locData = { lat: r.latitude, lng: r.longitude, city: r.city, country: r.country };
     await AsyncStorage.setItem(LOCATION_KEY, JSON.stringify(locData));
-    // Viktigt: triggar bönetider att ladda om med ny plats
     await AsyncStorage.setItem('andalus_settings_updated', Date.now().toString());
     setLocationLabel(r.city);
     setCityModal(false);
+
+    // Dispatch SET_LOCATION so AppContext reloads prayer times (home screen + notifications)
+    dispatch({ type: 'SET_LOCATION', payload: {
+      latitude:  r.latitude,
+      longitude: r.longitude,
+      city:      r.city,
+      suburb:    '',
+      country:   r.country,
+    }});
+
+    // If IFIS is active, auto-match the selected city to the IFIS city list and
+    // update ifisCity in settings — otherwise the user would have to manually pick
+    // the city again under Beräkningsmetod → Stad.
+    if (settings.prayerSource === 'ifis') {
+      try {
+        const cities  = await fetchIfisCities();
+        const matched = cities.find(c => c === normalizeIfisCity(r.city))
+                     ?? matchIfisCity(r.city, cities, { latitude: r.latitude, longitude: r.longitude });
+        if (matched) saveSettings({ ifisCity: matched });
+      } catch {}
+    }
   }
 
   type Mode = 'dark' | 'light' | 'system';
@@ -725,7 +745,7 @@ export default function SettingsScreen() {
         <View style={{backgroundColor:T.card,borderRadius:14,borderWidth:0.5,borderColor:T.border,padding:16}}>
           <Text style={{fontSize:15,fontWeight:'700',color:T.text}}>Hidayah</Text>
           <Text style={{fontSize:13,color:T.textMuted,marginTop:2}}>Bönetider och Qibla-kompass</Text>
-          <Text style={{fontSize:12,color:T.textMuted,marginTop:6,opacity:0.7}}>Version 1.9.2</Text>
+          <Text style={{fontSize:12,color:T.textMuted,marginTop:6,opacity:0.7}}>Version 1.9.3</Text>
           <Text style={{fontSize:11,color:T.textMuted,marginTop:2,opacity:0.55}}>
             © {new Date().getFullYear()} Fatih Köker. Alla rättigheter förbehållna.
           </Text>

@@ -414,7 +414,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const normalizedGeo  = normalizeIfisCity(geocodedCity);
       const knownCities    = Object.keys(getIfisCityDisplayNames());
       const matched        = knownCities.find(c => c === normalizedGeo)
-                          || matchIfisCity(geocodedCity, knownCities);
+                          || matchIfisCity(geocodedCity, knownCities, { latitude: loc.latitude, longitude: loc.longitude });
       if (matched && matched !== ifisCity) {
         effectiveIfisCity = matched;
         dispatch({ type: 'SET_SETTINGS', payload: { ifisCity: matched } });
