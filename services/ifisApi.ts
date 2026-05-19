@@ -8,11 +8,64 @@ const IFIS_BASE = 'https://api.xn--bnetider-n4a.nu/v1';
 export const IFIS_METHOD_KEY = 'ifis' as const;
 export const IFIS_METHOD_DISPLAY_NAME = 'Islamiska Förbundet i Sverige';
 
-// Base mapping — expanded dynamically when fetchIfisCities() runs
+// Slug → proper display name for every Swedish city where normalisation
+// (å/ä→a, ö→o, lowercase) would produce the wrong capitalisation.
+// Cities without å/ä/ö (e.g. "stockholm", "lund") are handled by the
+// simple-capitalisation fallback in getIfisCityDisplayName().
 const BASE_CITY_NAMES: Record<string, string> = {
-  stockholm: 'Stockholm',
-  goteborg:  'Göteborg',
-  malmo:     'Malmö',
+  // Already correct without this map — kept for explicitness
+  stockholm:       'Stockholm',
+  // ── Cities whose slug differs from a simple re-capitalisation ──────────────
+  goteborg:        'Göteborg',
+  malmo:           'Malmö',
+  vasteras:        'Västerås',
+  orebro:          'Örebro',
+  linkoping:       'Linköping',
+  jonkoping:       'Jönköping',
+  norrkoping:      'Norrköping',
+  umea:            'Umeå',
+  gavle:           'Gävle',
+  boras:           'Borås',
+  sodertalje:      'Södertälje',
+  vaxjo:           'Växjö',
+  jarfalla:        'Järfälla',
+  lulea:           'Luleå',
+  skelleftea:      'Skellefteå',
+  pitea:           'Piteå',
+  gallivare:       'Gällivare',
+  ostersund:       'Östersund',
+  ornskoldsvik:    'Örnsköldsvik',
+  borlange:        'Borlänge',
+  bollnas:         'Bollnäs',
+  soderhamn:       'Söderhamn',
+  nynashamn:       'Nynäshamn',
+  taby:            'Täby',
+  tyreso:          'Tyresö',
+  'upplands-vasby':'Upplands Väsby',
+  marsta:          'Märsta',
+  akersberga:      'Åkersberga',
+  norrtalje:       'Norrtälje',
+  enkoping:        'Enköping',
+  strangnas:       'Strängnäs',
+  nykoping:        'Nyköping',
+  mjolby:          'Mjölby',
+  finspang:        'Finspång',
+  tranas:          'Tranås',
+  varnamo:         'Värnamo',
+  nassjo:          'Nässjö',
+  eksjo:           'Eksjö',
+  vastervik:       'Västervik',
+  hassleholm:      'Hässleholm',
+  angelholm:       'Ängelholm',
+  alingsas:        'Alingsås',
+  kungalv:         'Kungälv',
+  vanersborg:      'Vänersborg',
+  skovde:          'Skövde',
+  lidkoping:       'Lidköping',
+  koping:          'Köping',
+  harnosand:       'Härnösand',
+  solleftea:       'Sollefteå',
+  stromstad:       'Strömstad',
 };
 
 let IFIS_CITY_DISPLAY_NAMES: Record<string, string> = { ...BASE_CITY_NAMES };
