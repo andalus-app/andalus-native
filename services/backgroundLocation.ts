@@ -6,6 +6,10 @@ import { fetchPrayerTimes, fetchTomorrowPrayerTimes, calcMidnight } from './pray
 import { schedulePrayerNotifications, refreshPrePrayerReminderNotifications, getNotificationDisplayName } from './notifications';
 import { nativeReverseGeocode } from './geocoding';
 import {
+  getIfisTodayAndTomorrow, matchIfisCity, getIfisCityDisplayName,
+  getIfisCityDisplayNames, normalizeIfisCity,
+} from './ifisApi';
+import {
   updateWidgetData,
   upsertCityPrayerCache,
   setNotificationScheduleState,
@@ -81,15 +85,17 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }: TaskMan
     const settings = settingsRaw ? JSON.parse(settingsRaw) : {};
     if (settings.autoLocation === false) return;
 
-    const method: number = settings.calculationMethod ?? 3;
-    const school: number = settings.school ?? 0;
+    const method: number      = settings.calculationMethod ?? 3;
+    const school: number      = settings.school ?? 0;
+    const prayerSource: string = settings.prayerSource ?? 'aladhan';
+    const savedIfisCity: string = settings.ifisCity ?? 'stockholm';
 
     // Read previous prayer cache before fetching — used to decide whether
     // notification rescheduling is needed after this update.
     const prevCacheRaw = await AsyncStorage.getItem(CACHE_KEY).catch(() => null);
-    const prevTodayT: Record<string, string> | null = prevCacheRaw
-      ? (JSON.parse(prevCacheRaw).todayT ?? null)
-      : null;
+    const prevCache = prevCacheRaw ? JSON.parse(prevCacheRaw) : null;
+    const prevTodayT: Record<string, string> | null = prevCache?.todayT ?? null;
+    const prevHijri: unknown = prevCache?.hijri ?? null;
 
     // Read the current schedule state so we can detect a city-name change even
     // when prayer times are similar (e.g. native used "Stockholm", JS resolves
@@ -104,12 +110,49 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }: TaskMan
       : geo.city || geo.subLocality || '';
     const country = geo.country;
 
-    const [todayRes, tomTimings] = await Promise.all([
-      fetchPrayerTimes(coords.latitude, coords.longitude, getTodayStr(), method, school),
-      fetchTomorrowPrayerTimes(coords.latitude, coords.longitude, method, school),
-    ]);
-    const todayT = { ...todayRes.timings, Midnight: calcMidnight(todayRes.timings.Maghrib, tomTimings.Fajr) || '' };
-    const tomT   = { ...tomTimings, Midnight: '' };
+    let todayT: Record<string, string>;
+    let tomT: Record<string, string>;
+    let hijri: any = null;
+    let effectiveCity: string;
+    let isIfis = false;
+
+    if (prayerSource === 'ifis') {
+      isIfis = true;
+      // Try to match geocoded city to IFIS city list
+      const knownCities  = Object.keys(getIfisCityDisplayNames());
+      const normalizedGeo = normalizeIfisCity(geo.city || city);
+      const autoMatched   = knownCities.find(c => c === normalizedGeo)
+                         || matchIfisCity(geo.city || city, knownCities);
+      const ifisCity      = autoMatched ?? savedIfisCity;
+
+      // Persist updated city if changed
+      if (ifisCity !== savedIfisCity) {
+        const updatedSettings = { ...settings, ifisCity };
+        await AsyncStorage.setItem('andalus_settings', JSON.stringify(updatedSettings)).catch(() => {});
+        const appStateRaw2 = await AsyncStorage.getItem('andalus_app_state').catch(() => null);
+        if (appStateRaw2) {
+          try {
+            const appState2 = JSON.parse(appStateRaw2);
+            if (appState2.settings) appState2.settings.ifisCity = ifisCity;
+            await AsyncStorage.setItem('andalus_app_state', JSON.stringify(appState2)).catch(() => {});
+          } catch {}
+        }
+      }
+
+      const ifisResult = await getIfisTodayAndTomorrow(ifisCity);
+      todayT = ifisResult.todayT;
+      tomT   = ifisResult.tomT ?? {};
+      effectiveCity = getIfisCityDisplayName(ifisCity);
+    } else {
+      const [todayRes, tomTimings] = await Promise.all([
+        fetchPrayerTimes(coords.latitude, coords.longitude, getTodayStr(), method, school),
+        fetchTomorrowPrayerTimes(coords.latitude, coords.longitude, method, school),
+      ]);
+      todayT = { ...todayRes.timings, Midnight: calcMidnight(todayRes.timings.Maghrib, tomTimings.Fajr) || '' };
+      tomT   = { ...tomTimings, Midnight: '' };
+      hijri  = todayRes.hijri;
+      effectiveCity = city;
+    }
 
     // Persist resolved location — read by notifications and pre-prayer reminder scheduler.
     await AsyncStorage.setItem('andalus_location', JSON.stringify({
@@ -127,24 +170,25 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }: TaskMan
       await AsyncStorage.setItem('andalus_app_state', JSON.stringify(appState));
     }
 
-    // Persist prayer cache so the app shows correct times immediately on next open
-    // without waiting for a foreground network fetch.
-    const cacheKey = coords.latitude.toFixed(4) + ',' + coords.longitude.toFixed(4) + ',' + method + ',' + school;
-    await AsyncStorage.setItem(CACHE_KEY, JSON.stringify({
-      key:    cacheKey,
-      date:   getTodayStr(),
-      todayT,
-      tomT,
-      hijri:  todayRes.hijri,
-    }));
+    // Persist prayer cache for startup hydration
+    if (isIfis) {
+      await AsyncStorage.setItem(CACHE_KEY, JSON.stringify({
+        key:   `ifis:${effectiveCity.toLowerCase()}`,
+        date:  getTodayStr(),
+        todayT, tomT, hijri: prevHijri ?? null,
+      })).catch(() => {});
+    } else {
+      const cacheKey = coords.latitude.toFixed(4) + ',' + coords.longitude.toFixed(4) + ',' + method + ',' + school;
+      await AsyncStorage.setItem(CACHE_KEY, JSON.stringify({
+        key: cacheKey, date: getTodayStr(), todayT, tomT, hijri,
+      })).catch(() => {});
+    }
 
     // Write to the iOS widget App Group — same data shape used by AppContext.
-    // This is the step that makes the widget show the new city without the user
-    // opening the app (when the JS runtime is alive via background location mode).
     if (Platform.OS === 'ios') {
-      const h = todayRes.hijri;
+      const h = hijri;
       await updateWidgetData({
-        city,
+        city:      effectiveCity,
         latitude:  coords.latitude,
         longitude: coords.longitude,
         prayers: [
@@ -155,12 +199,16 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }: TaskMan
           { name: 'Maghrib',    time: todayT.Maghrib ?? '' },
           { name: 'Isha',       time: todayT.Isha    ?? '' },
         ],
-        hijri: {
-          day:         parseInt(h?.day           ?? '0', 10),
-          monthNumber: parseInt(h?.month?.number ?? '0', 10),
-          monthNameEn: h?.month?.en              ?? '',
-          year:        parseInt(h?.year          ?? '0', 10),
-        },
+        hijri: (() => {
+          const src: any = h ?? prevHijri;
+          if (!src) return { day: 0, monthNumber: 0, monthNameEn: '', year: 0 };
+          return {
+            day:         parseInt(src.day           ?? '0', 10),
+            monthNumber: parseInt(src.month?.number ?? '0', 10),
+            monthNameEn: src.month?.en              ?? '',
+            year:        parseInt(src.year          ?? '0', 10),
+          };
+        })(),
         date:      localIsoDate(),
         timestamp: Date.now() / 1000,
       }).catch(() => {});
@@ -170,16 +218,18 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }: TaskMan
     // scheduler can reschedule in the background if the app is later killed.
     let scheduleState: NotificationScheduleState | null = null;
     if (Platform.OS === 'ios') {
-      const effectiveCity    = getEffectivePrayerCity(city);
-      const settingsRaw2     = await AsyncStorage.getItem('andalus_settings').catch(() => null);
-      const settings2        = settingsRaw2 ? JSON.parse(settingsRaw2) : {};
-      const method2: number  = settings2.calculationMethod ?? 3;
-      const school2: number  = settings2.school ?? 0;
-      const cityKey          = `${effectiveCity.toLowerCase()}_${method2}_${school2}`;
-      const todayDate        = new Date();
-      const tomorrowDate     = new Date(todayDate.getFullYear(), todayDate.getMonth(), todayDate.getDate() + 1);
-      const reminderRaw      = await AsyncStorage.getItem('hidayah_prayer_reminder_offset').catch(() => null);
-      const reminderOffset   = reminderRaw ? parseInt(reminderRaw, 10) : 0;
+      const settingsRaw2   = await AsyncStorage.getItem('andalus_settings').catch(() => null);
+      const settings2      = settingsRaw2 ? JSON.parse(settingsRaw2) : {};
+      const method2        = isIfis ? 3 : (settings2.calculationMethod ?? 3);
+      const school2        = isIfis ? 0 : (settings2.school ?? 0);
+      const alAdhanCity    = getEffectivePrayerCity(city);
+      const cityKey        = isIfis
+        ? `ifis_${(effectiveCity).toLowerCase()}`
+        : `${alAdhanCity.toLowerCase()}_${method2}_${school2}`;
+      const todayDate      = new Date();
+      const tomorrowDate   = new Date(todayDate.getFullYear(), todayDate.getMonth(), todayDate.getDate() + 1);
+      const reminderRaw    = await AsyncStorage.getItem('hidayah_prayer_reminder_offset').catch(() => null);
+      const reminderOffset = reminderRaw ? parseInt(reminderRaw, 10) : 0;
 
       await upsertCityPrayerCache({
         cityKey,
@@ -195,8 +245,6 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }: TaskMan
         updatedAt:    Date.now() / 1000,
       }).catch(() => {});
 
-      // scheduleState is assigned to the outer let so it can be written AFTER
-      // schedulePrayerNotifications runs — see the write call below the scheduling block.
       scheduleState = {
         version:                  1,
         owner:                    'js',
@@ -216,12 +264,9 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }: TaskMan
         updatedAt:                Date.now() / 1000,
       };
 
-      // Write precise effective schedule so native background scheduler prefers
-      // these exact times over the nearest-fallback-city lookup. This is the
-      // JS-background path so city is already "Kista, Stockholm" (suburb + city).
       await setEffectivePrayerSchedule({
-        displayName:             city,
-        notificationDisplayName: getNotificationDisplayName(city),
+        displayName:             effectiveCity,
+        notificationDisplayName: getNotificationDisplayName(effectiveCity),
         locationKey:             cityKey,
         lat:                     coords.latitude,
         lng:                     coords.longitude,
@@ -235,11 +280,7 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }: TaskMan
         source:                  'js_background',
       } as EffectivePrayerSchedule).catch(() => {});
 
-      // Write this precise resolved place into the visited places cache with a
-      // 7-day rolling window so native can use it even if the app hasn't been
-      // opened for several days (e.g. Spånga visited 2 days ago still matches).
-      // Fire-and-forget: writes today+tomorrow immediately, then fetches days 2–6.
-      if (city) {
+      if (!isIfis && city) {
         refreshVisitedPlaceMultiDayCache(
           {
             locationKey:             makeLocationKey(city),
@@ -257,13 +298,12 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }: TaskMan
       }
     }
 
-    // Reschedule notifications if prayer times changed OR the city name (display label)
-    // changed — the label appears in every notification body and must stay accurate.
-    const effectiveCityForNotif = getEffectivePrayerCity(city);
-    const timesChangedByMinute  = !prevTodayT || maxAbsPrayerDiffMinutes(prevTodayT, todayT) >= 1;
-    const cityNameChanged        = prevScheduleDisplayName !== null && effectiveCityForNotif !== prevScheduleDisplayName;
+    // Reschedule notifications if prayer times changed OR the city name changed
+    const notifCity            = isIfis ? effectiveCity : getEffectivePrayerCity(city);
+    const timesChangedByMinute = !prevTodayT || maxAbsPrayerDiffMinutes(prevTodayT, todayT) >= 1;
+    const cityNameChanged      = prevScheduleDisplayName !== null && notifCity !== prevScheduleDisplayName;
     if (timesChangedByMinute || cityNameChanged) {
-      await schedulePrayerNotifications(todayT, tomT, effectiveCityForNotif, { method, school });
+      await schedulePrayerNotifications(todayT, tomT, notifCity, { method, school });
       await refreshPrePrayerReminderNotifications();
     }
 

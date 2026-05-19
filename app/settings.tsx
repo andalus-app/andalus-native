@@ -15,6 +15,10 @@ import BackButton from '../components/BackButton';
 import CitySearchModal from '../components/CitySearchModal';
 import { useTheme } from '../context/ThemeContext';
 import { useApp, CALC_METHODS } from '../context/AppContext';
+import {
+  IFIS_METHOD_DISPLAY_NAME, getIfisCityDisplayName, getIfisSourceDisplayName,
+  fetchIfisCities,
+} from '../services/ifisApi';
 import { reverseGeocode } from '../services/prayerApi';
 import {
   requestNotificationPermission,
@@ -57,6 +61,8 @@ const DEFAULT_SETTINGS = {
   announcementNotifications: true,
   dhikrReminder:             false,
   fridayDuaReminder:         true,
+  prayerSource:              'aladhan' as 'aladhan' | 'ifis',
+  ifisCity:                  'stockholm',
 };
 
 function SectionLabel({ label, T }: { label: string; T: Theme }) {
@@ -154,6 +160,8 @@ export default function SettingsScreen() {
   const [prayerReminderOffset,        setPrayerReminderOffset]        = useState<PrayerReminderOffset>('off');
   const [pendingPrayerReminderOffset, setPendingPrayerReminderOffset] = useState<PrayerReminderOffset>('off');
   const [prayerReminderModal,         setPrayerReminderModal]         = useState(false);
+  const [ifisCityModal,               setIfisCityModal]               = useState(false);
+  const [ifisCities,                  setIfisCities]                  = useState<string[]>(['stockholm','goteborg','malmo']);
   const [prayerReminderSaved,         setPrayerReminderSaved]         = useState(false);
   const prCheckScale   = useRef(new Animated.Value(0)).current;
   const prCheckOpacity = useRef(new Animated.Value(0)).current;
@@ -407,8 +415,18 @@ export default function SettingsScreen() {
 
         <SectionLabel label="Bönetider" T={T}/>
         <Row T={T} iconName="ruler" label="Beräkningsmetod"
-          value={(CALC_METHODS as Record<number, string>)[settings.calculationMethod]||'Muslim World League'}
+          value={settings.prayerSource === 'ifis'
+            ? IFIS_METHOD_DISPLAY_NAME
+            : ((CALC_METHODS as Record<number, string>)[settings.calculationMethod] || 'Muslim World League')}
           onPress={() => setMethodModal(true)}/>
+        {settings.prayerSource === 'ifis' && (
+          <Row T={T} iconName="map-point" label="Stad"
+            value={getIfisSourceDisplayName(settings.ifisCity || 'stockholm')}
+            onPress={() => {
+              setIfisCityModal(true);
+              fetchIfisCities().then(cities => setIfisCities(cities)).catch(() => {});
+            }}/>
+        )}
         <Row T={T} iconName="book" label="Rättsskola"
           value={settings.school===0?"Standard (Shafi'i, Maliki, Hanbali)":'Hanafi'}
           onPress={() => setSchoolModal(true)}/>
@@ -707,7 +725,7 @@ export default function SettingsScreen() {
         <View style={{backgroundColor:T.card,borderRadius:14,borderWidth:0.5,borderColor:T.border,padding:16}}>
           <Text style={{fontSize:15,fontWeight:'700',color:T.text}}>Hidayah</Text>
           <Text style={{fontSize:13,color:T.textMuted,marginTop:2}}>Bönetider och Qibla-kompass</Text>
-          <Text style={{fontSize:12,color:T.textMuted,marginTop:6,opacity:0.7}}>Version 1.9.0</Text>
+          <Text style={{fontSize:12,color:T.textMuted,marginTop:6,opacity:0.7}}>Version 1.9.1</Text>
           <Text style={{fontSize:11,color:T.textMuted,marginTop:2,opacity:0.55}}>
             © {new Date().getFullYear()} Fatih Köker. Alla rättigheter förbehållna.
           </Text>
@@ -723,13 +741,53 @@ export default function SettingsScreen() {
 
       <Sheet visible={methodModal} T={T}
         title="Beräkningsmetod"
-        subtitle={'Vald: '+((CALC_METHODS as Record<number, string>)[settings.calculationMethod]||'Muslim World League')}
+        subtitle={'Vald: ' + (settings.prayerSource === 'ifis'
+          ? IFIS_METHOD_DISPLAY_NAME
+          : ((CALC_METHODS as Record<number, string>)[settings.calculationMethod] || 'Muslim World League'))}
         onClose={() => setMethodModal(false)}>
-        {Object.entries(CALC_METHODS).map(([key,name],idx,arr) => (
-          <OptionRow key={key} label={name}
-            active={settings.calculationMethod===parseInt(key)}
-            isLast={idx===arr.length-1} T={T}
-            onPress={() => { saveSettings({calculationMethod:parseInt(key)}); setMethodModal(false); }}/>
+        {[
+          { key: 'ifis', label: IFIS_METHOD_DISPLAY_NAME, isIfis: true },
+          ...Object.entries(CALC_METHODS).map(([key, name]) => ({ key, label: name, isIfis: false })),
+        ]
+          .sort((a, b) => a.label.localeCompare(b.label, 'sv'))
+          .map((item, idx, arr) => (
+            <OptionRow
+              key={item.key}
+              label={item.label}
+              active={item.isIfis
+                ? settings.prayerSource === 'ifis'
+                : settings.prayerSource === 'aladhan' && settings.calculationMethod === parseInt(item.key)}
+              isLast={idx === arr.length - 1}
+              T={T}
+              onPress={() => {
+                if (item.isIfis) {
+                  saveSettings({ prayerSource: 'ifis' });
+                } else {
+                  saveSettings({ calculationMethod: parseInt(item.key), prayerSource: 'aladhan' });
+                }
+                setMethodModal(false);
+              }}
+            />
+          ))}
+        <View style={{height:8}}/>
+      </Sheet>
+
+      <Sheet visible={ifisCityModal} T={T}
+        title="Välj stad"
+        subtitle="Islamiska Förbundet Sverige"
+        onClose={() => setIfisCityModal(false)}>
+        {ifisCities.map((city, idx) => (
+          <OptionRow
+            key={city}
+            label={getIfisCityDisplayName(city)}
+            active={(settings.ifisCity || 'stockholm') === city}
+            isLast={idx === ifisCities.length - 1}
+            T={T}
+            onPress={() => {
+              saveSettings({ ifisCity: city });
+              setIfisCityModal(false);
+            }}
+          />
         ))}
         <View style={{height:8}}/>
       </Sheet>

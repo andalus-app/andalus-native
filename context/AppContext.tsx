@@ -6,6 +6,10 @@ import { fetchPrayerTimes, fetchTomorrowPrayerTimes, calcMidnight, reverseGeocod
 import { startBackgroundLocationUpdates, stopBackgroundLocationUpdates } from '../services/backgroundLocation';
 import { warmupNativeCache } from '../services/nativeCacheWarmup';
 import { buildYearlyCache, getPrayerTimesWithFallback } from '../services/monthlyCache';
+import {
+  getIfisTodayAndTomorrow, warmIfisCache, matchIfisCity,
+  getIfisCityDisplayNames, getIfisCityDisplayName, normalizeIfisCity,
+} from '../services/ifisApi';
 import { schedulePrayerNotifications, cancelPrayerNotifications, scheduleDhikrReminder, cancelDhikrReminder, scheduleFridayDuaReminder, cancelFridayDuaReminder, refreshPrePrayerReminderNotifications, getNotificationDisplayName } from '../services/notifications';
 import {
   updateWidgetData,
@@ -71,7 +75,7 @@ function localIsoDate(d: Date = new Date()): string {
 }
 
 type LocationType = { latitude: number; longitude: number; city: string; suburb?: string; country: string } | null;
-type Settings = { calculationMethod: number; school: number; notifications: boolean; announcementNotifications: boolean; autoLocation: boolean; dhikrReminder: boolean; fridayDuaReminder: boolean };
+type Settings = { calculationMethod: number; school: number; notifications: boolean; announcementNotifications: boolean; autoLocation: boolean; dhikrReminder: boolean; fridayDuaReminder: boolean; prayerSource: 'aladhan' | 'ifis'; ifisCity: string };
 type Timings  = Record<string, string> | null;
 
 type State = {
@@ -85,13 +89,15 @@ type State = {
 };
 
 const DEFAULT_SETTINGS: Settings = {
-  calculationMethod:        3,
-  school:                   0,
-  notifications:            true,
+  calculationMethod:         3,
+  school:                    0,
+  notifications:             true,
   announcementNotifications: true,
-  autoLocation:             true,
-  dhikrReminder:            false,
-  fridayDuaReminder:        true,
+  autoLocation:              true,
+  dhikrReminder:             false,
+  fridayDuaReminder:         true,
+  prayerSource:              'aladhan',
+  ifisCity:                  'stockholm',
 };
 
 const initialState: State = {
@@ -351,39 +357,84 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return () => sub.remove();
   }, []); // eslint-disable-line
 
-  // ── Hämta bönetider automatiskt när location/method/school ändras ──
-  // EXAKT samma useEffect-mönster som PWA:n: [location, calculationMethod, school]
+  // ── Hämta bönetider automatiskt när location/method/school/prayerSource/ifisCity ändras ──
   useEffect(() => {
     if (!state.location) return;
-    lastFetchRef.current = null; // tvinga ny hämtning vid ändring
-    loadPrayers(state.location, state.settings.calculationMethod, state.settings.school);
-  }, [state.location, state.settings.calculationMethod, state.settings.school]); // eslint-disable-line
+    lastFetchRef.current = null;
+    loadPrayers(
+      state.location,
+      state.settings.calculationMethod,
+      state.settings.school,
+      state.settings.prayerSource ?? 'aladhan',
+      state.settings.ifisCity ?? 'stockholm',
+    );
+  }, [state.location, state.settings.calculationMethod, state.settings.school, state.settings.prayerSource, state.settings.ifisCity]); // eslint-disable-line
 
-  // ── Bygg stadsbaserad bönetidscache + spegla stadsindex till App Group ──
-  // Cachen är stabil per stad — GPS-rörelse inom samma stad triggar aldrig ombyggnad.
-  // App Group-indexet låter den native schemaläggaren hitta närmaste cachade stad
-  // utan nätverksåtkomst eller JS-körning.
+  // ── Bygg/värm cache + spegla stadsindex till App Group ──
   useEffect(() => {
     if (!state.location?.city) return;
     const { latitude: lat, longitude: lng, city } = state.location;
     const { calculationMethod: method, school } = state.settings;
-    buildYearlyCache(city, lat, lng, method, school).catch(() => {});
+    const prayerSource = state.settings.prayerSource ?? 'aladhan';
+    const ifisCity     = state.settings.ifisCity ?? 'stockholm';
+
+    if (prayerSource === 'ifis') {
+      warmIfisCache(ifisCity).catch(() => {});
+    } else {
+      buildYearlyCache(city, lat, lng, method, school).catch(() => {});
+    }
+    // Always update native location index — used as AlAdhan fallback by native scheduler
     if (Platform.OS === 'ios') {
       const effectiveCity = getEffectivePrayerCity(city);
       const cityKey = `${effectiveCity.toLowerCase()}_${method}_${school}`;
       updateLocationIndexEntry({ cityKey, displayName: effectiveCity, lat, lng, method, school })
         .catch(() => {});
     }
-  }, [state.location, state.settings.calculationMethod, state.settings.school]); // eslint-disable-line
+  }, [state.location, state.settings.calculationMethod, state.settings.school, state.settings.prayerSource, state.settings.ifisCity]); // eslint-disable-line
 
-  async function loadPrayers(loc: LocationType, method: number, school: number) {
+  async function loadPrayers(
+    loc: LocationType,
+    method: number,
+    school: number,
+    prayerSource: 'aladhan' | 'ifis' = 'aladhan',
+    ifisCity: string = 'stockholm',
+  ) {
     if (!loc) return;
-    const key = loc.latitude.toFixed(4)+','+loc.longitude.toFixed(4)+','+method+','+school;
+
+    const isIfis = prayerSource === 'ifis';
+
+    // Auto-match IFIS city from geocoded location when IFIS is active
+    let effectiveIfisCity = ifisCity;
+    if (isIfis) {
+      const geocodedCity   = getEffectivePrayerCity(loc.city);
+      const normalizedGeo  = normalizeIfisCity(geocodedCity);
+      const knownCities    = Object.keys(getIfisCityDisplayNames());
+      const matched        = knownCities.find(c => c === normalizedGeo)
+                          || matchIfisCity(geocodedCity, knownCities);
+      if (matched && matched !== ifisCity) {
+        effectiveIfisCity = matched;
+        dispatch({ type: 'SET_SETTINGS', payload: { ifisCity: matched } });
+      }
+    }
+
+    const key = isIfis
+      ? `ifis:${effectiveIfisCity}`
+      : `${loc.latitude.toFixed(4)},${loc.longitude.toFixed(4)},${method},${school}`;
+
     if (lastFetchRef.current === key) return;
     lastFetchRef.current = key;
 
-    // Fallback-kedja: dagscache → stadsbaserad årsvis cache → offline-fel
-    const localData = await getPrayerTimesWithFallback(loc.city, loc.latitude, loc.longitude, method, school);
+    // Local cache read — fast path before any network call
+    let localData: { todayT: Record<string, string>; tomT: Record<string, string> | null; hijri: any } | null = null;
+    if (isIfis) {
+      try {
+        const r = await getIfisTodayAndTomorrow(effectiveIfisCity);
+        localData = { todayT: r.todayT, tomT: r.tomT, hijri: null };
+      } catch {}
+    } else {
+      const fallback = await getPrayerTimesWithFallback(loc.city, loc.latitude, loc.longitude, method, school);
+      if (fallback) localData = fallback;
+    }
 
     if (localData) {
       dispatch({ type: 'SET_PRAYER_TIMES',   payload: localData.todayT });
@@ -396,34 +447,64 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: 'SET_ERROR',   payload: null });
 
     try {
-      const todayStr = getTodayStr();
-      const [todayRes, tomTimings] = await Promise.all([
-        fetchPrayerTimes(loc.latitude, loc.longitude, todayStr, method, school),
-        fetchTomorrowPrayerTimes(loc.latitude, loc.longitude, method, school),
-      ]);
+      let todayT: Record<string, string>;
+      let tomT: Record<string, string>;
+      let fetchedHijri: any = null;
 
-      // Beräkna halva natten
-      const todayT = { ...todayRes.timings, Midnight: calcMidnight(todayRes.timings.Maghrib, tomTimings.Fajr) || '' };
-      const tomT   = { ...tomTimings, Midnight: '' };
+      if (isIfis) {
+        const r = await getIfisTodayAndTomorrow(effectiveIfisCity);
+        todayT = r.todayT;
+        tomT   = r.tomT ?? {};
+        // Warm both years in background — does not block UI
+        warmIfisCache(effectiveIfisCity).catch(() => {});
+        // Fetch Hijri from AlAdhan separately — IFIS has no Hijri data.
+        // This keeps the Hijri date current daily regardless of prayer source.
+        try {
+          const hijriRes = await fetchPrayerTimes(loc.latitude, loc.longitude, getTodayStr(), 3, 0);
+          fetchedHijri = hijriRes.hijri;
+        } catch {
+          // Network failure — state.hijriDate used as fallback in widget write
+        }
+      } else {
+        const todayStr = getTodayStr();
+        const [todayRes, tomTimings] = await Promise.all([
+          fetchPrayerTimes(loc.latitude, loc.longitude, todayStr, method, school),
+          fetchTomorrowPrayerTimes(loc.latitude, loc.longitude, method, school),
+        ]);
+        todayT      = { ...todayRes.timings, Midnight: calcMidnight(todayRes.timings.Maghrib, tomTimings.Fajr) || '' };
+        tomT        = { ...tomTimings, Midnight: '' };
+        fetchedHijri = todayRes.hijri;
+      }
 
       dispatch({ type: 'SET_PRAYER_TIMES',   payload: todayT });
       dispatch({ type: 'SET_TOMORROW_TIMES', payload: tomT });
-      dispatch({ type: 'SET_HIJRI',          payload: todayRes.hijri });
+      if (fetchedHijri) dispatch({ type: 'SET_HIJRI', payload: fetchedHijri });
       dispatch({ type: 'SET_ERROR',          payload: null });
-      await setCached(loc, method, school, todayT, tomT, todayRes.hijri);
+
+      // Persist to daily cache for startup hydration — IFIS uses a special key
+      if (isIfis) {
+        AsyncStorage.setItem(CACHE_KEY, JSON.stringify({
+          key:   `ifis:${effectiveIfisCity}`,
+          date:  getTodayStr(),
+          todayT, tomT, hijri: fetchedHijri,
+        })).catch(() => {});
+      } else {
+        await setCached(loc, method, school, todayT, tomT, fetchedHijri);
+      }
 
       // Write data to App Group shared container for iOS widgets.
-      // Only on iOS — no-op on other platforms.
       if (Platform.OS === 'ios') {
-        const h = todayRes.hijri;
-        const dateFormatter = new Intl.DateTimeFormat('sv-SE', { dateStyle: 'short' });
-        const todayIso = localIsoDate(); // "yyyy-MM-dd"
-        const fullDisplayName = (loc.suburb && loc.suburb !== loc.city)
-          ? `${loc.suburb}, ${loc.city}`
-          : loc.city;
+        const h = fetchedHijri;
+        const todayIso = localIsoDate();
+
+        // Display name: IFIS shows city name, AlAdhan shows suburb+city
+        const fullDisplayName = isIfis
+          ? getIfisCityDisplayName(effectiveIfisCity)
+          : ((loc.suburb && loc.suburb !== loc.city) ? `${loc.suburb}, ${loc.city}` : loc.city);
+
         updateWidgetData({
-          city: fullDisplayName,
-          latitude: loc.latitude,
+          city:      fullDisplayName,
+          latitude:  loc.latitude,
           longitude: loc.longitude,
           prayers: [
             { name: 'Fajr',       time: todayT.Fajr    ?? '' },
@@ -433,27 +514,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             { name: 'Maghrib',    time: todayT.Maghrib ?? '' },
             { name: 'Isha',       time: todayT.Isha    ?? '' },
           ],
-          hijri: {
-            day:         parseInt(h?.day  ?? '0', 10),
-            monthNumber: parseInt(h?.month?.number ?? '0', 10),
-            monthNameEn: h?.month?.en ?? '',
-            year:        parseInt(h?.year ?? '0', 10),
-          },
+          hijri: (() => {
+            const src = h ?? state.hijriDate;
+            if (!src) return { day: 0, monthNumber: 0, monthNameEn: '', year: 0 };
+            return {
+              day:         parseInt(src.day           ?? '0', 10),
+              monthNumber: parseInt(src.month?.number ?? '0', 10),
+              monthNameEn: src.month?.en              ?? '',
+              year:        parseInt(src.year          ?? '0', 10),
+            };
+          })(),
           date:      todayIso,
           timestamp: Date.now() / 1000,
-        }).catch(() => {
-          // Non-fatal — widget will continue showing previous data
-        });
+        }).catch(() => {});
 
-        // Write today's Allah name + Quran verse to App Group for daily content widgets.
         updateDailyContent(getDailyWidgetPayload()).catch(() => {});
 
-        // Mirror today/tomorrow prayer times to App Group so the native notification
-        // scheduler can reschedule in the background without network access.
-        const effectiveCity  = getEffectivePrayerCity(loc.city);
-        const cityKey        = `${effectiveCity.toLowerCase()}_${method}_${school}`;
-        const todayDate      = new Date();
-        const tomorrowDate   = new Date(todayDate.getFullYear(), todayDate.getMonth(), todayDate.getDate() + 1);
+        const effectiveCity = isIfis
+          ? getIfisCityDisplayName(effectiveIfisCity)
+          : getEffectivePrayerCity(loc.city);
+        // IFIS uses its own cityKey prefix so native cache lookup is independent
+        const cityKey      = isIfis
+          ? `ifis_${effectiveIfisCity}`
+          : `${effectiveCity.toLowerCase()}_${method}_${school}`;
+        const todayDate    = new Date();
+        const tomorrowDate = new Date(todayDate.getFullYear(), todayDate.getMonth(), todayDate.getDate() + 1);
+
         upsertCityPrayerCache({
           cityKey,
           displayName:  effectiveCity,
@@ -461,19 +547,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           lng:          loc.longitude,
           date:         localIsoDate(todayDate),
           tomorrowDate: localIsoDate(tomorrowDate),
-          method,
-          school,
+          method:       isIfis ? 3 : method,
+          school:       isIfis ? 0 : school,
           todayT,
           tomT: tomT ?? null,
           updatedAt: Date.now() / 1000,
         }).catch(() => {});
 
-        // Write the precise effective schedule so the native scheduler reads this
-        // BEFORE falling back to the nearest-fallback-city lookup. This prevents
-        // Stockholm's geographic prayer times from overriding Kista's precise times
-        // when a significant-location-change fires while the app is closed.
-        // displayName is the full geocoded name ("Kista, Stockholm" when suburb is set);
-        // notificationDisplayName is the body-text label ("Stockholm").
         setEffectivePrayerSchedule({
           displayName:             fullDisplayName,
           notificationDisplayName: getNotificationDisplayName(fullDisplayName),
@@ -484,41 +564,33 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           tomorrowDate:            localIsoDate(tomorrowDate),
           todayTimes:              todayT,
           tomorrowTimes:           tomT ?? null,
-          method,
-          school,
+          method:                  isIfis ? 3 : method,
+          school:                  isIfis ? 0 : school,
           updatedAt:               Date.now() / 1000,
           source:                  'js_precise_location',
         } as EffectivePrayerSchedule).catch(() => {});
 
-        // Write this precise resolved place into the visited places cache with a
-        // 7-day rolling window so native can use it even if the app hasn't been
-        // opened for several days (e.g. Spånga visited 2 days ago still matches).
-        // Fire-and-forget: writes today+tomorrow immediately, then fetches and
-        // adds days 2–6 in the background without blocking the UI.
-        refreshVisitedPlaceMultiDayCache(
-          {
-            locationKey:             makeLocationKey(fullDisplayName),
-            displayName:             fullDisplayName,
-            notificationDisplayName: getNotificationDisplayName(fullDisplayName),
-            lat:                     loc.latitude,
-            lng:                     loc.longitude,
-            method,
-            school,
-            source:                  'js_precise_location',
-          },
-          todayT,
-          tomT ?? null,
-        ).catch(() => {});
+        if (!isIfis) {
+          refreshVisitedPlaceMultiDayCache(
+            {
+              locationKey:             makeLocationKey(fullDisplayName),
+              displayName:             fullDisplayName,
+              notificationDisplayName: getNotificationDisplayName(fullDisplayName),
+              lat:                     loc.latitude,
+              lng:                     loc.longitude,
+              method,
+              school,
+              source:                  'js_precise_location',
+            },
+            todayT,
+            tomT ?? null,
+          ).catch(() => {});
 
-        // Warmup all 25 bundled fallback cities in the native cache so native
-        // can reschedule notifications for any Swedish city even on first visit.
-        // Fire-and-forget — does not block main fetch. Skips cities already fresh.
-        warmupNativeCache(method, school).catch((err) => {
-          if (__DEV__) console.warn('[NativeCacheWarmup] failed', err);
-        });
+          warmupNativeCache(method, school).catch((err) => {
+            if (__DEV__) console.warn('[NativeCacheWarmup] failed', err);
+          });
+        }
 
-        // Write schedule state after this JS refresh so the native scheduler can
-        // skip a redundant reschedule when it next wakes from a location event.
         AsyncStorage.getItem('hidayah_prayer_reminder_offset').then(raw => {
           const offset = raw ? parseInt(raw, 10) : 0;
           const scheduleState: NotificationScheduleState = {
@@ -531,8 +603,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             lat:                      loc.latitude,
             lng:                      loc.longitude,
             date:                     localIsoDate(todayDate),
-            method,
-            school,
+            method:                   isIfis ? 3 : method,
+            school:                   isIfis ? 0 : school,
             todayT,
             tomT:                     tomT ?? undefined,
             dhikrEnabled:             state.settings.dhikrReminder,
@@ -542,16 +614,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           return setNotificationScheduleState(scheduleState);
         }).catch(() => {});
 
-        // Clear the background-location signal only on success. If the network
-        // call above failed, we never reach this line — needsPrayerRefresh stays
-        // set so the next app open will retry the full refresh.
         if (pendingBgClearRef.current) {
           pendingBgClearRef.current = false;
           clearNeedsPrayerRefresh().catch(() => {});
         }
 
-        // Commit v2 migration only after a successful Aladhan fetch + App Group write.
-        // The flag is set in the startup useEffect when old UTC-shifted caches were cleared.
         if (migrationPendingRef.current) {
           migrationPendingRef.current = false;
           AsyncStorage.setItem(PRAYER_CACHE_DATE_KEY_VERSION, String(CURRENT_PRAYER_CACHE_VERSION))
@@ -561,58 +628,62 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
 
     } catch {
-      lastFetchRef.current = null; // tillåt retry
+      lastFetchRef.current = null;
       if (!localData) {
-        // Daily cache, yearly cache, and Aladhan all failed — last-resort Supabase SCB fallback
-        let fallbackSucceeded = false;
-        try {
-          console.log('[PrayerFallback] Supabase fallback attempted');
-          const fallback = await getPrayerMonthFromSupabaseFallback({
-            latitude:  loc.latitude,
-            longitude: loc.longitude,
-            date:      new Date(),
-          });
-          if (fallback) {
-            console.log(`[PrayerFallback] Supabase fallback succeeded: ${fallback.locationName} (${fallback.matchType})`);
-            dispatch({ type: 'SET_PRAYER_TIMES',   payload: fallback.todayT });
-            dispatch({ type: 'SET_TOMORROW_TIMES', payload: fallback.tomT });
-            if (fallback.hijri) dispatch({ type: 'SET_HIJRI', payload: fallback.hijri });
-            dispatch({ type: 'SET_ERROR',          payload: null });
-            await setCached(loc, method, school, fallback.todayT, fallback.tomT, fallback.hijri);
-            if (Platform.OS === 'ios') {
-              const h = fallback.hijri;
-              const fullDisplayName = (loc.suburb && loc.suburb !== loc.city)
-                ? `${loc.suburb}, ${loc.city}`
-                : loc.city;
-              updateWidgetData({
-                city:      fullDisplayName,
-                latitude:  loc.latitude,
-                longitude: loc.longitude,
-                prayers: [
-                  { name: 'Fajr',       time: fallback.todayT.Fajr    ?? '' },
-                  { name: 'Soluppgång', time: fallback.todayT.Sunrise  ?? '' },
-                  { name: 'Dhuhr',      time: fallback.todayT.Dhuhr   ?? '' },
-                  { name: 'Asr',        time: fallback.todayT.Asr     ?? '' },
-                  { name: 'Maghrib',    time: fallback.todayT.Maghrib ?? '' },
-                  { name: 'Isha',       time: fallback.todayT.Isha    ?? '' },
-                ],
-                hijri: {
-                  day:         h ? parseInt(h.day,          10) : 0,
-                  monthNumber: h ? parseInt(h.month.number, 10) : 0,
-                  monthNameEn: h?.month.en ?? '',
-                  year:        h ? parseInt(h.year,         10) : 0,
-                },
-                date:      localIsoDate(),
-                timestamp: Date.now() / 1000,
-              }).catch(() => {});
-            }
-            fallbackSucceeded = true;
-          }
-        } catch (fbErr) {
-          console.warn('[PrayerFallback] Supabase fallback failed:', fbErr instanceof Error ? fbErr.message : 'unknown');
-        }
-        if (!fallbackSucceeded) {
+        if (isIfis) {
           dispatch({ type: 'SET_ERROR', payload: 'offline' });
+        } else {
+          // Daily cache, yearly cache, and AlAdhan all failed — last-resort Supabase SCB fallback
+          let fallbackSucceeded = false;
+          try {
+            console.log('[PrayerFallback] Supabase fallback attempted');
+            const fallback = await getPrayerMonthFromSupabaseFallback({
+              latitude:  loc.latitude,
+              longitude: loc.longitude,
+              date:      new Date(),
+            });
+            if (fallback) {
+              console.log(`[PrayerFallback] Supabase fallback succeeded: ${fallback.locationName} (${fallback.matchType})`);
+              dispatch({ type: 'SET_PRAYER_TIMES',   payload: fallback.todayT });
+              dispatch({ type: 'SET_TOMORROW_TIMES', payload: fallback.tomT });
+              if (fallback.hijri) dispatch({ type: 'SET_HIJRI', payload: fallback.hijri });
+              dispatch({ type: 'SET_ERROR',          payload: null });
+              await setCached(loc, method, school, fallback.todayT, fallback.tomT, fallback.hijri);
+              if (Platform.OS === 'ios') {
+                const h = fallback.hijri;
+                const fullDisplayName = (loc.suburb && loc.suburb !== loc.city)
+                  ? `${loc.suburb}, ${loc.city}`
+                  : loc.city;
+                updateWidgetData({
+                  city:      fullDisplayName,
+                  latitude:  loc.latitude,
+                  longitude: loc.longitude,
+                  prayers: [
+                    { name: 'Fajr',       time: fallback.todayT.Fajr    ?? '' },
+                    { name: 'Soluppgång', time: fallback.todayT.Sunrise  ?? '' },
+                    { name: 'Dhuhr',      time: fallback.todayT.Dhuhr   ?? '' },
+                    { name: 'Asr',        time: fallback.todayT.Asr     ?? '' },
+                    { name: 'Maghrib',    time: fallback.todayT.Maghrib ?? '' },
+                    { name: 'Isha',       time: fallback.todayT.Isha    ?? '' },
+                  ],
+                  hijri: {
+                    day:         h ? parseInt(h.day,          10) : 0,
+                    monthNumber: h ? parseInt(h.month.number, 10) : 0,
+                    monthNameEn: h?.month.en ?? '',
+                    year:        h ? parseInt(h.year,         10) : 0,
+                  },
+                  date:      localIsoDate(),
+                  timestamp: Date.now() / 1000,
+                }).catch(() => {});
+              }
+              fallbackSucceeded = true;
+            }
+          } catch (fbErr) {
+            console.warn('[PrayerFallback] Supabase fallback failed:', fbErr instanceof Error ? fbErr.message : 'unknown');
+          }
+          if (!fallbackSucceeded) {
+            dispatch({ type: 'SET_ERROR', payload: 'offline' });
+          }
         }
       }
     } finally {
@@ -684,20 +755,30 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   async function refreshPrayers() {
     lastFetchRef.current = null;
     if (state.location) {
-      await loadPrayers(state.location, state.settings.calculationMethod, state.settings.school);
+      await loadPrayers(
+        state.location,
+        state.settings.calculationMethod,
+        state.settings.school,
+        state.settings.prayerSource ?? 'aladhan',
+        state.settings.ifisCity ?? 'stockholm',
+      );
     }
   }
 
   // ── Schedule / cancel prayer notifications whenever relevant state changes ──
   useEffect(() => {
     if (!state.prayerTimes || !state.location) return;
+    const isIfis    = (state.settings.prayerSource ?? 'aladhan') === 'ifis';
+    const notifCity = isIfis
+      ? getIfisCityDisplayName(state.settings.ifisCity ?? 'stockholm')
+      : getEffectivePrayerCity(state.location.city);
     if (!state.settings.notifications) {
       cancelPrayerNotifications().catch(() => {});
     } else {
       schedulePrayerNotifications(
         state.prayerTimes,
         state.tomorrowTimes,
-        getEffectivePrayerCity(state.location.city),
+        notifCity,
         { method: state.settings.calculationMethod, school: state.settings.school },
       ).catch(() => {});
     }

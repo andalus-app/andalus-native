@@ -10,6 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../context/ThemeContext';
 import { nativeReverseGeocode } from '../services/geocoding';
 import { getMonthFromCache, buildYearlyCache, DayRow, SWEDISH_MONTHS as SM, SWEDISH_DAYS } from '../services/monthlyCache';
+import { fetchIfisMonthRows, getIfisSourceDisplayName, getIfisCityDisplayName, IfisDayRow } from '../services/ifisApi';
 
 const PRAYER_COLS    = ['FAJR','SHURUQ','DHUHR','ASR','MAGHRIB','ISHA','HALVA NATTEN*'];
 const SWEDISH_MONTHS = SM;
@@ -67,7 +68,10 @@ async function fetchMonthData(
   });
 }
 
-function buildPDFHtml(rows: DayRow[], year: number, month: number, loc: LocationData, todayStr: string, logoB64: string): string {
+function buildPDFHtml(
+  rows: DayRow[], year: number, month: number, loc: LocationData, todayStr: string,
+  logoB64: string, methodLabel?: string,
+): string {
   const monthName    = SWEDISH_MONTHS[month - 1];
   const cityName     = loc.city;
   const suburbName   = loc.suburb;
@@ -165,7 +169,7 @@ function buildPDFHtml(rows: DayRow[], year: number, month: number, loc: Location
 
 <div class="footer">
   <div class="footer-note">* Halva natten = mittpunkten mellan Maghrib och nästa dags Fajr</div>
-
+  ${methodLabel ? `<div class="footer-note">Metod: ${methodLabel}</div>` : ''}
 </div>
 
 </body></html>`;
@@ -184,6 +188,8 @@ export default function MonthlyScreen() {
   const [locLoading, setLocLoading] = useState(true);
   const [method, setMethod] = useState(3);
   const [school, setSchool] = useState(0);
+  const [prayerSource, setPrayerSource] = useState<'aladhan' | 'ifis'>('aladhan');
+  const [ifisCity,     setIfisCity]     = useState('stockholm');
   const swipeX = useRef(new Animated.Value(0)).current;
   const isAnimating = useRef(false);
 
@@ -222,6 +228,8 @@ export default function MonthlyScreen() {
         const savedSchool = saved.school ?? 0;
         setMethod(savedMethod);
         setSchool(savedSchool);
+        setPrayerSource(saved.prayerSource ?? 'aladhan');
+        setIfisCity(saved.ifisCity ?? 'stockholm');
 
         if (locationRaw) {
           // Prefer the location already resolved and persisted by the prayer
@@ -257,23 +265,31 @@ export default function MonthlyScreen() {
     if (!location) return;
     let cancelled = false;
 
-    // Check cache synchronously-ish — show instantly if available
-    getMonthFromCache(year, month, location.city, method, school).then(cached => {
-      if (cancelled) return;
-      if (cached) {
-        setRows(cached);
-        setLoading(false);
-      } else {
-        setLoading(true);
-        setRows([]);
-        fetchMonthData(year, month, location.city, location.lat, location.lng, method, school)
-          .then(data => { if (!cancelled) { setRows(data); setLoading(false); } })
-          .catch(() => { if (!cancelled) setLoading(false); });
-      }
-    });
+    if (prayerSource === 'ifis') {
+      setLoading(true);
+      setRows([]);
+      fetchIfisMonthRows(ifisCity, year, month)
+        .then(data => { if (!cancelled) { setRows(data as DayRow[]); setLoading(false); } })
+        .catch(() => { if (!cancelled) setLoading(false); });
+    } else {
+      // Check AlAdhan cache synchronously-ish — show instantly if available
+      getMonthFromCache(year, month, location.city, method, school).then(cached => {
+        if (cancelled) return;
+        if (cached) {
+          setRows(cached);
+          setLoading(false);
+        } else {
+          setLoading(true);
+          setRows([]);
+          fetchMonthData(year, month, location.city, location.lat, location.lng, method, school)
+            .then(data => { if (!cancelled) { setRows(data); setLoading(false); } })
+            .catch(() => { if (!cancelled) setLoading(false); });
+        }
+      });
+    }
 
     return () => { cancelled = true; };
-  }, [year, month, location, method, school]);
+  }, [year, month, location, method, school, prayerSource, ifisCity]);
 
   function prevMonth() { setMonth(m => { if (m === 1) { setYear(y => y - 1); return 12; } return m - 1; }); }
   function nextMonth() { setMonth(m => { if (m === 12) { setYear(y => y + 1); return 1; } return m + 1; }); }
@@ -290,7 +306,10 @@ export default function MonthlyScreen() {
         : '';
 
       const todayStr  = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
-      const html      = buildPDFHtml(rows, year, month, location, todayStr, logoB64);
+      const methodLabel = prayerSource === 'ifis'
+        ? `Islamiska Förbundet i Sverige - ${getIfisCityDisplayName(ifisCity)}`
+        : undefined;
+      const html      = buildPDFHtml(rows, year, month, location, todayStr, logoB64, methodLabel);
       const result    = await Print.printToFileAsync({ html, base64: false });
       const monthName = SWEDISH_MONTHS[month - 1];
       const locLabel  = location.suburb ? `${location.suburb}, ${location.city}` : location.city;
@@ -332,7 +351,14 @@ export default function MonthlyScreen() {
         <TouchableOpacity onPress={prevMonth} style={s.navBtn} disabled={isLoadingAny}>
           <Text style={[s.navArrow,isLoadingAny&&{opacity:.3}]}>‹</Text>
         </TouchableOpacity>
-        <Text style={s.monthTitle}>{SWEDISH_MONTHS[month-1]} {year}</Text>
+        <View style={{alignItems:'center'}}>
+          <Text style={s.monthTitle}>{SWEDISH_MONTHS[month-1]} {year}</Text>
+          {prayerSource === 'ifis' && (
+            <Text style={{fontSize:11,color:T.textMuted,marginTop:2}}>
+              {getIfisSourceDisplayName(ifisCity)}
+            </Text>
+          )}
+        </View>
         <TouchableOpacity onPress={nextMonth} style={s.navBtn} disabled={isLoadingAny}>
           <Text style={[s.navArrow,isLoadingAny&&{opacity:.3}]}>›</Text>
         </TouchableOpacity>

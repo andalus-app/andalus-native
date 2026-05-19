@@ -265,6 +265,62 @@ Never split a single list item into multiple `<Text>` or `<View>` components. Ea
 
 ---
 
+## IFIS — Islamiska Förbundet Sverige
+
+### API
+
+* Base URL: `https://api.xn--bnetider-n4a.nu/v1`
+* Cities: `GET /method/ifis/cities` → `string[]` (lowercase slugs, e.g. "stockholm")
+* Year data: `GET /method/ifis/city/{city}/times` → 3D array `[month0_days, month1_days, ...]`, indexed from January (month 0), each day is `[fajr, shorook, dhuhr, asr, maghrib, isha]` in **minutes from midnight**
+* Single day: `GET /method/ifis/city/{city}/times/{YYYY-MM-DD}` → `[fajr, shorook, dhuhr, asr, maghrib, isha]`
+
+### Data Format
+
+* API returns minutes from midnight (e.g. 160 = 02:40)
+* Array index: 0=Fajr, 1=Shorook, 2=Dhuhr, 3=Asr, 4=Maghrib, 5=Isha
+* Must be normalized to `Record<string, string>` with keys Fajr, Sunrise, Dhuhr, Asr, Maghrib, Isha, Midnight before use
+* IFIS does NOT return Hijri date or Midnight — Midnight is calculated using existing `calcMidnight()`
+
+### Naming Rules (CRITICAL — do not break)
+
+* Internal technical key: `ifis` (in settings, cache keys, code)
+* In method list (settings): display as **"Islamiska Förbundet Sverige"** — never "IFIS" or "IFIS Bönetider"
+* In monthly view source label: **"Islamiska Förbundet {Stad}"** (e.g. "Islamiska Förbundet Stockholm")
+* In PDF method label: **"Metod: Islamiska Förbundet {Stad}"**
+* Constants: `IFIS_METHOD_DISPLAY_NAME = 'Islamiska Förbundet Sverige'`
+
+### Settings Fields
+
+```ts
+prayerSource: 'aladhan' | 'ifis'  // which source to use (default: 'aladhan')
+ifisCity: string                   // IFIS city slug (default: 'stockholm')
+```
+
+### Cache Keys
+
+* Format: `ifis:{city}:{year}` (e.g. `ifis:stockholm:2026`)
+* Each city+year is a separate AsyncStorage key
+* Structure: `IfisYearCache` = `{ city, year, cachedAt, source: 'ifis', version: 1, data: unknown }`
+* Priority: yearly cache → daily endpoint → error
+* Warm both current and next year in background; missing next-year data is non-fatal
+
+### City Normalization
+
+* `normalizeIfisCity(city)`: lowercase + å/ä→a, ö→o (e.g. "Göteborg" → "goteborg")
+* City display names: `{ stockholm: 'Stockholm', goteborg: 'Göteborg', malmo: 'Malmö', ... }` — expanded dynamically from API
+* Auto-match geocoded city to IFIS city list; keep last working city if no match
+
+### Architecture Rules
+
+* IFIS **reuses** existing background location, widget, and notification flows
+* Do NOT create a separate background architecture for IFIS
+* When IFIS active: write IFIS times to App Group in same format as AlAdhan
+* When IFIS active: notify with same scheduling flow, same notification IDs
+* AlAdhan logic is NEVER modified — both sources coexist via `prayerSource` flag
+* `calculationMethod` (number) and `school` are always kept for when user switches back to AlAdhan
+
+---
+
 ## External Docs
 
 See:

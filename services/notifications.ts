@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { getNotificationScheduleState } from '../modules/WidgetData';
+import { getIfisTimesForDate } from './ifisApi';
 
 // Lazy-load expo-notifications so a missing native module (e.g. in Expo Go or
 // before a native rebuild) never crashes the app — all functions degrade to no-ops.
@@ -1003,16 +1004,36 @@ export async function refreshPrePrayerReminderNotifications(): Promise<void> {
     const settings = settingsRaw ? JSON.parse(settingsRaw) : {};
     const method: number = settings.calculationMethod ?? 3;
     const school: number = settings.school ?? 0;
+    const prayerSource: string = settings.prayerSource ?? 'aladhan';
+    const ifisCity: string     = settings.ifisCity ?? 'stockholm';
 
     const now           = new Date();
     const offsetMinutes = offset as number;
 
-    const daySets = await Promise.all(
-      Array.from({ length: 5 }, (_, i) => {
-        const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
-        return fetchDayTimings(loc.lat, loc.lng, d, method, school).then(times => ({ date: d, times }));
-      }),
-    );
+    let daySets: { date: Date; times: Record<string, string> | null }[];
+
+    if (prayerSource === 'ifis') {
+      daySets = await Promise.all(
+        Array.from({ length: 5 }, async (_, i) => {
+          const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
+          const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+          try {
+            const times = await getIfisTimesForDate(ifisCity, dateKey);
+            return { date: d, times };
+          } catch {
+            console.warn(`[PrePrayerReminder] IFIS fetch failed for ${dateKey} — skipping day`);
+            return { date: d, times: null };
+          }
+        }),
+      );
+    } else {
+      daySets = await Promise.all(
+        Array.from({ length: 5 }, (_, i) => {
+          const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
+          return fetchDayTimings(loc.lat, loc.lng, d, method, school).then(times => ({ date: d, times }));
+        }),
+      );
+    }
 
     for (const { date, times } of daySets) {
       if (!times) continue;
