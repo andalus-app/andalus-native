@@ -371,7 +371,10 @@ export default function SettingsScreen() {
         const cities = await fetchIfisCities();
         const matched = cities.find(c => c === normalizeIfisCity(loc.city ?? ''))
                      ?? matchIfisCity(loc.city ?? '', cities, { latitude: loc.lat, longitude: loc.lng });
-        if (matched) saveSettings({ ifisCity: matched });
+        // Must include prayerSource explicitly — `settings` in this async closure is
+        // stale (captured before the saveSettings({ prayerSource:'ifis' }) re-render),
+        // so spreading it would revert prayerSource back to 'aladhan'.
+        if (matched) saveSettings({ prayerSource: 'ifis', ifisCity: matched });
       } catch {}
     }
   }
@@ -773,7 +776,7 @@ export default function SettingsScreen() {
         <View style={{backgroundColor:T.card,borderRadius:14,borderWidth:0.5,borderColor:T.border,padding:16}}>
           <Text style={{fontSize:15,fontWeight:'700',color:T.text}}>Hidayah</Text>
           <Text style={{fontSize:13,color:T.textMuted,marginTop:2}}>Bönetider och Qibla-kompass</Text>
-          <Text style={{fontSize:12,color:T.textMuted,marginTop:6,opacity:0.7}}>Version 1.9.9</Text>
+          <Text style={{fontSize:12,color:T.textMuted,marginTop:6,opacity:0.7}}>Version 2.0.0</Text>
           <Text style={{fontSize:11,color:T.textMuted,marginTop:2,opacity:0.55}}>
             © {new Date().getFullYear()} Fatih Köker. Alla rättigheter förbehållna.
           </Text>
