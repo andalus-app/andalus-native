@@ -796,9 +796,6 @@ struct WatchTimelineProvider: TimelineProvider {
             for off: TimeInterval in [-300, -240, -180, -120, -60, -30, -20, -10] {
                 let t = ht.addingTimeInterval(off); if t > now { dates.insert(t) }
             }
-            for s in 1...60 {
-                let t = ht.addingTimeInterval(-Double(s)); if t > now { dates.insert(t) }
-            }
         }
 
         return dates.sorted().map { makeEntry(from: all, at: $0) }
@@ -889,11 +886,17 @@ private struct WatchTimelineBodyView: View {
                         .foregroundColor(accentClr)
                         .lineLimit(1)
                         .minimumScaleFactor(0.78)
-                    Text(entry.countdownStr)
-                        .font(.system(size: 11, weight: .regular).monospacedDigit())
-                        .foregroundColor(mainClr)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.78)
+                    Group {
+                        if dimmed {
+                            Text(entry.countdownStr)
+                        } else {
+                            Text(heroTime, style: .timer)
+                        }
+                    }
+                    .font(.system(size: 11, weight: .regular).monospacedDigit())
+                    .foregroundColor(mainClr)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.78)
                 }
                 Text(timeFmt.string(from: heroTime))
                     .font(.system(size: 10, weight: .regular).monospacedDigit())
@@ -910,7 +913,7 @@ private struct WatchTimelineBodyView: View {
     private func prayerCell(_ prayer: WatchPrayer, idx: Int) -> some View {
         let isPast = entry.nextIndex == -1 || idx < entry.nextIndex
         let isNext = idx == entry.nextIndex
-        let clr: Color = isPast ? passedClr : (isNext ? accentClr : mainClr.opacity(0.85))
+        let clr: Color = isNext ? accentClr : mainClr.opacity(0.85)
 
         HStack(spacing: 3) {
             Text(kWatchTLPrayerAbbrevs[idx])
@@ -922,7 +925,7 @@ private struct WatchTimelineBodyView: View {
             if isPast {
                 Image(systemName: "checkmark")
                     .font(.system(size: 6, weight: .bold))
-                    .foregroundColor(passedClr)
+                    .foregroundColor(mainClr.opacity(0.55))
             }
         }
         .lineLimit(1)
