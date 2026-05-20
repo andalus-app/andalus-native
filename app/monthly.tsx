@@ -8,6 +8,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { Asset } from 'expo-asset';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../context/ThemeContext';
+import { useApp } from '../context/AppContext';
 import { nativeReverseGeocode } from '../services/geocoding';
 import { getMonthFromCache, buildYearlyCache, DayRow, SWEDISH_MONTHS as SM, SWEDISH_DAYS } from '../services/monthlyCache';
 import { fetchIfisMonthRows, getIfisSourceDisplayName, getIfisCityDisplayName, IfisDayRow } from '../services/ifisApi';
@@ -179,6 +180,7 @@ function buildPDFHtml(
 export default function MonthlyScreen() {
   const { theme: T, isDark } = useTheme();
   const router = useRouter();
+  const app    = useApp();
   const today = new Date();
   const [year,  setYear]  = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth() + 1);
@@ -217,25 +219,34 @@ export default function MonthlyScreen() {
     },
   })).current;
 
+  // Use AppContext location as the primary source — it always holds the latest
+  // GPS-resolved coordinates (the same ones used for live prayer fetches and
+  // notifications). Falling back to andalus_location or live GPS only when
+  // AppContext has not resolved a location yet avoids the suburb-vs-city-centre
+  // coordinate mismatch that caused monthly view to show different times than
+  // the prayer screen and notifications.
   useEffect(() => {
+    if (app.location) {
+      setLocation({
+        lat:     app.location.latitude,
+        lng:     app.location.longitude,
+        city:    app.location.city    || '',
+        suburb:  app.location.suburb  || '',
+        country: app.location.country || '',
+      });
+      setLocLoading(false);
+      return;
+    }
+
+    // AppContext location not ready yet — fall back to saved keys.
     (async () => {
       try {
         const [settingsRaw, locationRaw] = await Promise.all([
           AsyncStorage.getItem('andalus_settings'),
           AsyncStorage.getItem('andalus_location'),
         ]);
-        const saved       = settingsRaw ? JSON.parse(settingsRaw) : {};
-        const savedMethod = saved.calculationMethod ?? 3;
-        const savedSchool = saved.school ?? 0;
-        setMethod(savedMethod);
-        setSchool(savedSchool);
-        setPrayerSource(saved.prayerSource ?? 'aladhan');
-        setIfisCity(saved.ifisCity ?? 'stockholm');
-
+        const saved = settingsRaw ? JSON.parse(settingsRaw) : {};
         if (locationRaw) {
-          // Prefer the location already resolved and persisted by the prayer
-          // screen — guarantees the same coordinates (and thus same cache key)
-          // as the yearly cache that AppContext already built.
           const loc = JSON.parse(locationRaw);
           setLocation({
             lat:     loc.lat,
@@ -245,8 +256,6 @@ export default function MonthlyScreen() {
             country: loc.country     || '',
           });
         } else {
-          // No saved location yet (first launch before prayer screen ran).
-          // Fall back to a live GPS read.
           const autoLocation = saved.autoLocation ?? true;
           if (!autoLocation) { setLocLoading(false); return; }
           const Location = await import('expo-location');
@@ -259,6 +268,19 @@ export default function MonthlyScreen() {
         }
       } catch {}
       setLocLoading(false);
+    })();
+  }, [app.location]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const settingsRaw = await AsyncStorage.getItem('andalus_settings');
+        const saved       = settingsRaw ? JSON.parse(settingsRaw) : {};
+        setMethod(saved.calculationMethod ?? 3);
+        setSchool(saved.school ?? 0);
+        setPrayerSource(saved.prayerSource ?? 'aladhan');
+        setIfisCity(saved.ifisCity ?? 'stockholm');
+      } catch {}
     })();
   }, []);
 
