@@ -1862,7 +1862,9 @@ struct LockTimelineProvider: TimelineProvider {
             if halvaNatten > now { dates.insert(halvaNatten) }
         }
 
-        // Coarse near-hero entries (−5 min → −10 s) for smooth countdown.
+        // Per-minute + coarse near-hero + per-second entries so countdownStr stays
+        // accurate at all times. Without per-minute entries the widget freezes on the
+        // build-time string until the next coarse entry fires.
         let heroTime: Date? = {
             switch computeHeroState(allPrayers: allPrayers, now: now) {
             case .prayer(let p):      return p.time
@@ -1871,6 +1873,14 @@ struct LockTimelineProvider: TimelineProvider {
             }
         }()
         if let ht = heroTime, ht > now {
+            // Minute-level entries from now until 5 min before hero time.
+            var cursor = now.addingTimeInterval(60)
+            let fiveMinBefore = ht.addingTimeInterval(-300)
+            while cursor < fiveMinBefore {
+                dates.insert(cursor)
+                cursor = cursor.addingTimeInterval(60)
+            }
+            // Coarse entries for the last 5 min (−5 min → −10 s).
             for offset: TimeInterval in [-300, -240, -180, -120, -60, -30, -20, -10] {
                 let t = ht.addingTimeInterval(offset); if t > now { dates.insert(t) }
             }
@@ -1968,45 +1978,40 @@ struct LockTimelineView: View {
         }
     }
 
-    // ── Prayer cell — "FJR 02:05" inline, used in 2×3 grid ──────────────────
-    @ViewBuilder
-    private func prayerCell(_ prayer: Prayer, idx: Int) -> some View {
-        let isPast = entry.nextIndex == -1 || idx < entry.nextIndex
-        let isNext = idx == entry.nextIndex
-        let clr: Color = isPast ? passedClr : (isNext ? accentClr : mainClr.opacity(0.85))
-
-        HStack(spacing: 3) {
-            Text(kTimelinePrayerAbbrevs[idx])
-                .font(.system(size: 8.5, weight: isNext ? .bold : .regular))
-                .foregroundColor(clr)
-            Text(timeFmt.string(from: prayer.time))
-                .font(.system(size: 9, weight: isNext ? .semibold : .regular).monospacedDigit())
-                .foregroundColor(clr)
-            if isPast {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 6, weight: .bold))
-                    .foregroundColor(passedClr)
-            }
-        }
-        .lineLimit(1)
-        .frame(maxWidth: .infinity, alignment: .leading)
+    // ── Strip leading zero: "02:05" → "2:05" ────────────────────────────────
+    private func shortTime(_ prayer: Prayer) -> String {
+        let s = timeFmt.string(from: prayer.time)
+        return s.hasPrefix("0") ? String(s.dropFirst()) : s
     }
 
-    // ── Timeline grid — 2 rows × 3 columns ───────────────────────────────────
+    // ── Timeline grid — abbrev row + time row, 6 equal columns ───────────────
     private var timelineRow: some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(spacing: 2) {
+            // Row 2: FJR  SHR  DHR  ASR  MGR  ISH
             HStack(spacing: 0) {
-                ForEach(0..<3, id: \.self) { idx in
-                    if idx < entry.prayers.count {
-                        prayerCell(entry.prayers[idx], idx: idx)
-                    }
+                ForEach(0..<min(6, entry.prayers.count), id: \.self) { idx in
+                    let isPast = entry.nextIndex == -1 || idx < entry.nextIndex
+                    let isNext = idx == entry.nextIndex
+                    let clr: Color = isPast ? passedClr : (isNext ? accentClr : mainClr.opacity(0.85))
+                    Text(kTimelinePrayerAbbrevs[idx])
+                        .font(.system(size: 7.5, weight: isNext ? .bold : .medium))
+                        .foregroundColor(clr)
+                        .frame(maxWidth: .infinity)
+                        .lineLimit(1)
                 }
             }
+            // Row 3: times with leading zero stripped
             HStack(spacing: 0) {
-                ForEach(3..<6, id: \.self) { idx in
-                    if idx < entry.prayers.count {
-                        prayerCell(entry.prayers[idx], idx: idx)
-                    }
+                ForEach(0..<min(6, entry.prayers.count), id: \.self) { idx in
+                    let isPast = entry.nextIndex == -1 || idx < entry.nextIndex
+                    let isNext = idx == entry.nextIndex
+                    let clr: Color = isPast ? passedClr : (isNext ? accentClr : mainClr.opacity(0.85))
+                    Text(shortTime(entry.prayers[idx]))
+                        .font(.system(size: 8.5, weight: isNext ? .semibold : .regular).monospacedDigit())
+                        .foregroundColor(clr)
+                        .frame(maxWidth: .infinity)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
                 }
             }
         }
@@ -2402,22 +2407,21 @@ private struct ArabicVerseMedium: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Dagens Koranvers")
-                .font(.system(size: 10, weight: .semibold)).foregroundColor(kGold)
-            Spacer(minLength: 6)
-            // Arabic — always fully displayed, highest layout priority
-            Text(entry.arabic)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(.white.opacity(0.75))
-                .multilineTextAlignment(.trailing)
-                .frame(maxWidth: .infinity, alignment: .trailing)
-                .layoutPriority(1)
-            Spacer(minLength: 5)
+            if !entry.arabic.isEmpty {
+                // Arabic — always fully displayed, highest layout priority
+                Text(entry.arabic)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.white.opacity(0.75))
+                    .multilineTextAlignment(.trailing)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .layoutPriority(1)
+                Spacer(minLength: 5)
+            }
             // Swedish — shows as much as fits, ends with "..." to signal more exists
             Text(entry.swedish)
-                .font(.system(size: 11, weight: .regular))
+                .font(.system(size: entry.arabic.isEmpty ? 12 : 11, weight: .regular))
                 .foregroundColor(.white.opacity(0.85))
-                .lineLimit(3)
+                .lineLimit(entry.arabic.isEmpty ? 5 : 3)
                 .truncationMode(.tail)
                 .frame(maxWidth: .infinity, alignment: .leading)
             Spacer(minLength: 5)
