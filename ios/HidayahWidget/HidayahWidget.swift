@@ -447,9 +447,14 @@ private func computeHeroState(allPrayers: [Prayer], now: Date) -> HeroState {
         return maghrib.time.addingTimeInterval(fajrAdj.timeIntervalSince(maghrib.time) / 2)
     }()
 
+    let ishaTime = five.first(where: { $0.name == "Isha" })?.time
+
     var candidates: [(HeroState, Date)] = [(.prayer(nextPrayer), nextPrayer.time)]
-    if let s = shuruqTime,      s > now { candidates.append((.shuruq(s),      s)) }
-    if let h = halvaNattenTime, h > now { candidates.append((.halvaNatten(h), h)) }
+    if let s = shuruqTime, s > now { candidates.append((.shuruq(s), s)) }
+    if let h = halvaNattenTime, h > now,
+       let isha = ishaTime, now >= isha {
+        candidates.append((.halvaNatten(h), h))
+    }
 
     return candidates.min(by: { $0.1 < $1.1 })?.0 ?? .prayer(nextPrayer)
 }
@@ -1789,10 +1794,50 @@ struct LockTimelineProvider: TimelineProvider {
 
     func getTimeline(in context: Context,
                      completion: @escaping (Timeline<LockTimelineEntry>) -> Void) {
-        let prayers  = loadPrayers()
-        let entries  = buildTimelineEntries(allPrayers: prayers)
-        let midnight = Calendar.current.startOfDay(for: .now).addingTimeInterval(86_400 + 60)
-        completion(Timeline(entries: entries, policy: .after(midnight)))
+        let midnight        = Calendar.current.startOfDay(for: .now).addingTimeInterval(86_400 + 60)
+        let defaults        = UserDefaults(suiteName: kAppGroup)
+        let locationChanged = defaults?.bool(forKey: "needsPrayerRefresh") ?? false
+        NSLog("[Widget] LockTimelineProvider.getTimeline: locationChanged=%@", locationChanged ? "yes" : "no")
+
+        // Path 1: today's App Group blob is valid and native hasn't flagged a location change
+        // (or native already wrote a fresh blob after the location event).
+        if let stored = readAppGroupData() {
+            let prayers = parsePrayers(stored.prayers)
+            if !prayers.isEmpty {
+                let bgDetectedAt = defaults?.double(forKey: kBgDetectedKey) ?? 0
+                let blobTs       = stored.timestamp ?? 0
+                let nativeFresh  = locationChanged && blobTs > 0 && bgDetectedAt > 0 && blobTs > bgDetectedAt
+                NSLog("[Widget] LockTimeline getTimeline stored: city=%@ blobTs=%.0f nativeFresh=%@",
+                      stored.city, blobTs, nativeFresh ? "YES" : "NO")
+
+                if !locationChanged || nativeFresh {
+                    NSLog("[Widget] LockTimeline getTimeline PATH-1: city=%@ %d prayers", stored.city, prayers.count)
+                    let entries = buildTimelineEntries(allPrayers: prayers)
+                    completion(Timeline(entries: entries, policy: .after(midnight)))
+                    return
+                }
+            }
+        }
+
+        // Path 2: stale / missing / location changed and native hasn't resolved yet — fetch live.
+        let (lat, lng, city) = readStoredLocation()
+        NSLog("[Widget] LockTimeline getTimeline PATH-2: city=%@ lat=%.4f lng=%.4f", city, lat, lng)
+        fetchFromAPI(lat: lat, lng: lng) { prayers, _ in
+            guard !prayers.isEmpty else {
+                NSLog("[Widget] LockTimeline getTimeline PATH-2: API failed — retry in 15 min")
+                let fallback = self.makeEntry(allPrayers: PrayerEntry.placeholder().allPrayers, at: .now)
+                completion(Timeline(entries: [fallback],
+                                    policy: .after(Date().addingTimeInterval(900))))
+                return
+            }
+            let policy: TimelineReloadPolicy = locationChanged
+                ? .after(Date().addingTimeInterval(900))
+                : .after(midnight)
+            NSLog("[Widget] LockTimeline getTimeline PATH-2: %d prayers policy=%@",
+                  prayers.count, locationChanged ? "15min" : "midnight")
+            let entries = self.buildTimelineEntries(allPrayers: prayers)
+            completion(Timeline(entries: entries, policy: policy))
+        }
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
@@ -1889,8 +1934,17 @@ struct LockTimelineView: View {
     private var heroIcon: String {
         switch hero {
         case .shuruq:        return "sunrise.fill"
-        case .halvaNatten:   return "moon.fill"            // Isha icon — consistent
-        case .prayer(let p): return timelineSymbol(for: p.name)
+        case .halvaNatten:   return "moon.stars.fill"
+        case .prayer(let p):
+            switch p.name {
+            case "Fajr":                  return "fajr.fill"
+            case "Shuruq", "Soluppgång": return "sunrise.fill"
+            case "Dhuhr":                 return "sun.max.fill"
+            case "Asr":                   return "cloud.sun.fill"
+            case "Maghrib":               return "sunset.fill"
+            case "Isha":                  return "moon.stars.fill"
+            default:                      return "fajr.fill"
+            }
         }
     }
     private var heroName: String {
@@ -1915,13 +1969,19 @@ struct LockTimelineView: View {
             // Icon — subtle glow only in active mode
             ZStack {
                 if !dimmed {
-                    Image(systemName: heroIcon)
-                        .font(.system(size: 19, weight: .medium))
+                    Image(heroIcon)
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 19, height: 19)
                         .foregroundColor(kGold.opacity(0.18))
                         .blur(radius: 3.5)
                 }
-                Image(systemName: heroIcon)
-                    .font(.system(size: 19, weight: .medium))
+                Image(heroIcon)
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 19, height: 19)
                     .foregroundColor(accentClr)
             }
             .frame(width: 24, alignment: .center)
