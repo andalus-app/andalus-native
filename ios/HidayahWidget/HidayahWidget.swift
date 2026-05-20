@@ -1933,13 +1933,22 @@ struct LockTimelineView: View {
                         .font(.system(size: 13, weight: .bold))
                         .foregroundColor(accentClr)
                         .lineLimit(1)
-                    // Live-updating via system clock — no WidgetKit entry refresh needed.
-                    // Text(.relative) stays accurate on Apple Watch regardless of refresh rate.
+                    // Same method as LockScreenFocusView.lockCountdown:
+                    // Text(.timer) live-updates from the system clock — always accurate.
+                    // < 60 s: static "om 1m" so seconds are never shown.
                     if let td = entry.heroTargetDate, td > entry.date {
-                        Text(td, style: .relative)
-                            .font(.system(size: 11, weight: .regular))
-                            .foregroundColor(mainClr)
-                            .lineLimit(1)
+                        let remaining = td.timeIntervalSince(entry.date)
+                        if remaining < 60 {
+                            Text(entry.countdownStr)
+                                .font(.system(size: 11, weight: .regular))
+                                .foregroundColor(mainClr)
+                                .lineLimit(1)
+                        } else {
+                            (Text("om ") + Text(td, style: .timer))
+                                .font(.system(size: 11, weight: .regular).monospacedDigit())
+                                .foregroundColor(mainClr)
+                                .lineLimit(1)
+                        }
                     } else {
                         Text(entry.countdownStr)
                             .font(.system(size: 11, weight: .regular))
@@ -1966,33 +1975,32 @@ struct LockTimelineView: View {
     // ── Timeline grid — abbrev row + dot row + time row, 6 equal columns ───────
     private var timelineRow: some View {
         VStack(spacing: 2) {
-            // Row 2: FJR  SHR  DHR  ASR  MGR  ISH — full opacity for all
+            // Row 2: FJR  SHR  DHR  ASR  MGR  ISH — next is gold, all others full white
+            HStack(spacing: 0) {
+                ForEach(0..<min(6, entry.prayers.count), id: \.self) { idx in
+                    let isNext = idx == entry.nextIndex
+                    Text(kTimelinePrayerAbbrevs[idx])
+                        .font(.system(size: 7.5, weight: isNext ? .bold : .medium))
+                        .foregroundColor(isNext ? accentClr : .white)
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity)
+                }
+            }
+            // Row 3: times full white, dot below next prayer
             HStack(spacing: 0) {
                 ForEach(0..<min(6, entry.prayers.count), id: \.self) { idx in
                     let isNext = idx == entry.nextIndex
                     VStack(spacing: 2) {
-                        Text(kTimelinePrayerAbbrevs[idx])
-                            .font(.system(size: 7.5, weight: isNext ? .bold : .medium))
-                            .foregroundColor(isNext ? accentClr : mainClr)
+                        Text(shortTime(entry.prayers[idx]))
+                            .font(.system(size: 8.5, weight: isNext ? .semibold : .regular).monospacedDigit())
+                            .foregroundColor(.white)
                             .lineLimit(1)
-                        // Dot below abbreviation — only under next prayer
+                            .minimumScaleFactor(0.75)
                         Circle()
                             .fill(isNext ? accentClr : Color.clear)
                             .frame(width: 3, height: 3)
                     }
                     .frame(maxWidth: .infinity)
-                }
-            }
-            // Row 3: times with leading zero stripped — full opacity for all
-            HStack(spacing: 0) {
-                ForEach(0..<min(6, entry.prayers.count), id: \.self) { idx in
-                    let isNext = idx == entry.nextIndex
-                    Text(shortTime(entry.prayers[idx]))
-                        .font(.system(size: 8.5, weight: isNext ? .semibold : .regular).monospacedDigit())
-                        .foregroundColor(mainClr)
-                        .frame(maxWidth: .infinity)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
                 }
             }
         }
