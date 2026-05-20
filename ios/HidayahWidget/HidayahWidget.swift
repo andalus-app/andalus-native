@@ -278,36 +278,14 @@ private func buildEntries(prayers: [Prayer], city: String, lastUpdatedAt: Date? 
         if let ht = halvaNattenTime, ht > now { dates.insert(ht) }
     }
 
-    // Coarse near-prayer entries: every minute for last 5 minutes, then at 30/20/10 s
-    let coarseOffsets: [TimeInterval] = [-300, -240, -180, -120, -60, -30, -20, -10]
+    // Entry at T-60 for each upcoming prayer/halvaNatten so "1 min" triggers at the right time.
     for prayer in prayers where prayer.time > now {
-        for offset in coarseOffsets {
-            let t = prayer.time.addingTimeInterval(offset)
-            if t > now { dates.insert(t) }
-        }
+        let t = prayer.time.addingTimeInterval(-60)
+        if t > now { dates.insert(t) }
     }
     if let ht = halvaNattenTime, ht > now {
-        for offset in coarseOffsets {
-            let t = ht.addingTimeInterval(offset)
-            if t > now { dates.insert(t) }
-        }
-    }
-
-    // Per-second entries for the last 60 s before the next hero event only.
-    // iOS lock screen renders Text(.timer) as "<1 minut" below 60 s — explicit
-    // per-second entries let the view display a static "0:ss" string instead.
-    let nextHeroTime: Date? = {
-        switch computeHeroState(allPrayers: prayers, now: now) {
-        case .prayer(let p):     return p.time
-        case .shuruq(let t):     return t
-        case .halvaNatten(let t): return t
-        }
-    }()
-    if let net = nextHeroTime, net > now {
-        for s in 1...60 {
-            let t = net.addingTimeInterval(-Double(s))
-            if t > now { dates.insert(t) }
-        }
+        let t = ht.addingTimeInterval(-60)
+        if t > now { dates.insert(t) }
     }
 
     return dates.sorted().map { t in
@@ -1290,15 +1268,13 @@ struct LockScreenFocusView: View {
 
     /// Countdown timer for the lock screen.
     /// Above 60 s: Text(.timer) live-updates on the active screen.
-    /// Below 60 s: Text(.timer) freezes at "<1 min" in sleep mode, so use a static
-    /// "0:ss" string instead — per-second WidgetKit entries (built in buildEntries)
-    /// swap in a fresh entry each second, keeping the display accurate while sleeping.
+    /// Below 60 s: show static "1 min" — never count seconds.
     @ViewBuilder
     private func lockCountdown(to target: Date) -> some View {
         let remaining = target.timeIntervalSince(entry.date)
         Group {
             if remaining < 60 {
-                Text(String(format: "0:%02d", max(0, Int(remaining.rounded()))))
+                Text("1 min")
             } else {
                 Text(target, style: .timer)
             }
@@ -1462,17 +1438,16 @@ struct HidayahLockOverviewWidget: Widget {
 /// Compact countdown: "1t, 4m" / "59m" / "50s" / "0s"
 private func compactCountdown(from now: Date, to target: Date) -> String {
     let secs = max(0, Int(target.timeIntervalSince(now).rounded()))
-    if secs < 60 { return "\(secs)s" }
+    if secs < 60 { return "1m" }
     let totalMins = secs / 60
     if totalMins < 60 { return "\(totalMins)m" }
     return "\(totalMins / 60)t, \(totalMins % 60)m"
 }
 
-/// Builds a minute-level + final-60-second timeline for the arc widget.
+/// Builds a minute-level timeline for the arc widget.
 /// Generates minute-level entries from now until the next five prayer,
-/// per-second entries for the final 60 seconds, then transition-only entries
-/// for the remaining prayers. This keeps countdown text accurate to ≤1 minute
-/// even when the device is sleeping.
+/// a T-60 entry so "1m" displays for the final minute, then transition-only
+/// entries for the remaining prayers.
 private func buildLockArcEntries(prayers: [Prayer],
                                   city: String,
                                   lastUpdatedAt: Date? = nil) -> [PrayerEntry] {
@@ -1492,11 +1467,9 @@ private func buildLockArcEntries(prayers: [Prayer],
             dates.insert(cursor)
             cursor = cursor.addingTimeInterval(60)
         }
-        // Per-second entries for the final 60 s so "50s", "49s"… display correctly.
-        for s in 1...60 {
-            let candidate = next.time.addingTimeInterval(-Double(s))
-            if candidate > now { dates.insert(candidate) }
-        }
+        // Entry at T-60 so "1m" displays for the final minute.
+        let sixtyBefore = next.time.addingTimeInterval(-60)
+        if sixtyBefore > now { dates.insert(sixtyBefore) }
         // Transition entry exactly at the prayer time.
         dates.insert(next.time)
     }
@@ -1751,10 +1724,10 @@ struct HidayahLockArcWidget: Widget {
 
 // MARK: - Countdown helper
 
-/// "om 57s" / "om 18m" / "om 9t 04m" — Swedish (t not h), zero-padded minutes ≥ 1h.
+/// "om 1m" / "om 18m" / "om 9t 04m" — Swedish (t not h), zero-padded minutes ≥ 1h.
 private func timelineCountdown(from now: Date, to target: Date) -> String {
     let secs = max(0, Int(target.timeIntervalSince(now).rounded()))
-    if secs < 60  { return "om \(secs)s" }
+    if secs < 60  { return "om 1m" }
     let mins = secs / 60
     if mins < 60  { return "om \(mins)m" }
     let h = mins / 60; let m = mins % 60
@@ -1789,13 +1762,16 @@ private func timelineSymbol(for name: String) -> String {
 // MARK: - Entry
 
 struct LockTimelineEntry: TimelineEntry {
-    let date:         Date
+    let date:            Date
     /// Six ordered prayers: Fajr, Shuruq, Dhuhr, Asr, Maghrib, Isha.
-    let prayers:      [Prayer]
+    let prayers:         [Prayer]
     /// Index of next upcoming prayer (0–5); -1 = all passed (Halva natten / Fajr imorgon state).
-    let nextIndex:    Int
-    /// Pre-formatted Swedish countdown string, e.g. "om 18m" or "om 9t 04m".
-    let countdownStr: String
+    let nextIndex:       Int
+    /// Pre-formatted fallback string (used when heroTargetDate is nil).
+    let countdownStr:    String
+    /// The actual target date — used for live Text(.relative) rendering so the countdown
+    /// stays accurate on Apple Watch without depending on WidgetKit timeline refresh rate.
+    let heroTargetDate:  Date?
 }
 
 // MARK: - Provider
@@ -1842,7 +1818,8 @@ struct LockTimelineProvider: TimelineProvider {
         }()
         let countdown = target.map { timelineCountdown(from: date, to: $0) } ?? "–"
         return LockTimelineEntry(date: date, prayers: six,
-                                 nextIndex: nextIdx, countdownStr: countdown)
+                                 nextIndex: nextIdx, countdownStr: countdown,
+                                 heroTargetDate: target)
     }
 
     private func buildTimelineEntries(allPrayers: [Prayer]) -> [LockTimelineEntry] {
@@ -1862,9 +1839,8 @@ struct LockTimelineProvider: TimelineProvider {
             if halvaNatten > now { dates.insert(halvaNatten) }
         }
 
-        // Per-minute + coarse near-hero + per-second entries so countdownStr stays
-        // accurate at all times. Without per-minute entries the widget freezes on the
-        // build-time string until the next coarse entry fires.
+        // Per-minute entries so countdownStr stays accurate. Without these the widget
+        // freezes on the build-time string until the next transition entry fires.
         let heroTime: Date? = {
             switch computeHeroState(allPrayers: allPrayers, now: now) {
             case .prayer(let p):      return p.time
@@ -1873,21 +1849,15 @@ struct LockTimelineProvider: TimelineProvider {
             }
         }()
         if let ht = heroTime, ht > now {
-            // Minute-level entries from now until 5 min before hero time.
+            // Minute-level entries from now until 60 s before hero time.
             var cursor = now.addingTimeInterval(60)
-            let fiveMinBefore = ht.addingTimeInterval(-300)
-            while cursor < fiveMinBefore {
+            let sixtySecBefore = ht.addingTimeInterval(-60)
+            while cursor < sixtySecBefore {
                 dates.insert(cursor)
                 cursor = cursor.addingTimeInterval(60)
             }
-            // Coarse entries for the last 5 min (−5 min → −10 s).
-            for offset: TimeInterval in [-300, -240, -180, -120, -60, -30, -20, -10] {
-                let t = ht.addingTimeInterval(offset); if t > now { dates.insert(t) }
-            }
-            // Per-second entries for the final 60 s (accurate "om Xs" display).
-            for s in 1...60 {
-                let t = ht.addingTimeInterval(-Double(s)); if t > now { dates.insert(t) }
-            }
+            // Entry at T-60 so "om 1m" displays for the final minute.
+            if sixtySecBefore > now { dates.insert(sixtySecBefore) }
         }
 
         return dates.sorted().map { makeEntry(allPrayers: allPrayers, at: $0) }
@@ -1963,12 +1933,21 @@ struct LockTimelineView: View {
                         .font(.system(size: 13, weight: .bold))
                         .foregroundColor(accentClr)
                         .lineLimit(1)
-                    Text(entry.countdownStr)
-                        .font(.system(size: 11, weight: .regular))
-                        .foregroundColor(mainClr)
-                        .lineLimit(1)
+                    // Live-updating via system clock — no WidgetKit entry refresh needed.
+                    // Text(.relative) stays accurate on Apple Watch regardless of refresh rate.
+                    if let td = entry.heroTargetDate, td > entry.date {
+                        Text(td, style: .relative)
+                            .font(.system(size: 11, weight: .regular))
+                            .foregroundColor(mainClr)
+                            .lineLimit(1)
+                    } else {
+                        Text(entry.countdownStr)
+                            .font(.system(size: 11, weight: .regular))
+                            .foregroundColor(mainClr)
+                            .lineLimit(1)
+                    }
                 }
-                .minimumScaleFactor(0.75)
+                .minimumScaleFactor(0.7)
                 Text(heroTimeStr)
                     .font(.system(size: 10, weight: .semibold).monospacedDigit())
                     .foregroundColor(mainClr)
@@ -3054,7 +3033,7 @@ private let kFallbackHadiths: [FallbackHadith] = [
 #Preview(as: .accessoryRectangular)  { HidayahLockFocusWidget()      } timeline: { PrayerEntry.placeholder() }
 #Preview(as: .accessoryRectangular)  { HidayahLockOverviewWidget()   } timeline: { PrayerEntry.placeholder() }
 #Preview(as: .accessoryRectangular)  { HidayahLockArcWidget()        } timeline: { PrayerEntry.placeholder() }
-#Preview(as: .accessoryRectangular)  { HidayahLockTimelineWidget()   } timeline: { LockTimelineEntry(date: .now, prayers: orderedSixPrayers(from: PrayerEntry.placeholder().allPrayers), nextIndex: 1, countdownStr: "om 18m") }
+#Preview(as: .accessoryRectangular)  { HidayahLockTimelineWidget()   } timeline: { LockTimelineEntry(date: .now, prayers: orderedSixPrayers(from: PrayerEntry.placeholder().allPrayers), nextIndex: 1, countdownStr: "om 18m", heroTargetDate: Date.now.addingTimeInterval(1080)) }
 #endif
 #Preview(as: .systemSmall)           { HidayahAllahNameWidget()     } timeline: { AllahNameEntry.placeholder }
 #Preview(as: .systemMedium)          { HidayahAllahNameWidget()     } timeline: { AllahNameEntry.placeholder }
