@@ -14,7 +14,6 @@
  * updateDailyContent() from modules/WidgetData.
  */
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getDailyQuranVerse, getDailyHadith } from './dailyReminder';
 
 // Fixed epoch — must match notifications.ts (do not change)
@@ -32,44 +31,6 @@ const ALLAH_NAMES_DATA: {
 function todayAllahNameIndex(): number {
   const daysSinceEpoch = Math.floor((Date.now() - ALLAH_EPOCH_MS) / 86_400_000);
   return ((daysSinceEpoch % ALLAH_NAMES_DATA.length) + ALLAH_NAMES_DATA.length) % ALLAH_NAMES_DATA.length;
-}
-
-// ── Arabic verse fetch ──────────────────────────────────────────────────────────
-
-const VERSE_ARABIC_CACHE_PREFIX = 'andalus_daily_verse_arabic_v1_';
-const QURAN_API_BASE = 'https://api.quran.com/api/v4';
-
-/**
- * Fetches Uthmani Arabic text for the given verse refs, joining with newlines.
- * Uses a per-date AsyncStorage cache — only one network round-trip per day per ref.
- * Returns empty string on any failure (widget will degrade gracefully).
- */
-async function fetchDailyVerseArabic(refs: string[], dateStr: string): Promise<string> {
-  const key = `${VERSE_ARABIC_CACHE_PREFIX}${dateStr}`;
-
-  try {
-    const cached = await AsyncStorage.getItem(key);
-    if (cached !== null) return cached;
-  } catch {
-    // Cache unreadable — continue to fetch
-  }
-
-  try {
-    const texts: string[] = [];
-    for (const ref of refs) {
-      const url = `${QURAN_API_BASE}/verses/by_key/${encodeURIComponent(ref)}?fields=text_uthmani`;
-      const resp = await fetch(url, { signal: AbortSignal.timeout(8_000) });
-      if (!resp.ok) throw new Error(`Arabic verse API ${resp.status}`);
-      const json = await resp.json() as { verse?: { text_uthmani?: string } };
-      const text = json.verse?.text_uthmani ?? '';
-      if (text) texts.push(text);
-    }
-    const combined = texts.join('\n');
-    AsyncStorage.setItem(key, combined).catch(() => undefined);
-    return combined;
-  } catch {
-    return '';
-  }
 }
 
 // ── Public types & payload builder ─────────────────────────────────────────────
@@ -90,7 +51,7 @@ export interface DailyWidgetPayload {
     surahNumber: number;
     ayahNumber:  number;
     reference:   string;
-    arabic?:     string;
+    arabic:      string;
   };
   hadith: {
     hadith_nr: number;
@@ -102,9 +63,7 @@ export interface DailyWidgetPayload {
 
 /**
  * Builds and writes a 30-day verse lookup cache to App Group.
- * Called fire-and-forget on every app open alongside getDailyWidgetPayload().
- * Uses the existing per-date AsyncStorage Arabic cache so only new dates
- * require a network round-trip to quran.com.
+ * Arabic text comes from the bundled UTHMANI_ARABIC map — no network needed.
  */
 export async function updateVerse30DayCache(): Promise<void> {
   const { setVerse30DayCache } = await import('../modules/WidgetData');
@@ -116,14 +75,13 @@ export async function updateVerse30DayCache(): Promise<void> {
   }> = {};
 
   for (let i = 0; i < 30; i++) {
-    const d  = new Date(today);
+    const d     = new Date(today);
     d.setDate(d.getDate() + i);
     const ds    = d.toISOString().slice(0, 10);
     const verse = getDailyQuranVerse(d);
-    const arabic = await fetchDailyVerseArabic(verse.refs, ds);
     verses[ds] = {
       swedish:     verse.swedish,
-      arabic,
+      arabic:      verse.arabic,
       surahName:   verse.surahName,
       surahNumber: verse.surahNumber,
       ayahNumber:  verse.ayahNumber,
@@ -134,14 +92,12 @@ export async function updateVerse30DayCache(): Promise<void> {
   await setVerse30DayCache({ version: 1, writtenAt: dateStr, verses });
 }
 
-export async function getDailyWidgetPayload(): Promise<DailyWidgetPayload> {
+export function getDailyWidgetPayload(): DailyWidgetPayload {
   const idx    = todayAllahNameIndex();
   const name   = ALLAH_NAMES_DATA[idx];
   const verse  = getDailyQuranVerse(new Date());
   const hadith = getDailyHadith(new Date());
   const dateStr = new Date().toISOString().slice(0, 10);
-
-  const arabic = await fetchDailyVerseArabic(verse.refs, dateStr);
 
   return {
     date:      dateStr,
@@ -159,7 +115,7 @@ export async function getDailyWidgetPayload(): Promise<DailyWidgetPayload> {
       surahNumber: verse.surahNumber,
       ayahNumber:  verse.ayahNumber,
       reference:   verse.displayRef,
-      arabic:      arabic || undefined,
+      arabic:      verse.arabic,
     },
     hadith: {
       hadith_nr: hadith.hadithNr,

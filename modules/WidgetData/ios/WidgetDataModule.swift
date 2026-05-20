@@ -106,6 +106,7 @@ public class WidgetDataModule: Module {
             }
             WidgetCenter.shared.reloadTimelines(ofKind: "HidayahAllahNameWidget")
             WidgetCenter.shared.reloadTimelines(ofKind: "HidayahDailyVerseWidget")
+            WidgetCenter.shared.reloadTimelines(ofKind: "HidayahDailyVerseArabicWidget")
             WidgetCenter.shared.reloadTimelines(ofKind: "HidayahDailyHadithWidget")
             promise.resolve(nil)
         }

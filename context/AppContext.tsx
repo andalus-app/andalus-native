@@ -539,7 +539,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           timestamp: Date.now() / 1000,
         }).catch(() => {});
 
-        getDailyWidgetPayload().then(updateDailyContent).catch(() => {});
+        updateDailyContent(getDailyWidgetPayload()).catch(() => {});
         updateVerse30DayCache().catch(() => {});
 
         const effectiveCity = isIfis

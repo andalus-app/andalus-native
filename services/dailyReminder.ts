@@ -12,6 +12,7 @@
  */
 
 import { BERNSTROM_DATA } from '@/data/bernstromTranslation';
+import { UTHMANI_ARABIC } from '@/data/uthmaniArabic';
 import { SURAH_INDEX } from '@/data/surahIndex';
 import { DAGENS_KORANVERS_CARDS } from '@/data/dagensKoranvers';
 import hadithData from '@/data/hadithData.json';
@@ -25,6 +26,7 @@ export type QuranReminder = {
   surahNumber: number;
   ayahNumber: number;
   swedish: string;       // exact text from BERNSTROM_DATA — verse texts joined with \n
+  arabic: string;        // Uthmani Arabic — from bundled UTHMANI_ARABIC, always non-empty
   /** All verse keys in this card — one element for single-verse, multiple for grouped */
   refs: string[];
   /** Human-readable reference range, e.g. "2:255" or "2:155–157" */
@@ -142,6 +144,7 @@ function buildDagensKoranversReminder(slot: number): QuranReminder {
   const surahInfo   = SURAH_INDEX.find((s) => s.id === surahNumber);
 
   const swedish = refs.map((r) => BERNSTROM_DATA[r] ?? '').join(' ');
+  const arabic  = refs.map((r) => UTHMANI_ARABIC[r] ?? '').filter(Boolean).join('\n');
 
   let displayRef: string;
   if (refs.length === 1) {
@@ -163,6 +166,7 @@ function buildDagensKoranversReminder(slot: number): QuranReminder {
     ayahNumber,
     surahName:      surahInfo?.nameSimple ?? `Surah ${surahNumber}`,
     swedish,
+    arabic,
     refs,
     displayRef,
     navigationPath: `/quran?verseKey=${firstRef}`,

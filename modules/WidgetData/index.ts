@@ -395,7 +395,7 @@ export async function updateDailyContent(payload: {
     surahNumber: number;
     ayahNumber:  number;
     reference:   string;
-    arabic?:     string;
+    arabic:      string;
   };
   hadith: {
     hadith_nr: number;

@@ -1963,31 +1963,33 @@ struct LockTimelineView: View {
         return s.hasPrefix("0") ? String(s.dropFirst()) : s
     }
 
-    // ── Timeline grid — abbrev row + time row, 6 equal columns ───────────────
+    // ── Timeline grid — abbrev row + dot row + time row, 6 equal columns ───────
     private var timelineRow: some View {
         VStack(spacing: 2) {
-            // Row 2: FJR  SHR  DHR  ASR  MGR  ISH
+            // Row 2: FJR  SHR  DHR  ASR  MGR  ISH — full opacity for all
             HStack(spacing: 0) {
                 ForEach(0..<min(6, entry.prayers.count), id: \.self) { idx in
-                    let isPast = entry.nextIndex == -1 || idx < entry.nextIndex
                     let isNext = idx == entry.nextIndex
-                    let clr: Color = isPast ? passedClr : (isNext ? accentClr : mainClr.opacity(0.85))
-                    Text(kTimelinePrayerAbbrevs[idx])
-                        .font(.system(size: 7.5, weight: isNext ? .bold : .medium))
-                        .foregroundColor(clr)
-                        .frame(maxWidth: .infinity)
-                        .lineLimit(1)
+                    VStack(spacing: 2) {
+                        Text(kTimelinePrayerAbbrevs[idx])
+                            .font(.system(size: 7.5, weight: isNext ? .bold : .medium))
+                            .foregroundColor(isNext ? accentClr : mainClr)
+                            .lineLimit(1)
+                        // Dot below abbreviation — only under next prayer
+                        Circle()
+                            .fill(isNext ? accentClr : Color.clear)
+                            .frame(width: 3, height: 3)
+                    }
+                    .frame(maxWidth: .infinity)
                 }
             }
-            // Row 3: times with leading zero stripped
+            // Row 3: times with leading zero stripped — full opacity for all
             HStack(spacing: 0) {
                 ForEach(0..<min(6, entry.prayers.count), id: \.self) { idx in
-                    let isPast = entry.nextIndex == -1 || idx < entry.nextIndex
                     let isNext = idx == entry.nextIndex
-                    let clr: Color = isPast ? passedClr : (isNext ? accentClr : mainClr.opacity(0.85))
                     Text(shortTime(entry.prayers[idx]))
                         .font(.system(size: 8.5, weight: isNext ? .semibold : .regular).monospacedDigit())
-                        .foregroundColor(clr)
+                        .foregroundColor(mainClr)
                         .frame(maxWidth: .infinity)
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
@@ -2050,7 +2052,7 @@ private struct DailyCache: Decodable {
     struct VerseData: Decodable {
         let swedish: String; let surahName: String
         let surahNumber: Int; let ayahNumber: Int; let reference: String
-        let arabic: String?
+        let arabic: String
     }
     struct HadithData: Decodable {
         let hadith_nr: Int?
@@ -2261,7 +2263,7 @@ struct QuranVerseProvider: TimelineProvider {
                                    surahNumber: c.quranVerse.surahNumber,
                                    ayahNumber: c.quranVerse.ayahNumber,
                                    reference: c.quranVerse.reference,
-                                   arabic: c.quranVerse.arabic ?? "")
+                                   arabic: c.quranVerse.arabic)
         }
         // 2. 30-day cache — written by JS on app open, covers today up to 30 days ahead
         if let entry = readVerse30DayCache() { return entry }
