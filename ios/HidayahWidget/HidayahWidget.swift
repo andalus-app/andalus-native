@@ -1778,6 +1778,7 @@ struct LockTimelineView: View {
 
     private var accentClr:  Color { dimmed ? .primary                      : kGold }
     private var mainClr:    Color { dimmed ? .primary                      : .white.opacity(0.88) }
+    private var mutedClr:   Color { dimmed ? .secondary                    : .white.opacity(0.45) }
     private var dividerClr: Color { dimmed ? Color.secondary.opacity(0.22) : kGold.opacity(0.24) }
 
     private var heroIcon: String {
@@ -1816,19 +1817,19 @@ struct LockTimelineView: View {
         let remaining = target.timeIntervalSince(entry.date)
         Group {
             if remaining < 60 {
-                Text("om 1m")
+                Text("1m")
             } else {
-                (Text("om ") + Text(target, style: .timer))
+                Text(target, style: .timer)
             }
         }
-        .font(.system(size: 11, weight: .regular).monospacedDigit())
+        .font(.system(size: 13, weight: .semibold).monospacedDigit())
         .foregroundColor(mainClr)
         .lineLimit(1)
         .minimumScaleFactor(0.7)
     }
 
     private var focusRow: some View {
-        HStack(alignment: .center, spacing: 9) {
+        HStack(alignment: .center, spacing: 5) {
             ZStack {
                 if !dimmed {
                     Image(heroIcon)
@@ -1849,18 +1850,23 @@ struct LockTimelineView: View {
             .frame(width: 24, alignment: .center)
 
             VStack(alignment: .leading, spacing: 1) {
+                // Rad 1: namn (+ klocktid för halvaNatten — syns ej i tidslinjen)
                 HStack(alignment: .lastTextBaseline, spacing: 5) {
                     Text(heroName)
                         .font(.system(size: 13, weight: .bold))
                         .foregroundColor(accentClr)
                         .lineLimit(1)
-                    if let target = heroTargetDate {
-                        countdown(to: target)
+                    if case .halvaNatten = hero {
+                        Text(heroTimeStr)
+                            .font(.system(size: 10, weight: .regular).monospacedDigit())
+                            .foregroundColor(mutedClr)
+                            .lineLimit(1)
                     }
                 }
-                Text(heroTimeStr)
-                    .font(.system(size: 10, weight: .semibold).monospacedDigit())
-                    .foregroundColor(mainClr)
+                // Rad 2: timer
+                if let target = heroTargetDate {
+                    countdown(to: target)
+                }
             }
 
             Spacer(minLength: 0)
