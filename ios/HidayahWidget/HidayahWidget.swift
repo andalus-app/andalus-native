@@ -1727,17 +1727,6 @@ struct HidayahLockArcWidget: Widget {
 //
 // Always-On Display: isLuminanceReduced neutralises colors, keeps dark background.
 
-// MARK: - Countdown helper
-
-/// "om 1m" / "om 18m" / "om 9t 04m" — Swedish (t not h), zero-padded minutes ≥ 1h.
-private func timelineCountdown(from now: Date, to target: Date) -> String {
-    let secs = max(0, Int(target.timeIntervalSince(now).rounded()))
-    if secs < 60  { return "om 1m" }
-    let mins = secs / 60
-    if mins < 60  { return "om \(mins)m" }
-    let h = mins / 60; let m = mins % 60
-    return String(format: "om %dt %02dm", h, m)
-}
 
 // MARK: - Six-prayer configuration
 
@@ -1764,173 +1753,33 @@ private func timelineSymbol(for name: String) -> String {
     return "clock"
 }
 
-// MARK: - Entry
-
-struct LockTimelineEntry: TimelineEntry {
-    let date:            Date
-    /// Six ordered prayers: Fajr, Shuruq, Dhuhr, Asr, Maghrib, Isha.
-    let prayers:         [Prayer]
-    /// Index of next upcoming prayer (0–5); -1 = all passed (Halva natten / Fajr imorgon state).
-    let nextIndex:       Int
-    /// Pre-formatted fallback string (used when heroTargetDate is nil).
-    let countdownStr:    String
-    /// The actual target date — used for live Text(.relative) rendering so the countdown
-    /// stays accurate on Apple Watch without depending on WidgetKit timeline refresh rate.
-    let heroTargetDate:  Date?
-}
-
-// MARK: - Provider
-
-struct LockTimelineProvider: TimelineProvider {
-
-    func placeholder(in context: Context) -> LockTimelineEntry {
-        makeEntry(allPrayers: PrayerEntry.placeholder().allPrayers, at: .now)
-    }
-
-    func getSnapshot(in context: Context,
-                     completion: @escaping (LockTimelineEntry) -> Void) {
-        completion(makeEntry(allPrayers: loadPrayers(), at: .now))
-    }
-
-    func getTimeline(in context: Context,
-                     completion: @escaping (Timeline<LockTimelineEntry>) -> Void) {
-        let midnight        = Calendar.current.startOfDay(for: .now).addingTimeInterval(86_400 + 60)
-        let defaults        = UserDefaults(suiteName: kAppGroup)
-        let locationChanged = defaults?.bool(forKey: "needsPrayerRefresh") ?? false
-        NSLog("[Widget] LockTimelineProvider.getTimeline: locationChanged=%@", locationChanged ? "yes" : "no")
-
-        // Path 1: today's App Group blob is valid and native hasn't flagged a location change
-        // (or native already wrote a fresh blob after the location event).
-        if let stored = readAppGroupData() {
-            let prayers = parsePrayers(stored.prayers)
-            if !prayers.isEmpty {
-                let bgDetectedAt = defaults?.double(forKey: kBgDetectedKey) ?? 0
-                let blobTs       = stored.timestamp ?? 0
-                let nativeFresh  = locationChanged && blobTs > 0 && bgDetectedAt > 0 && blobTs > bgDetectedAt
-                NSLog("[Widget] LockTimeline getTimeline stored: city=%@ blobTs=%.0f nativeFresh=%@",
-                      stored.city, blobTs, nativeFresh ? "YES" : "NO")
-
-                if !locationChanged || nativeFresh {
-                    NSLog("[Widget] LockTimeline getTimeline PATH-1: city=%@ %d prayers", stored.city, prayers.count)
-                    let entries = buildTimelineEntries(allPrayers: prayers)
-                    completion(Timeline(entries: entries, policy: .after(midnight)))
-                    return
-                }
-            }
-        }
-
-        // Path 2: stale / missing / location changed and native hasn't resolved yet — fetch live.
-        let (lat, lng, city) = readStoredLocation()
-        NSLog("[Widget] LockTimeline getTimeline PATH-2: city=%@ lat=%.4f lng=%.4f", city, lat, lng)
-        fetchFromAPI(lat: lat, lng: lng) { prayers, _ in
-            guard !prayers.isEmpty else {
-                NSLog("[Widget] LockTimeline getTimeline PATH-2: API failed — retry in 15 min")
-                let fallback = self.makeEntry(allPrayers: PrayerEntry.placeholder().allPrayers, at: .now)
-                completion(Timeline(entries: [fallback],
-                                    policy: .after(Date().addingTimeInterval(900))))
-                return
-            }
-            let policy: TimelineReloadPolicy = locationChanged
-                ? .after(Date().addingTimeInterval(900))
-                : .after(midnight)
-            NSLog("[Widget] LockTimeline getTimeline PATH-2: %d prayers policy=%@",
-                  prayers.count, locationChanged ? "15min" : "midnight")
-            let entries = self.buildTimelineEntries(allPrayers: prayers)
-            completion(Timeline(entries: entries, policy: policy))
-        }
-    }
-
-    // ── Private helpers ───────────────────────────────────────────────────────
-
-    private func loadPrayers() -> [Prayer] {
-        if let stored = readAppGroupData() {
-            let parsed = parsePrayers(stored.prayers)
-            if !parsed.isEmpty { return parsed }
-        }
-        return PrayerEntry.placeholder().allPrayers
-    }
-
-    private func makeEntry(allPrayers: [Prayer], at date: Date) -> LockTimelineEntry {
-        let six     = orderedSixPrayers(from: allPrayers)
-        let nextIdx = six.firstIndex { $0.time > date } ?? -1
-        let hero    = computeHeroState(allPrayers: allPrayers, now: date)
-        let target: Date? = {
-            switch hero {
-            case .prayer(let p):      return p.time
-            case .shuruq(let t):      return t
-            case .halvaNatten(let t): return t
-            }
-        }()
-        let countdown = target.map { timelineCountdown(from: date, to: $0) } ?? "–"
-        return LockTimelineEntry(date: date, prayers: six,
-                                 nextIndex: nextIdx, countdownStr: countdown,
-                                 heroTargetDate: target)
-    }
-
-    private func buildTimelineEntries(allPrayers: [Prayer]) -> [LockTimelineEntry] {
-        let now = Date()
-        var dates = Set<Date>()
-        dates.insert(now)
-
-        // One entry at each prayer-time and halva natten transition for the rest of the day.
-        for p in allPrayers where p.time > now { dates.insert(p.time) }
-        let five = allPrayers.filter { kFivePrayers.contains($0.name) }
-        if let maghrib = five.first(where: { $0.name == "Maghrib" }),
-           let fajr    = five.first(where: { $0.name == "Fajr" }) {
-            var fajrAdj = fajr.time
-            if fajrAdj <= maghrib.time { fajrAdj = fajrAdj.addingTimeInterval(86_400) }
-            let halvaNatten = maghrib.time.addingTimeInterval(
-                fajrAdj.timeIntervalSince(maghrib.time) / 2)
-            if halvaNatten > now { dates.insert(halvaNatten) }
-        }
-
-        // Per-minute entries so countdownStr stays accurate. Without these the widget
-        // freezes on the build-time string until the next transition entry fires.
-        let heroTime: Date? = {
-            switch computeHeroState(allPrayers: allPrayers, now: now) {
-            case .prayer(let p):      return p.time
-            case .shuruq(let t):      return t
-            case .halvaNatten(let t): return t
-            }
-        }()
-        if let ht = heroTime, ht > now {
-            // Minute-level entries from now until 60 s before hero time.
-            var cursor = now.addingTimeInterval(60)
-            let sixtySecBefore = ht.addingTimeInterval(-60)
-            while cursor < sixtySecBefore {
-                dates.insert(cursor)
-                cursor = cursor.addingTimeInterval(60)
-            }
-            // Entry at T-60 so "om 1m" displays for the final minute.
-            if sixtySecBefore > now { dates.insert(sixtySecBefore) }
-        }
-
-        return dates.sorted().map { makeEntry(allPrayers: allPrayers, at: $0) }
-    }
-}
-
 // MARK: - View
 
 struct LockTimelineView: View {
-    let entry: LockTimelineEntry
-    /// Always-On Display: dimmed = true → neutralise accent colors, keep dark background.
+    let entry: PrayerEntry
     @Environment(\.isLuminanceReduced) private var dimmed
 
-    // ── Hero state (reuses existing computeHeroState) ─────────────────────────
     private var hero: HeroState {
-        computeHeroState(allPrayers: entry.prayers, now: entry.date)
+        computeHeroState(allPrayers: entry.allPrayers, now: entry.date)
+    }
+    private var orderedPrayers: [Prayer] {
+        orderedSixPrayers(from: entry.allPrayers)
+    }
+    private var nextIdx: Int {
+        orderedPrayers.firstIndex { $0.time > entry.date } ?? -1
+    }
+    private var heroTargetDate: Date? {
+        switch hero {
+        case .prayer(let p):      return p.time
+        case .shuruq(let t):      return t
+        case .halvaNatten(let t): return t
+        }
     }
 
-    // ── Adaptive colours ──────────────────────────────────────────────────────
     private var accentClr:  Color { dimmed ? .primary                      : kGold }
     private var mainClr:    Color { dimmed ? .primary                      : .white.opacity(0.88) }
-    private var mutedClr:   Color { dimmed ? .secondary                    : .white.opacity(0.40) }
-    private var passedClr:  Color { dimmed ? Color(white: 0.38)            : .white.opacity(0.28) }
     private var dividerClr: Color { dimmed ? Color.secondary.opacity(0.22) : kGold.opacity(0.24) }
-    private var dotClr:     Color { dimmed ? Color.secondary               : kGold.opacity(0.48) }
-    private var chevronClr: Color { dimmed ? Color.secondary               : .white.opacity(0.26) }
 
-    // ── Hero accessors ────────────────────────────────────────────────────────
     private var heroIcon: String {
         switch hero {
         case .shuruq:        return "sunrise.fill"
@@ -1962,11 +1811,24 @@ struct LockTimelineView: View {
         }
     }
 
-    // ── Focus row ─────────────────────────────────────────────────────────────
+    @ViewBuilder
+    private func countdown(to target: Date) -> some View {
+        let remaining = target.timeIntervalSince(entry.date)
+        Group {
+            if remaining < 60 {
+                Text("om 1m")
+            } else {
+                (Text("om ") + Text(target, style: .timer))
+            }
+        }
+        .font(.system(size: 11, weight: .regular).monospacedDigit())
+        .foregroundColor(mainClr)
+        .lineLimit(1)
+        .minimumScaleFactor(0.7)
+    }
+
     private var focusRow: some View {
         HStack(alignment: .center, spacing: 9) {
-
-            // Icon — subtle glow only in active mode
             ZStack {
                 if !dimmed {
                     Image(heroIcon)
@@ -1986,37 +1848,16 @@ struct LockTimelineView: View {
             }
             .frame(width: 24, alignment: .center)
 
-            // Name + countdown / time
             VStack(alignment: .leading, spacing: 1) {
                 HStack(alignment: .lastTextBaseline, spacing: 5) {
                     Text(heroName)
                         .font(.system(size: 13, weight: .bold))
                         .foregroundColor(accentClr)
                         .lineLimit(1)
-                    // Same method as LockScreenFocusView.lockCountdown:
-                    // Text(.timer) live-updates from the system clock — always accurate.
-                    // < 60 s: static "om 1m" so seconds are never shown.
-                    if let td = entry.heroTargetDate, td > entry.date {
-                        let remaining = td.timeIntervalSince(entry.date)
-                        if remaining < 60 {
-                            Text(entry.countdownStr)
-                                .font(.system(size: 11, weight: .regular))
-                                .foregroundColor(mainClr)
-                                .lineLimit(1)
-                        } else {
-                            (Text("om ") + Text(td, style: .timer))
-                                .font(.system(size: 11, weight: .regular).monospacedDigit())
-                                .foregroundColor(mainClr)
-                                .lineLimit(1)
-                        }
-                    } else {
-                        Text(entry.countdownStr)
-                            .font(.system(size: 11, weight: .regular))
-                            .foregroundColor(mainClr)
-                            .lineLimit(1)
+                    if let target = heroTargetDate {
+                        countdown(to: target)
                     }
                 }
-                .minimumScaleFactor(0.7)
                 Text(heroTimeStr)
                     .font(.system(size: 10, weight: .semibold).monospacedDigit())
                     .foregroundColor(mainClr)
@@ -2026,19 +1867,16 @@ struct LockTimelineView: View {
         }
     }
 
-    // ── Strip leading zero: "02:05" → "2:05" ────────────────────────────────
     private func shortTime(_ prayer: Prayer) -> String {
         let s = timeFmt.string(from: prayer.time)
         return s.hasPrefix("0") ? String(s.dropFirst()) : s
     }
 
-    // ── Timeline grid — abbrev row + dot row + time row, 6 equal columns ───────
     private var timelineRow: some View {
         VStack(spacing: 2) {
-            // Row 2: FJR  SHR  DHR  ASR  MGR  ISH — next is gold, all others full white
             HStack(spacing: 0) {
-                ForEach(0..<min(6, entry.prayers.count), id: \.self) { idx in
-                    let isNext = idx == entry.nextIndex
+                ForEach(0..<min(6, orderedPrayers.count), id: \.self) { idx in
+                    let isNext = idx == nextIdx
                     Text(kTimelinePrayerAbbrevs[idx])
                         .font(.system(size: 7.5, weight: isNext ? .bold : .medium))
                         .foregroundColor(isNext ? accentClr : .white)
@@ -2046,12 +1884,11 @@ struct LockTimelineView: View {
                         .frame(maxWidth: .infinity)
                 }
             }
-            // Row 3: times full white, dot below next prayer
             HStack(spacing: 0) {
-                ForEach(0..<min(6, entry.prayers.count), id: \.self) { idx in
-                    let isNext = idx == entry.nextIndex
+                ForEach(0..<min(6, orderedPrayers.count), id: \.self) { idx in
+                    let isNext = idx == nextIdx
                     VStack(spacing: 2) {
-                        Text(shortTime(entry.prayers[idx]))
+                        Text(shortTime(orderedPrayers[idx]))
                             .font(.system(size: 8.5, weight: isNext ? .semibold : .regular).monospacedDigit())
                             .foregroundColor(.white)
                             .lineLimit(1)
@@ -2066,7 +1903,6 @@ struct LockTimelineView: View {
         }
     }
 
-    // ── Root body ─────────────────────────────────────────────────────────────
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             focusRow
@@ -2087,7 +1923,7 @@ struct LockTimelineView: View {
 struct HidayahLockTimelineWidget: Widget {
     let kind = "HidayahLockTimelineWidget"
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: kind, provider: LockTimelineProvider()) { entry in
+        StaticConfiguration(kind: kind, provider: PrayerProvider()) { entry in
             LockTimelineView(entry: entry)
                 .containerBackground(
                     LinearGradient(colors: [kBgTop, kBgBottom],
@@ -3103,7 +2939,7 @@ private let kFallbackHadiths: [FallbackHadith] = [
 #Preview(as: .accessoryRectangular)  { HidayahLockFocusWidget()      } timeline: { PrayerEntry.placeholder() }
 #Preview(as: .accessoryRectangular)  { HidayahLockOverviewWidget()   } timeline: { PrayerEntry.placeholder() }
 #Preview(as: .accessoryRectangular)  { HidayahLockArcWidget()        } timeline: { PrayerEntry.placeholder() }
-#Preview(as: .accessoryRectangular)  { HidayahLockTimelineWidget()   } timeline: { LockTimelineEntry(date: .now, prayers: orderedSixPrayers(from: PrayerEntry.placeholder().allPrayers), nextIndex: 1, countdownStr: "om 18m", heroTargetDate: Date.now.addingTimeInterval(1080)) }
+#Preview(as: .accessoryRectangular)  { HidayahLockTimelineWidget()   } timeline: { PrayerEntry.placeholder() }
 #endif
 #Preview(as: .systemSmall)           { HidayahAllahNameWidget()     } timeline: { AllahNameEntry.placeholder }
 #Preview(as: .systemMedium)          { HidayahAllahNameWidget()     } timeline: { AllahNameEntry.placeholder }
