@@ -295,8 +295,13 @@ export default function MonthlyScreen() {
         .then(data => { if (!cancelled) { setRows(data as DayRow[]); setLoading(false); } })
         .catch(() => { if (!cancelled) setLoading(false); });
     } else {
-      // Check AlAdhan cache synchronously-ish — show instantly if available
-      getMonthFromCache(year, month, location.city, method, school).then(cached => {
+      // Check AlAdhan cache synchronously-ish — show instantly if available.
+      // Pass lat/lng so the coord validation in getMonthFromCache rejects stale
+      // suburb-vs-city-centre data. Without these args the cache check skips
+      // validation and returns whatever coordinates were used when the cache
+      // was first built (e.g. Stockholm centre 21:26 even though user is in
+      // Spånga 21:27) — causing monthly view to disagree with notifications.
+      getMonthFromCache(year, month, location.city, method, school, location.lat, location.lng).then(cached => {
         if (cancelled) return;
         if (cached) {
           setRows(cached);
