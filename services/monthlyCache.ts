@@ -36,6 +36,14 @@ type CityCache = {
 
 // ── Private helpers ──────────────────────────────────────────────────────────
 
+// Cache built at a different GPS position becomes a stale time source once the
+// user has moved more than this distance.  Beyond the threshold the cache is
+// rejected so callers fall back to a fresh Aladhan fetch with actual coordinates.
+// 0.05° ≈ 5 km at Swedish latitudes — large enough to absorb normal GPS jitter
+// but small enough to catch suburb-vs-city-centre discrepancies (e.g. Spånga
+// at 17.92 °E vs Stockholm centre at 18.07 °E → 1-minute Maghrib difference).
+const COORD_THRESHOLD = 0.05;
+
 function stripTz(t: string) { return t ? t.replace(/\s*\(.*\)/, '').trim() : ''; }
 
 function calcMidnight(maghrib: string, fajrNext: string): string {
@@ -194,8 +202,10 @@ export async function buildYearlyCache(
   const required = requiredMonthKeys();  // 13 keys (12 data + 1 anchor)
 
   const existing  = await readCityCache(city, method, school);
-  // Reuse existing lat/lng for API consistency (city-stable coordinates)
-  const cache: CityCache = existing
+  const coordsDrifted = existing &&
+    (Math.abs(existing.lat - lat) > COORD_THRESHOLD ||
+     Math.abs(existing.lng - lng) > COORD_THRESHOLD);
+  const cache: CityCache = (existing && !coordsDrifted)
     ? { ...existing, months: { ...existing.months } }
     : { cityKey: makeCacheKey(city, method, school), lat, lng, method, school, months: {} };
 
@@ -245,13 +255,20 @@ export async function buildYearlyCache(
 
 /**
  * Returns today's and tomorrow's timings from city-based yearly cache.
- * Handles month and year boundaries safely.
+ * Pass lat/lng so the cache is rejected when its stored coordinates differ
+ * by more than COORD_THRESHOLD from the user's actual GPS position — this
+ * prevents stale suburb-vs-city-centre times from reaching notifications.
  */
 export async function getTodayFromYearlyCache(
   city: string, method: number, school: number,
+  lat?: number, lng?: number,
 ): Promise<{ todayT: Record<string, string>; tomT: Record<string, string> | null } | null> {
   const c = await readCityCache(city, method, school);
   if (!c) return null;
+  if (lat !== undefined && lng !== undefined &&
+      (Math.abs(c.lat - lat) > COORD_THRESHOLD || Math.abs(c.lng - lng) > COORD_THRESHOLD)) {
+    return null;
+  }
 
   const now   = new Date();
   const today = monthKey(now.getFullYear(), now.getMonth() + 1);
@@ -286,7 +303,7 @@ export async function getPrayerTimesWithFallback(
   const daily = await readDailyCache(lat, lng, method, school);
   if (daily) return daily;
 
-  const yearly = await getTodayFromYearlyCache(city, method, school);
+  const yearly = await getTodayFromYearlyCache(city, method, school, lat, lng);
   if (!yearly) return null;
 
   return { todayT: yearly.todayT, tomT: yearly.tomT, hijri: null };
@@ -294,11 +311,19 @@ export async function getPrayerTimesWithFallback(
 
 /**
  * Returns cached DayRow[] for a given month, or null on miss.
- * City-based lookup — pass the same city string used for buildYearlyCache.
+ * Pass lat/lng so the cache is rejected when its stored coordinates differ
+ * by more than COORD_THRESHOLD — forces a fresh Aladhan fetch for the exact
+ * GPS position instead of returning suburb-vs-city-centre stale times.
  */
 export async function getMonthFromCache(
   year: number, month: number, city: string, method: number, school: number,
+  lat?: number, lng?: number,
 ): Promise<DayRow[] | null> {
   const c = await readCityCache(city, method, school);
-  return c?.months[monthKey(year, month)] ?? null;
+  if (!c) return null;
+  if (lat !== undefined && lng !== undefined &&
+      (Math.abs(c.lat - lat) > COORD_THRESHOLD || Math.abs(c.lng - lng) > COORD_THRESHOLD)) {
+    return null;
+  }
+  return c.months[monthKey(year, month)] ?? null;
 }

@@ -23,8 +23,9 @@ async function fetchMonthData(
   city: string, lat: number, lng: number,
   method: number, school: number,
 ): Promise<DayRow[]> {
-  // Try city-based cache first
-  const cached = await getMonthFromCache(year, month, city, method, school);
+  // Try city-based cache first — pass GPS coords so stale suburb-vs-city-centre
+  // data is rejected and a fresh fetch with the actual position is used instead.
+  const cached = await getMonthFromCache(year, month, city, method, school, lat, lng);
   if (cached) return cached;
 
   // Cache miss — fetch this month + next for midnight calc

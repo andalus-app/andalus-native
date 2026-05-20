@@ -726,11 +726,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setAutoLocation(state.settings.autoLocation).catch(() => {});
       // Also read the pre-prayer reminder offset (stored separately from main settings)
       AsyncStorage.getItem('hidayah_prayer_reminder_offset').then(raw => {
-        const offset = raw ? parseInt(raw, 10) : 0;
+        const offset    = raw ? parseInt(raw, 10) : 0;
+        const isIfis    = (state.settings.prayerSource ?? 'aladhan') === 'ifis';
         return setNativeSettings({
           notifications:           state.settings.notifications,
-          calculationMethod:       state.settings.calculationMethod,
-          school:                  state.settings.school,
+          // When IFIS is active mirror method=3 / school=0 so NativeNotificationScheduler's
+          // method-validation (precise.method == settings.calculationMethod) matches what JS
+          // writes to the effective schedule and visited-places cache. Without this, users who
+          // were on a non-MWL AlAdhan method would get a method mismatch in background and the
+          // native scheduler would fall through to an AlAdhan fallback, writing wrong times to
+          // the widget and scheduling notifications with wrong times.
+          calculationMethod:       isIfis ? 3 : state.settings.calculationMethod,
+          school:                  isIfis ? 0 : state.settings.school,
           dhikrReminder:           state.settings.dhikrReminder,
           prePrayerReminderOffset: isNaN(offset) ? 0 : offset,
         });
@@ -747,6 +754,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     state.settings.calculationMethod,
     state.settings.school,
     state.settings.dhikrReminder,
+    state.settings.prayerSource,
   ]);
 
   // ── Hämta GPS + uppdatera plats ──
@@ -829,7 +837,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
     // Pre-prayer reminders: refresh rolling 5-day schedule whenever prayer times reload
     refreshPrePrayerReminderNotifications().catch(() => {});
-  }, [state.prayerTimes, state.tomorrowTimes, state.settings.notifications, state.settings.dhikrReminder, state.settings.fridayDuaReminder, state.location?.city]); // eslint-disable-line
+  }, [state.prayerTimes, state.tomorrowTimes, state.settings.notifications, state.settings.dhikrReminder, state.settings.fridayDuaReminder, state.location?.city, state.settings.prayerSource, state.settings.calculationMethod, state.settings.school]); // eslint-disable-line
+
+  // ── Cancel immediately when prayer source or calculation parameters change ──
+  // Prevents stale notifications from a previous source firing during the
+  // transition window. Race condition: setNotificationScheduleState (in loadPrayers)
+  // can write new times to App Group before schedulePrayerNotifications reads the
+  // stored state — causing scheduleStateUnchanged to see "no diff" and skip the
+  // reschedule, leaving the old source's notification pending.
+  // By cancelling upfront, hasPrayerPending becomes false → the guard is bypassed →
+  // new notifications are always scheduled when fresh prayer times arrive.
+  useEffect(() => {
+    cancelPrayerNotifications().catch(() => {});
+  }, [state.settings.prayerSource, state.settings.calculationMethod, state.settings.school]); // eslint-disable-line
 
   const value = useMemo(() => ({ ...state, dispatch, refreshPrayers, refreshLocation }), [state]); // eslint-disable-line
 
