@@ -331,6 +331,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       location: state.location,
       settings: state.settings,
     })).catch(() => {});
+    // Sync GPS-fresh coordinates to 'andalus_location' so monthly.tsx and the
+    // prayer tab always use the same precise position as AppContext — not stale
+    // city-centre coordinates from the initial settings setup.
+    if (state.location) {
+      AsyncStorage.setItem('andalus_location', JSON.stringify({
+        lat:         state.location.latitude,
+        lng:         state.location.longitude,
+        city:        state.location.city,
+        subLocality: state.location.suburb ?? '',
+        country:     state.location.country,
+      })).catch(() => {});
+    }
   }, [state.location, state.settings]);
 
   // Keep autoLocationRef in sync so the AppState listener can read it without
