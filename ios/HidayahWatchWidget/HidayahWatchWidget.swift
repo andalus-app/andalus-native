@@ -23,6 +23,7 @@ private struct StoredData: Decodable {
     let prayers: [StoredPrayer]
     let date:    String
     let hijri:   StoredHijri?
+    let timezoneOffsetMinutes: Int?
 }
 
 // MARK: - Domain models
@@ -76,13 +77,21 @@ private func localISODate(_ d: Date) -> String {
     return String(format: "%04d-%02d-%02d", c.year!, c.month!, c.day!)
 }
 
-private func parseTime(_ raw: String, on day: Date) -> Date? {
+private func parseTime(_ raw: String, on day: Date, timezoneOffsetMinutes: Int?) -> Date? {
     let clean = raw.components(separatedBy: " ").first ?? raw
     let parts  = clean.split(separator: ":").compactMap { Int($0) }
     guard parts.count >= 2 else { return nil }
-    var c = Calendar.current.dateComponents([.year, .month, .day], from: day)
+
+    // Use the timezone that was active when the widget data was cached.
+    // If unavailable (legacy data), fall back to current device timezone.
+    var cal = Calendar.current
+    if let offsetMin = timezoneOffsetMinutes {
+        cal.timeZone = TimeZone(secondsFromGMT: offsetMin * 60) ?? .current
+    }
+
+    var c = cal.dateComponents([.year, .month, .day], from: day)
     c.hour = parts[0]; c.minute = parts[1]; c.second = 0
-    return Calendar.current.date(from: c)
+    return cal.date(from: c)
 }
 
 private func prayerIcon(_ name: String) -> String {
@@ -159,7 +168,7 @@ private func readWatchCache() -> (next: WatchPrayer, city: String)? {
     else { return nil }
     let now = Date()
     let prayers = stored.prayers.compactMap { p -> WatchPrayer? in
-        guard let t = parseTime(p.time, on: now) else { return nil }
+        guard let t = parseTime(p.time, on: now, timezoneOffsetMinutes: stored.timezoneOffsetMinutes) else { return nil }
         return WatchPrayer(name: p.name, time: t)
     }
     guard !prayers.isEmpty else { return nil }
@@ -178,7 +187,7 @@ private func readWatchCacheFull() -> LargeWatchEntry? {
 
     let now = Date()
     let prayers = stored.prayers.compactMap { p -> WatchPrayer? in
-        guard let t = parseTime(p.time, on: now) else { return nil }
+        guard let t = parseTime(p.time, on: now, timezoneOffsetMinutes: stored.timezoneOffsetMinutes) else { return nil }
         return WatchPrayer(name: p.name, time: t)
     }
     guard !prayers.isEmpty else { return nil }
@@ -737,7 +746,7 @@ struct WatchTimelineProvider: TimelineProvider {
         else { return nil }
         let now = Date()
         let prayers = stored.prayers.compactMap { p -> WatchPrayer? in
-            guard let t = parseTime(p.time, on: now) else { return nil }
+            guard let t = parseTime(p.time, on: now, timezoneOffsetMinutes: stored.timezoneOffsetMinutes) else { return nil }
             return WatchPrayer(name: p.name, time: t)
         }
         return prayers.isEmpty ? nil : prayers

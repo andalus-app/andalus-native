@@ -205,7 +205,7 @@ function QuranScreen({ deepLinkVerseKey, deepLinkNonce }: { deepLinkVerseKey?: s
       { signal: controller.signal },
     )
       .then((r) => r.json())
-      .then((data: { verse?: { words?: Array<{ page_number?: number }> } }) => {
+      .then((data: { verse?: { words?: { page_number?: number }[] } }) => {
         const page = data?.verse?.words?.[0]?.page_number;
         if (typeof page === 'number') {
           setCachedExactPage(fetchVerseKey, page); // all future taps → instant

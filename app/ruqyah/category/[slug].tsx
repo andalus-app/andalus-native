@@ -118,7 +118,7 @@ function RuqyahCategoryScreen() {
     >
       {/* ── Hero banner image ── */}
       <View style={styles.heroWrap}>
-        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+        { }
         <Image
           source={image as any}
           style={styles.heroImage}
@@ -185,6 +185,7 @@ function RuqyahCategoryScreen() {
             key={a.slug}
             article={a}
             onPress={() => router.push(`/ruqyah/${a.slug}` as any)}
+            hideCategory
           />
         ))}
       </View>

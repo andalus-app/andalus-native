@@ -321,7 +321,7 @@ const SurahHeaderCard = memo(function SurahHeaderCard({
   const stableOnLongPress = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
     onLongPressRef.current(surahId);
-  }, [surahId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [surahId]);  
   const { theme: T } = useTheme();
 
   const nameColor  = isDark ? '#FFFEF0' : '#1A1106';

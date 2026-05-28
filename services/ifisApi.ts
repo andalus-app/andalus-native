@@ -272,6 +272,26 @@ export async function getIfisTimesForDate(city: string, date: string): Promise<R
   return fetchIfisDay(city, date);
 }
 
+/**
+ * Returns IFIS prayer times for N consecutive days starting from today,
+ * keyed by ISO date. Reads from the already-warmed year cache without network
+ * access; days missing from the cache are silently skipped.
+ */
+export async function getIfisTimesForRange(
+  city: string, days: number,
+): Promise<Record<string, Record<string, string>>> {
+  const out: Record<string, Record<string, string>> = {};
+  const now = new Date();
+  for (let i = 0; i < days; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
+    const dateStr =
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const cached = await getIfisTimesFromYearCache(city, dateStr);
+    if (cached) out[dateStr] = cached;
+  }
+  return out;
+}
+
 export async function ensureIfisYearCache(city: string, year: number): Promise<void> {
   const existing = await getCachedIfisYear(city, year);
   if (existing) return;

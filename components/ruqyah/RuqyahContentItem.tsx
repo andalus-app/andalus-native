@@ -10,9 +10,10 @@ import {
 type Props = {
   article: RuqyahArticle;
   onPress: () => void;
+  hideCategory?: boolean;
 };
 
-function RuqyahContentItem({ article, onPress }: Props) {
+function RuqyahContentItem({ article, onPress, hideCategory }: Props) {
   return (
     <TouchableOpacity
       onPress={onPress}
@@ -21,9 +22,11 @@ function RuqyahContentItem({ article, onPress }: Props) {
     >
       {/* Top row: category + badges */}
       <View style={styles.topRow}>
-        <Text style={styles.category} numberOfLines={1}>
-          {article.categoryName}
-        </Text>
+        {!hideCategory && (
+          <Text style={styles.category} numberOfLines={1}>
+            {article.categoryName}
+          </Text>
+        )}
         <View style={styles.badges}>
           {article.isLecture && (
             <View style={styles.badge}>

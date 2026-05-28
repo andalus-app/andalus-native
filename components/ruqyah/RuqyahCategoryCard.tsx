@@ -63,7 +63,7 @@ function RuqyahCategoryCard({ category, onPress }: Props) {
       style={styles.card}
     >
       {/* Image — top half of card, no overlay */}
-      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+      { }
       <Image source={image as any} style={styles.image} resizeMode="cover" />
 
       {/* Text area */}

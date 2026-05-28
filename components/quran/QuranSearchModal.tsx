@@ -84,7 +84,7 @@ function QuranSearchModal() {
     const q = query.trim();
     if (!q) return [];
     const s = search(q);
-    const result: Array<{ title: string; data: SearchResult[] }> = [];
+    const result: { title: string; data: SearchResult[] }[] = [];
     if (s.verses.length > 0) result.push({ title: 'Vers',  data: s.verses });
     if (s.pages.length  > 0) result.push({ title: 'Sidor', data: s.pages  });
     if (s.surahs.length > 0) result.push({ title: 'Sura',  data: s.surahs });
@@ -201,7 +201,7 @@ function QuranSearchModal() {
         `?words=true&word_fields=code_v2,page_number&mushaf=1`,
       )
         .then((r) => r.json())
-        .then((data: { verse?: { words?: Array<{ page_number?: number }> } }) => {
+        .then((data: { verse?: { words?: { page_number?: number }[] } }) => {
           const page = data?.verse?.words?.[0]?.page_number;
           if (typeof page === 'number') {
             // goToVerse: switches to verse mode, navigates to page, scrolls to the verse

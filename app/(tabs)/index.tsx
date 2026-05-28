@@ -1,10 +1,9 @@
-import React from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View, Text, ActivityIndicator, TouchableOpacity, ScrollView,
   useWindowDimensions, Animated, Alert, RefreshControl, AppState, Platform,
 } from 'react-native';
-import { useState, useRef, useCallback, useEffect } from 'react';
-import Svg, { Defs, LinearGradient as SvgLinearGradient, Stop, Rect } from 'react-native-svg';
+import Svg, { Defs, LinearGradient as SvgLinearGradient, Stop, Rect , SvgXml } from 'react-native-svg';
 import * as Location from 'expo-location';
 import HidayahLogo from '../../components/HidayahLogo';
 import SvgIcon from '../../components/SvgIcon';
@@ -12,7 +11,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getPrayerTimesWithFallback } from '../../services/monthlyCache';
 import { getIfisTodayAndTomorrow, getIfisCityDisplayName } from '../../services/ifisApi';
 
-import { SvgXml } from 'react-native-svg';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useTheme } from '../../context/ThemeContext';
 import { useApp } from '../../context/AppContext';
@@ -20,9 +18,18 @@ import { nativeReverseGeocode } from '../../services/geocoding';
 import { updateWidgetData } from '../../modules/WidgetData';
 import PrayerEmptyState from '../../components/PrayerEmptyState';
 import type { CityResult } from '../../components/CitySearchModal';
+import { masjidIconXml } from '../../constants/masjidIcon';
 
 const MONTHLY_CALENDAR_SVG = `<svg width="800px" height="800px" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M17 14C17.5523 14 18 13.5523 18 13C18 12.4477 17.5523 12 17 12C16.4477 12 16 12.4477 16 13C16 13.5523 16.4477 14 17 14Z" fill="__C__"/><path d="M17 18C17.5523 18 18 17.5523 18 17C18 16.4477 17.5523 16 17 16C16.4477 16 16 16.4477 16 17C16 17.5523 16.4477 18 17 18Z" fill="__C__"/><path d="M13 13C13 13.5523 12.5523 14 12 14C11.4477 14 11 13.5523 11 13C11 12.4477 11.4477 12 12 12C12.5523 12 13 12.4477 13 13Z" fill="__C__"/><path d="M13 17C13 17.5523 12.5523 18 12 18C11.4477 18 11 17.5523 11 17C11 16.4477 11.4477 16 12 16C12.5523 16 13 16.4477 13 17Z" fill="__C__"/><path d="M7 14C7.55229 14 8 13.5523 8 13C8 12.4477 7.55229 12 7 12C6.44772 12 6 12.4477 6 13C6 13.5523 6.44772 14 7 14Z" fill="__C__"/><path d="M7 18C7.55229 18 8 17.5523 8 17C8 16.4477 7.55229 16 7 16C6.44772 16 6 16.4477 6 17C6 17.5523 6.44772 18 7 18Z" fill="__C__"/><path fill-rule="evenodd" clip-rule="evenodd" d="M7 1.75C7.41421 1.75 7.75 2.08579 7.75 2.5V3.26272C8.412 3.24999 9.14133 3.24999 9.94346 3.25H14.0564C14.8586 3.24999 15.588 3.24999 16.25 3.26272V2.5C16.25 2.08579 16.5858 1.75 17 1.75C17.4142 1.75 17.75 2.08579 17.75 2.5V3.32709C18.0099 3.34691 18.2561 3.37182 18.489 3.40313C19.6614 3.56076 20.6104 3.89288 21.3588 4.64124C22.1071 5.38961 22.4392 6.33855 22.5969 7.51098C22.75 8.65018 22.75 10.1058 22.75 11.9435V14.0564C22.75 15.8941 22.75 17.3498 22.5969 18.489C22.4392 19.6614 22.1071 20.6104 21.3588 21.3588C20.6104 22.1071 19.6614 22.4392 18.489 22.5969C17.3498 22.75 15.8942 22.75 14.0565 22.75H9.94359C8.10585 22.75 6.65018 22.75 5.51098 22.5969C4.33856 22.4392 3.38961 22.1071 2.64124 21.3588C1.89288 20.6104 1.56076 19.6614 1.40314 18.489C1.24997 17.3498 1.24998 15.8942 1.25 14.0564V11.9436C1.24998 10.1058 1.24997 8.65019 1.40314 7.51098C1.56076 6.33855 1.89288 5.38961 2.64124 4.64124C3.38961 3.89288 4.33856 3.56076 5.51098 3.40313C5.7439 3.37182 5.99006 3.34691 6.25 3.32709V2.5C6.25 2.08579 6.58579 1.75 7 1.75ZM5.71085 4.88976C4.70476 5.02502 4.12511 5.27869 3.7019 5.7019C3.27869 6.12511 3.02502 6.70476 2.88976 7.71085C2.86685 7.88123 2.8477 8.06061 2.83168 8.25H21.1683C21.1523 8.06061 21.1331 7.88124 21.1102 7.71085C20.975 6.70476 20.7213 6.12511 20.2981 5.7019C19.8749 5.27869 19.2952 5.02502 18.2892 4.88976C17.2615 4.75159 15.9068 4.75 14 4.75H10C8.09318 4.75 6.73851 4.75159 5.71085 4.88976ZM2.75 12C2.75 11.146 2.75032 10.4027 2.76309 9.75H21.2369C21.2497 10.4027 21.25 11.146 21.25 12V14C21.25 15.9068 21.2484 17.2615 21.1102 18.2892C20.975 19.2952 20.7213 19.8749 20.2981 20.2981C19.8749 20.7213 19.2952 20.975 18.2892 21.1102C17.2615 21.2484 15.9068 21.25 14 21.25H10C8.09318 21.25 6.73851 21.2484 5.71085 21.1102C4.70476 20.975 4.12511 20.7213 3.7019 20.2981C3.27869 19.8749 3.02502 19.2952 2.88976 18.2892C2.75159 17.2615 2.75 15.9068 2.75 14V12Z" fill="__C__"/></svg>`;
 const calendarXml = (color: string) => MONTHLY_CALENDAR_SVG.replace(/__C__/g, color);
+
+// ── Topbar icon tokens ──────────────────────────────────────────────────────
+// Glyph sizes are kept separate from the touch area: every topbar icon gets a
+// generous hitSlop so usability never depends on the rendered glyph size.
+const CALENDAR_ICON_SIZE = 28; // calendar (square viewBox) — prayer-tab reference glyph
+const MASJID_ICON_SIZE   = 26; // portrait pin fits to height, so it's trimmed to match the calendar's optical height
+const SETTINGS_ICON_SIZE = 19; // identical to home.tsx + more.tsx ("Visa mer") so it no longer jumps between pages
+const TOPBAR_HIT_SLOP    = { top: 8, right: 8, bottom: 8, left: 8 };
 
 const PRAYER_CACHE_KEY = 'andalus_prayer_cache';
 
@@ -71,7 +78,26 @@ function getNextPrayer(timings: Record<string, string>) {
   const now = nowMinutes();
   for (const key of PRAYER_ORDER) {
     if (!timings[key]) continue;
-    if (timeToMinutes(timings[key]) > now) return key;
+    const pMin = timeToMinutes(timings[key]);
+
+    // Special case: Midnight is calculated as the midpoint between today's Maghrib
+    // and tomorrow's Fajr. When it falls after 00:00, its time string is 00:XX,
+    // which compares as less than Isha (~22:XX), even though it's chronologically
+    // after Isha. We need to detect this and treat it as a future event when
+    // we're past Isha but before tomorrow's Fajr.
+    if (key === 'Midnight' && timings['Isha'] && timings['Fajr']) {
+      const ishaMin = timeToMinutes(timings['Isha']);
+      const fajrMin = timeToMinutes(timings['Fajr']);
+      // Midnight crosses the calendar day if its time value is less than Isha's
+      if (pMin < ishaMin) {
+        // Midnight is the next prayer if we're already past Isha
+        if (now >= ishaMin) return key;
+        // If we're before Isha, another prayer is next
+        continue;
+      }
+    }
+
+    if (pMin > now) return key;
   }
   return 'Fajr';
 }
@@ -187,7 +213,7 @@ export default function PrayerTimesScreen() {
   // arrives; clearInterval inside it makes the restart safe.
   useEffect(() => {
     if (timingsRef.current) startCountdownInterval();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);  
 
   // Load once on mount + re-fetch when app returns from background
   useEffect(() => {
@@ -234,16 +260,18 @@ export default function PrayerTimesScreen() {
     intervalRef.current = setInterval(() => {
       if (!timingsRef.current) return;
 
-      // Case 2: civil day changed — reload for the new day.
-      // Do NOT set reloadingRef here — loadPrayerTimes manages its own in-flight
-      // guard and will return immediately if reloadingRef is already true.
-      // Reset lastFetchRef so the 60 s cooldown doesn't block a day-change reload.
+      // Case 2: civil day changed — trigger a best-effort reload, but NEVER block
+      // the countdown. Offline (or when fallback can't resolve due to GPS drift),
+      // loadedDateRef stays stale and an early-return here would freeze the timer
+      // on every tick. Letting it fall through means the countdown keeps ticking
+      // from cached timings + Date.now() — prayer times shift by only seconds per
+      // day, so stale-by-one-day data is far better than a frozen display.
+      // lastFetchRef cooldown is intentionally kept so we don't hammer GPS/API
+      // every second when offline.
       if (loadedDateRef.current && loadedDateRef.current !== new Date().toDateString()) {
         if (!reloadingRef.current) {
-          lastFetchRef.current = 0;
           doReloadRef.current();
         }
-        return;
       }
 
       const np2 = getNextPrayer(timingsRef.current);
@@ -677,9 +705,19 @@ export default function PrayerTimesScreen() {
     <View style={{ flex: 1, backgroundColor: T.bg }}>
       <View style={{ paddingTop: 56, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
         <HidayahLogo size={52} />
-        <TouchableOpacity onPress={() => router.push('/monthly' as any)}>
-          <SvgXml xml={calendarXml(T.textMuted)} width={28} height={28} />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+          {/* Masjid-ikon — vänster om månadskalendern → öppnar "Närmaste masjid" */}
+          <TouchableOpacity onPress={() => router.push('/masjid' as any)} hitSlop={TOPBAR_HIT_SLOP}>
+            <SvgXml xml={masjidIconXml(T.textMuted)} width={MASJID_ICON_SIZE} height={MASJID_ICON_SIZE} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => router.push('/monthly' as any)} hitSlop={TOPBAR_HIT_SLOP}>
+            <SvgXml xml={calendarXml(T.textMuted)} width={CALENDAR_ICON_SIZE} height={CALENDAR_ICON_SIZE} />
+          </TouchableOpacity>
+          {/* Inställningar-ikon — längst ut till höger (samma glyph-storlek som hemskärmen/Visa mer) */}
+          <TouchableOpacity onPress={() => router.push('/settings' as any)} hitSlop={TOPBAR_HIT_SLOP}>
+            <SvgIcon name="settings" size={SETTINGS_ICON_SIZE} color={T.textMuted} />
+          </TouchableOpacity>
+        </View>
       </View>
       <PrayerEmptyState
         T={T}
@@ -716,9 +754,19 @@ export default function PrayerTimesScreen() {
       {/* ── Logo + monthly calendar icon ── */}
       <View style={{ paddingTop:56, paddingHorizontal:20, flexDirection:'row', alignItems:'center', justifyContent:'space-between' }}>
         <HidayahLogo size={52} />
-        <TouchableOpacity onPress={() => router.push('/monthly' as any)}>
-          <SvgXml xml={calendarXml(T.textMuted)} width={28} height={28} />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+          {/* Masjid-ikon — vänster om månadskalendern → öppnar "Närmaste masjid" */}
+          <TouchableOpacity onPress={() => router.push('/masjid' as any)} hitSlop={TOPBAR_HIT_SLOP}>
+            <SvgXml xml={masjidIconXml(T.textMuted)} width={MASJID_ICON_SIZE} height={MASJID_ICON_SIZE} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => router.push('/monthly' as any)} hitSlop={TOPBAR_HIT_SLOP}>
+            <SvgXml xml={calendarXml(T.textMuted)} width={CALENDAR_ICON_SIZE} height={CALENDAR_ICON_SIZE} />
+          </TouchableOpacity>
+          {/* Inställningar-ikon — längst ut till höger (samma glyph-storlek som hemskärmen/Visa mer) */}
+          <TouchableOpacity onPress={() => router.push('/settings' as any)} hitSlop={TOPBAR_HIT_SLOP}>
+            <SvgIcon name="settings" size={SETTINGS_ICON_SIZE} color={T.textMuted} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* ── Refresh spinner (fades above date) ── */}

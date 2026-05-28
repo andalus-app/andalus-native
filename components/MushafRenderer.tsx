@@ -671,7 +671,7 @@ function MushafRenderer({
   // ── Highlight fade animation (native driver — no JS thread per frame) ────────
   // highlightFadeAnim drives the opacity of the highlight SVG layer.
   // Resets to 0 instantly on verse/page change, animates to 1 when rects arrive.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   const highlightFadeAnim = useRef(new Animated.Value(0)).current;
 
   // Clear measurement state on verse/page change.

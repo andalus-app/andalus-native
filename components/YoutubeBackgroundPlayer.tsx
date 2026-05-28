@@ -120,7 +120,7 @@ export default function YoutubeBackgroundPlayer() {
     }
     // Going from inline → background (isNowSet=false): keep unmuted.
     // The audio continues off-screen — that IS the background mode.
-  }, [inlineFrame]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [inlineFrame]);  
 
   // Pause/resume when isPlaying changes (e.g. dhikr/Quran player pauses YouTube).
   const prevPlayingRef = useRef<boolean | null>(null);

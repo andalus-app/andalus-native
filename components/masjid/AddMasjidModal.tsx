@@ -1,0 +1,352 @@
+/**
+ * AddMasjidModal — user submission form for "Lägg till masjid".
+ *
+ * Submits through the submit_mosque RPC (status forced to 'pending' server-side;
+ * regular users can NEVER create an approved row). The raw device id is never
+ * sent — only its hash (handled in services/mosques.ts). Image is optional,
+ * ≤5 MB, compressed on pick (expo-image-picker quality), uploaded to
+ * mosque-images/submissions/. NO Google APIs.
+ *
+ * Isolation: this is a modal inside the masjid screen; it unmounts on close. The
+ * on-map picker WebView mounts only while picking. No background JS, no timers.
+ */
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  Modal, View, Text, TextInput, TouchableOpacity, ScrollView, Alert,
+  ActivityIndicator, StyleSheet, KeyboardAvoidingView, Platform,
+} from 'react-native';
+import { Image } from 'expo-image';
+import * as FileSystem from 'expo-file-system/legacy';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTheme } from '../../context/ThemeContext';
+import {
+  submitMosque, uploadMosqueSubmissionImage, MOSQUE_IMAGE_MAX_BYTES,
+  type SubmitErrorCode,
+} from '../../services/mosques';
+import MasjidLocationPicker from './MasjidLocationPicker';
+
+function errorMessage(code?: SubmitErrorCode): string {
+  switch (code) {
+    case 'rate_limit_hour': return 'Du har skickat för många förslag den senaste timmen. Försök igen om en stund.';
+    case 'rate_limit_day':  return 'Du har nått dagsgränsen för förslag. Försök igen imorgon.';
+    case 'submitter_blocked': return 'Du kan inte skicka förslag just nu.';
+    case 'mosque_name_required': return 'Ange masjidens namn.';
+    case 'mosque_coords_required': return 'Välj en plats på kartan.';
+    default: return 'Något gick fel. Kontrollera din anslutning och försök igen.';
+  }
+}
+
+export default function AddMasjidModal({
+  visible,
+  onClose,
+  userLoc,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  userLoc: { lat: number; lng: number } | null;
+}) {
+  const { theme: T } = useTheme();
+  const insets = useSafeAreaInsets();
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
+  const [name, setName] = useState('');
+  const [address, setAddress] = useState('');
+  const [postal, setPostal] = useState('');
+  const [city, setCity] = useState('');
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [hours, setHours] = useState('');
+  const [parking, setParking] = useState<boolean | null>(null);
+  const [accessInfo, setAccessInfo] = useState('');
+  const [image, setImage] = useState<{ uri: string; mime: string; size: number; base64: string } | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [pickerVisible, setPickerVisible] = useState(false);
+
+  const reset = useCallback(() => {
+    setName(''); setAddress(''); setPostal(''); setCity('');
+    setCoords(null); setHours(''); setParking(null); setAccessInfo('');
+    setImage(null); setSubmitting(false); setPickerVisible(false);
+  }, []);
+
+  const closeReset = useCallback(() => { reset(); onClose(); }, [reset, onClose]);
+
+  const pickImage = useCallback(async () => {
+    let ImagePicker: typeof import('expo-image-picker') | null = null;
+    try { ImagePicker = require('expo-image-picker'); } catch { ImagePicker = null; }
+    if (!ImagePicker) {
+      Alert.alert('Bild ej tillgänglig', 'Det gick inte att öppna bildväljaren. Du kan skicka förslaget utan bild.');
+      return;
+    }
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Åtkomst nekad', 'Tillåt åtkomst till bildbiblioteket i Inställningar.');
+        return;
+      }
+      const res = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 0.5, // compress on pick (no expo-image-manipulator needed)
+        allowsEditing: false,
+        presentationStyle: ImagePicker.UIImagePickerPresentationStyle.FULL_SCREEN,
+      });
+      if (res.canceled || !res.assets?.[0]) return;
+      const asset = res.assets[0];
+
+      // Read the exact bytes we'd upload and measure the REAL size from the
+      // base64 length. This is the ground truth (it's literally the upload
+      // payload), unlike asset.fileSize / getInfoAsync which can be unreliable
+      // for picked HEIC→JPEG assets. base64 length × 3/4 ≈ byte count.
+      let base64: string;
+      try {
+        base64 = await FileSystem.readAsStringAsync(asset.uri, { encoding: FileSystem.EncodingType.Base64 });
+      } catch {
+        Alert.alert('Bild ej tillgänglig', 'Det gick inte att läsa bilden. Du kan skicka förslaget utan bild.');
+        return;
+      }
+      const size = Math.floor((base64.length * 3) / 4);
+
+      if (size > MOSQUE_IMAGE_MAX_BYTES) {
+        // Too big even after compression → do NOT keep it; submit stays imageless.
+        Alert.alert('Bilden är för stor', 'Bilden behöver vara mindre än 5 MB. Välj en annan bild eller skicka förslaget utan bild.');
+        return;
+      }
+      if (mountedRef.current) setImage({ uri: asset.uri, mime: asset.mimeType ?? 'image/jpeg', size, base64 });
+    } catch {
+      Alert.alert('Bild ej tillgänglig', 'Det gick inte att läsa bilden. Du kan skicka förslaget utan bild.');
+    }
+  }, []);
+
+  const handleSubmit = useCallback(async () => {
+    if (!name.trim()) { Alert.alert('Namn krävs', 'Ange masjidens namn.'); return; }
+    if (!coords) { Alert.alert('Plats krävs', "Välj plats med “Använd nuvarande plats” eller “Välj på kartan”."); return; }
+
+    setSubmitting(true);
+    try {
+      let image_url: string | null = null;
+      let image_storage_path: string | null = null;
+      if (image) {
+        // Safety net: never start an upload for an oversize file.
+        if (image.size > MOSQUE_IMAGE_MAX_BYTES) {
+          setSubmitting(false);
+          Alert.alert('Bilden är för stor', 'Bilden behöver vara mindre än 5 MB. Välj en annan bild eller skicka förslaget utan bild.');
+          return;
+        }
+        const up = await uploadMosqueSubmissionImage(image.uri, image.mime, image.base64);
+        if (up.error || !up.url) {
+          if (mountedRef.current) {
+            setSubmitting(false);
+            Alert.alert(
+              'Uppladdning misslyckades',
+              up.error
+                ? `Det gick inte att ladda upp bilden.\n\n(${up.error})`
+                : 'Det gick inte att ladda upp bilden. Försök igen eller skicka utan bild.',
+            );
+          }
+          return;
+        }
+        image_url = up.url;
+        image_storage_path = up.path ?? null;
+      }
+
+      const res = await submitMosque({
+        name: name.trim(),
+        address: address.trim() || null,
+        postal_code: postal.trim() || null,
+        city: city.trim() || null,
+        latitude: coords.lat,
+        longitude: coords.lng,
+        opening_hours: hours.trim() ? { alla: hours.trim() } : null,
+        parking_available: parking,
+        access_info: accessInfo.trim() || null,
+        image_url,
+        image_storage_path,
+      });
+
+      if (!mountedRef.current) return;
+      setSubmitting(false);
+      if (res.id) {
+        Alert.alert('Tack!', 'Ditt förslag har skickats och granskas innan det publiceras.', [
+          { text: 'OK', onPress: closeReset },
+        ]);
+      } else {
+        Alert.alert('Kunde inte skicka', errorMessage(res.errorCode));
+      }
+    } catch {
+      if (mountedRef.current) {
+        setSubmitting(false);
+        Alert.alert('Något gick fel', 'Kontrollera din anslutning och försök igen.');
+      }
+    }
+  }, [name, coords, image, address, postal, city, hours, parking, accessInfo, closeReset]);
+
+  const coordLabel = coords ? `${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}` : 'Ingen plats vald';
+
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={closeReset}>
+      <View style={[styles.root, { backgroundColor: T.bg }]}>
+        <View style={[styles.header, { paddingTop: insets.top + 8, borderBottomColor: T.separator }]}>
+          <TouchableOpacity onPress={closeReset} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Text style={[styles.headerBtn, { color: T.textMuted }]}>Avbryt</Text>
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: T.text }]}>Lägg till masjid</Text>
+          <View style={{ width: 54 }} />
+        </View>
+
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 120 }} keyboardShouldPersistTaps="handled">
+            <Field label="Namn *" value={name} onChangeText={setName} placeholder="Masjidens namn" T={T} />
+            <Field label="Adress" value={address} onChangeText={setAddress} placeholder="Gata och nummer" T={T} />
+            <View style={styles.rowFields}>
+              <View style={{ flex: 1 }}>
+                <Field label="Postnummer" value={postal} onChangeText={setPostal} placeholder="123 45" keyboardType="numbers-and-punctuation" T={T} />
+              </View>
+              <View style={{ flex: 2 }}>
+                <Field label="Stad" value={city} onChangeText={setCity} placeholder="Stad" T={T} />
+              </View>
+            </View>
+
+            {/* Position */}
+            <Text style={[styles.label, { color: T.textMuted }]}>Plats *</Text>
+            <View style={[styles.coordBox, { backgroundColor: T.card, borderColor: T.border }]}>
+              <Ionicons name="location" size={18} color={coords ? T.accent : T.textMuted} />
+              <Text style={[styles.coordText, { color: coords ? T.text : T.textMuted }]}>{coordLabel}</Text>
+            </View>
+            <View style={styles.posButtons}>
+              <TouchableOpacity
+                style={[styles.posBtn, { backgroundColor: T.card, borderColor: T.border, opacity: userLoc ? 1 : 0.5 }]}
+                onPress={() => userLoc && setCoords(userLoc)}
+                disabled={!userLoc}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="navigate" size={16} color={T.accent} />
+                <Text style={[styles.posBtnText, { color: T.text }]}>Använd nuvarande plats</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.posBtn, { backgroundColor: T.card, borderColor: T.border }]}
+                onPress={() => setPickerVisible(true)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="map" size={16} color={T.accent} />
+                <Text style={[styles.posBtnText, { color: T.text }]}>Välj på kartan</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Field label="Öppettider" value={hours} onChangeText={setHours} placeholder="t.ex. 05:00–23:00" T={T} />
+
+            {/* Parking */}
+            <Text style={[styles.label, { color: T.textMuted }]}>Parkering</Text>
+            <View style={styles.segment}>
+              {([['Ja', true], ['Nej', false]] as const).map(([lbl, val]) => {
+                const active = parking === val;
+                return (
+                  <TouchableOpacity
+                    key={lbl}
+                    style={[styles.segBtn, { backgroundColor: active ? T.accent : T.card, borderColor: T.border }]}
+                    onPress={() => setParking(active ? null : val)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.segText, { color: active ? '#fff' : T.text }]}>{lbl}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <Field label="Tillgänglighet / övrig info" value={accessInfo} onChangeText={setAccessInfo} placeholder="t.ex. rullstolsanpassad entré" multiline T={T} />
+
+            {/* Image */}
+            <Text style={[styles.label, { color: T.textMuted }]}>Bild (valfri)</Text>
+            {image ? (
+              <View style={[styles.imageWrap, { borderColor: T.border }]}>
+                <Image source={{ uri: image.uri }} style={styles.image} contentFit="cover" />
+                <TouchableOpacity style={[styles.imageRemove, { backgroundColor: T.card }]} onPress={() => setImage(null)}>
+                  <Ionicons name="close" size={18} color={T.text} />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity style={[styles.imagePick, { backgroundColor: T.card, borderColor: T.border }]} onPress={pickImage} activeOpacity={0.8}>
+                <Ionicons name="image-outline" size={20} color={T.accent} />
+                <Text style={[styles.posBtnText, { color: T.text }]}>Lägg till en bild (max 5 MB)</Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity
+              style={[styles.submit, { backgroundColor: T.accent, opacity: submitting ? 0.7 : 1 }]}
+              onPress={handleSubmit}
+              disabled={submitting}
+              activeOpacity={0.85}
+            >
+              {submitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>Skicka för granskning</Text>}
+            </TouchableOpacity>
+            <Text style={[styles.note, { color: T.textMuted }]}>
+              Ditt förslag granskas av en administratör innan det publiceras.
+            </Text>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </View>
+
+      <MasjidLocationPicker
+        visible={pickerVisible}
+        initialLat={coords?.lat ?? userLoc?.lat ?? null}
+        initialLng={coords?.lng ?? userLoc?.lng ?? null}
+        onCancel={() => setPickerVisible(false)}
+        onPicked={(lat, lng) => { setCoords({ lat, lng }); setPickerVisible(false); }}
+      />
+    </Modal>
+  );
+}
+
+function Field({
+  label, value, onChangeText, placeholder, multiline, keyboardType, T,
+}: {
+  label: string; value: string; onChangeText: (t: string) => void; placeholder: string;
+  multiline?: boolean; keyboardType?: 'default' | 'numbers-and-punctuation'; T: any;
+}) {
+  return (
+    <View style={{ marginBottom: 14 }}>
+      <Text style={[styles.label, { color: T.textMuted }]}>{label}</Text>
+      <TextInput
+        style={[
+          styles.input,
+          { backgroundColor: T.card, borderColor: T.border, color: T.text },
+          multiline && { height: 80, textAlignVertical: 'top' },
+        ]}
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={T.textMuted}
+        multiline={multiline}
+        keyboardType={keyboardType}
+        autoCorrect={false}
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: { flex: 1 },
+  header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, paddingBottom: 10, borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  headerBtn: { fontSize: 16 },
+  headerTitle: { fontSize: 17, fontWeight: '700' },
+  label: { fontSize: 13, fontWeight: '600', marginBottom: 6 },
+  input: { borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15 },
+  rowFields: { flexDirection: 'row', gap: 12 },
+  coordBox: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 14, paddingVertical: 12 },
+  coordText: { fontSize: 15 },
+  posButtons: { flexDirection: 'row', gap: 12, marginTop: 10, marginBottom: 14 },
+  posBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, paddingVertical: 12 },
+  posBtnText: { fontSize: 14, fontWeight: '600' },
+  segment: { flexDirection: 'row', gap: 12, marginBottom: 14 },
+  segBtn: { flex: 1, alignItems: 'center', borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, paddingVertical: 12 },
+  segText: { fontSize: 15, fontWeight: '600' },
+  imageWrap: { borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden', height: 160 },
+  image: { width: '100%', height: '100%' },
+  imageRemove: { position: 'absolute', top: 8, right: 8, width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  imagePick: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, paddingVertical: 16 },
+  submit: { borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginTop: 22 },
+  submitText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  note: { fontSize: 12, textAlign: 'center', marginTop: 10 },
+});

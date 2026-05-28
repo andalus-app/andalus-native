@@ -63,6 +63,11 @@ let kLegacyPrayerIdPrefix    = "andalus-prayer-"
 let kDhikrIdentifiers        = ["andalus-dhikr-today", "andalus-dhikr-tomorrow"]
 let kPrePrayerPrefix         = "hidayah-pre-prayer-"
 
+/// Maximum number of days ahead the native scheduler will queue prayer
+/// notifications when the multi-day cache is available. Must match
+/// PRAYER_LOOKAHEAD_DAYS in services/notifications.ts.
+let kPrayerLookaheadDays     = 7
+
 // MARK: - App Group keys
 
 private let kAppGroup                    = "group.com.anonymous.Hidayah"
@@ -346,6 +351,11 @@ struct NotificationScheduleState: Codable {
     var school:                  Int
     var todayT:                  [String: String]?
     var tomT:                    [String: String]?
+    /// Stable fingerprint of the full 1-to-7 day prayer schedule that was queued.
+    /// Written whenever a multi-day schedule is set (JS or native path 1).
+    /// When present, rescheduleNeeded short-circuits the per-day diff loop.
+    /// Absent on older state — comparison falls back to today/tomorrow per-minute.
+    var weekTimesHash:           String?
     var dhikrEnabled:            Bool
     var prePrayerOffset:         Int
     var updatedAt:               Double   // Unix seconds
@@ -596,7 +606,8 @@ final class NativeNotificationScheduler {
                     todayDate:    resolvedDate,
                     tomorrowDate: resolvedTom,
                     todayT:       todayT,
-                    tomT:         tomT
+                    tomT:         tomT,
+                    dailyTimes:   nil   // effective schedule path: only today + tomorrow available
                 )
                 NSLog("[NativeNotif] Using effective schedule (native_precise_cache): %@ Asr=%@",
                       precise.displayName, todayT["Asr"] ?? "?")
@@ -767,6 +778,12 @@ final class NativeNotificationScheduler {
         let tomorrowDate: String
         let todayT:       [String: String]
         let tomT:         [String: String]?
+        /// When present, holds prayer times for up to 7 consecutive days keyed by
+        /// ISO date ("yyyy-MM-dd"). performSchedule iterates these to queue a
+        /// full week ahead instead of only today + tomorrow.
+        /// Only populated for path 1 (visited places); paths 2/3 leave it nil
+        /// and fall back to the legacy 2-day behavior.
+        let dailyTimes:   [String: [String: String]]?
     }
 
     /// Resolves today's and tomorrow's timings from a visited-place entry.
@@ -787,10 +804,13 @@ final class NativeNotificationScheduler {
                 NSLog("[NativeNotif] Visited %@ dailyTimesByDate: today=%@ found days=%d tomorrow=%@",
                       entry.displayName, todayStr, daily.count,
                       tomT != nil ? "found" : "missing")
+                // Pass the full multi-day dict through so performSchedule can
+                // queue up to 7 days at once (matches PRAYER_LOOKAHEAD_DAYS in JS).
                 return ResolvedTimings(todayDate:    todayStr,
                                        tomorrowDate: tomorrowStr,
                                        todayT:       todayT,
-                                       tomT:         tomT)
+                                       tomT:         tomT,
+                                       dailyTimes:   daily)
             }
             NSLog("[NativeNotif] Visited %@ stale: dailyTimesByDate present (%d days) but today=%@ missing",
                   entry.displayName, daily.count, todayStr)
@@ -801,7 +821,8 @@ final class NativeNotificationScheduler {
             return ResolvedTimings(todayDate:    entry.date,
                                    tomorrowDate: entry.tomorrowDate,
                                    todayT:       entry.todayTimes,
-                                   tomT:         entry.tomorrowTimes)
+                                   tomT:         entry.tomorrowTimes,
+                                   dailyTimes:   nil)
         }
         if entry.tomorrowDate == todayStr, let tomT = entry.tomorrowTimes {
             NSLog("[NativeNotif] Visited %@ midnight rollover (legacy) — using tomorrowTimes as today",
@@ -809,7 +830,8 @@ final class NativeNotificationScheduler {
             return ResolvedTimings(todayDate:    todayStr,
                                    tomorrowDate: tomorrowStr,
                                    todayT:       tomT,
-                                   tomT:         nil)
+                                   tomT:         nil,
+                                   dailyTimes:   nil)
         }
         NSLog("[NativeNotif] Visited %@ stale (legacy): date=%@ tomorrowDate=%@",
               entry.displayName, entry.date, entry.tomorrowDate)
@@ -828,7 +850,8 @@ final class NativeNotificationScheduler {
             return ResolvedTimings(todayDate: cache.today,
                                    tomorrowDate: cache.tomorrow,
                                    todayT: cache.todayT,
-                                   tomT: cache.tomT)
+                                   tomT: cache.tomT,
+                                   dailyTimes: nil)
         }
         if cache.tomorrow == todayStr, let tomT = cache.tomT {
             // Midnight rollover: cache was written yesterday; tomT is now today
@@ -837,7 +860,8 @@ final class NativeNotificationScheduler {
             return ResolvedTimings(todayDate: todayStr,
                                    tomorrowDate: tomorrowStr,
                                    todayT: tomT,
-                                   tomT: nil)
+                                   tomT: nil,
+                                   dailyTimes: nil)
         }
         return nil
     }
@@ -881,6 +905,19 @@ final class NativeNotificationScheduler {
         if s.prePrayerOffset != settings.effectivePrePrayerOffset {
             NSLog("[NativeNotif] Pre-prayer offset changed: %d → %d",
                   s.prePrayerOffset, settings.effectivePrePrayerOffset); return true
+        }
+        // Multi-day fast path: when both sides carry a weekTimesHash, a single
+        // equality check covers all 7 days. This short-circuits the per-minute
+        // loop below for the common "user moved within a metro, same schedule"
+        // case where the visited-place cache already holds these times.
+        if let prevHash = s.weekTimesHash, let daily = resolved.dailyTimes {
+            let currHash = self.computeWeekTimesHash(daily)
+            if prevHash == currHash {
+                NSLog("[NativeNotif] weekTimesHash unchanged (%d days) — skipping", daily.count)
+                return false
+            }
+            NSLog("[NativeNotif] weekTimesHash changed — rescheduling")
+            return true
         }
         let prayers = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"]
         for p in prayers {
@@ -928,27 +965,52 @@ final class NativeNotificationScheduler {
                 ("Maghrib", "maghrib"), ("Isha", "isha"),
             ]
 
-            // Today's prayers — date-scoped identifier: hidayah-prayer-YYYY-MM-DD-{key}
-            for (apiKey, idKey) in prayerMap {
-                guard let t = resolved.todayT[apiKey], !t.isEmpty,
-                      let fire = self.parseTime(t, base: todayBase), fire > now else { continue }
-                self.add(center,
-                         id:    "hidayah-prayer-\(resolved.todayDate)-\(idKey)",
-                         title: "Det är dags för \(apiKey)",
-                         body:  "i \(notifLabel)",
-                         at:    fire)
-            }
-
-            // Tomorrow's prayers — date-scoped identifier using tomorrowDate
-            if let tomT = resolved.tomT {
+            // Multi-day path: when the resolver supplied a dailyTimesByDate dict
+            // (path 1 = visited places), queue up to kPrayerLookaheadDays of
+            // prayer notifications in a single pass. Matches PRAYER_LOOKAHEAD_DAYS
+            // in services/notifications.ts so JS and native produce identical schedules.
+            // Other paths (precise effective schedule, fallback city) only have today
+            // + tomorrow and fall back to the legacy 2-day branch below.
+            if let daily = resolved.dailyTimes {
+                var queued = 0
+                for i in 0..<kPrayerLookaheadDays {
+                    guard let dayBase = cal.date(byAdding: .day, value: i, to: todayBase) else { continue }
+                    let dateStr = self.isoDate(dayBase)
+                    guard let timings = daily[dateStr] else { continue }
+                    for (apiKey, idKey) in prayerMap {
+                        guard let t = timings[apiKey], !t.isEmpty,
+                              let fire = self.parseTime(t, base: dayBase), fire > now else { continue }
+                        self.add(center,
+                                 id:    "hidayah-prayer-\(dateStr)-\(idKey)",
+                                 title: "Det är dags för \(apiKey)",
+                                 body:  "i \(notifLabel)",
+                                 at:    fire)
+                        queued += 1
+                    }
+                }
+                NSLog("[NativeNotif] Multi-day queued: %d prayer notifications across %d day(s)",
+                      queued, daily.count)
+            } else {
+                // Legacy 2-day branch (paths 2/3 and old visited entries without dailyTimesByDate)
                 for (apiKey, idKey) in prayerMap {
-                    guard let t = tomT[apiKey], !t.isEmpty,
-                          let fire = self.parseTime(t, base: tomorrowBase), fire > now else { continue }
+                    guard let t = resolved.todayT[apiKey], !t.isEmpty,
+                          let fire = self.parseTime(t, base: todayBase), fire > now else { continue }
                     self.add(center,
-                             id:    "hidayah-prayer-\(resolved.tomorrowDate)-\(idKey)",
+                             id:    "hidayah-prayer-\(resolved.todayDate)-\(idKey)",
                              title: "Det är dags för \(apiKey)",
                              body:  "i \(notifLabel)",
                              at:    fire)
+                }
+                if let tomT = resolved.tomT {
+                    for (apiKey, idKey) in prayerMap {
+                        guard let t = tomT[apiKey], !t.isEmpty,
+                              let fire = self.parseTime(t, base: tomorrowBase), fire > now else { continue }
+                        self.add(center,
+                                 id:    "hidayah-prayer-\(resolved.tomorrowDate)-\(idKey)",
+                                 title: "Det är dags för \(apiKey)",
+                                 body:  "i \(notifLabel)",
+                                 at:    fire)
+                    }
                 }
             }
 
@@ -983,7 +1045,11 @@ final class NativeNotificationScheduler {
                 self.cancelPrePrayerReminders(center: center)
             }
 
-            // Write schedule state
+            // Write schedule state. weekTimesHash is only set when we actually
+            // queued a multi-day schedule (resolved.dailyTimes present); for the
+            // 2-day legacy branch we leave it nil so a later JS call with the
+            // same times can still short-circuit via per-minute comparison.
+            let weekTimesHash: String? = resolved.dailyTimes.map(self.computeWeekTimesHash)
             let state = NotificationScheduleState(
                 version:                 1,
                 owner:                   "native",
@@ -998,6 +1064,7 @@ final class NativeNotificationScheduler {
                 school:                  settings.school,
                 todayT:                  resolved.todayT,
                 tomT:                    resolved.tomT,
+                weekTimesHash:           weekTimesHash,
                 dhikrEnabled:            settings.dhikrReminder,
                 prePrayerOffset:         offset,
                 updatedAt:               Date().timeIntervalSince1970
@@ -1110,6 +1177,24 @@ final class NativeNotificationScheduler {
         guard parts.count >= 2, parts[0] < 24, parts[1] < 60 else { return nil }
         return Calendar.current.date(bySettingHour: parts[0], minute: parts[1],
                                      second: 0, of: base)
+    }
+
+    /// Stable fingerprint of a multi-day schedule. MUST match the JS function
+    /// computeWeekTimesHash in services/notifications.ts byte-for-byte so a
+    /// native-written hash can be skip-compared against a JS-written hash.
+    /// Format per date (sorted ascending, joined by ";"):
+    ///   "YYYY-MM-DD:Fajr|Dhuhr|Asr|Maghrib|Isha"
+    /// Missing prayers stringify as empty.
+    private func computeWeekTimesHash(_ daily: [String: [String: String]]) -> String {
+        let dates = daily.keys.sorted()
+        var parts: [String] = []
+        parts.reserveCapacity(dates.count)
+        for d in dates {
+            let t = daily[d] ?? [:]
+            let row = "\(d):\(t["Fajr"] ?? "")|\(t["Dhuhr"] ?? "")|\(t["Asr"] ?? "")|\(t["Maghrib"] ?? "")|\(t["Isha"] ?? "")"
+            parts.append(row)
+        }
+        return parts.joined(separator: ";")
     }
 
     private func isoDate(_ date: Date) -> String {

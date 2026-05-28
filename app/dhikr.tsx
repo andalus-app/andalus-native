@@ -82,7 +82,7 @@ function useSlideIn(onClose: () => void) {
 }
 
 // ─── Audio player component ────────────────────────────────────────────────────
-function AudioPlayer({ url, T, isDark }: { url: string; T: any; isDark: boolean }) {
+function AudioPlayer({ url, label, T, isDark }: { url: string; label?: string; T: any; isDark: boolean }) {
   const playerRef  = useRef<any>(null);
   const barRef     = useRef(0);
   const mountedRef = useRef(true);
@@ -212,6 +212,9 @@ function AudioPlayer({ url, T, isDark }: { url: string; T: any; isDark: boolean 
 
   return (
     <View style={{ marginTop: 14, backgroundColor: bg, borderRadius: 12, padding: 12 }}>
+      {!!label && (
+        <Text style={{ fontSize: 12, fontWeight: '700', color: isDark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.55)', marginBottom: 10 }}>{label}</Text>
+      )}
       {/* Controls row: play — bar — repeat */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
         <TouchableOpacity onPress={toggle} disabled={!!error}
@@ -530,11 +533,14 @@ function DhikrCard({ d, T, isDark, favorites, onToggleFav, onCategoryPress, arab
           </>
         )}
 
-        {/* Audio player */}
+        {/* Audio player(s) — second clip + labels only when mp3_url_2 is set */}
         {!!d.mp3_url && (
           <View style={{ paddingHorizontal: 16, paddingBottom: 14, paddingTop: 14 }}>
             <View style={{ height: 1, backgroundColor: dividerCol, marginBottom: 12 }} />
-            <AudioPlayer url={d.mp3_url} T={T} isDark={isDark} />
+            <AudioPlayer url={d.mp3_url} label={d.mp3_url_2 ? d.mp3_label : undefined} T={T} isDark={isDark} />
+            {!!d.mp3_url_2 && (
+              <AudioPlayer url={d.mp3_url_2} label={d.mp3_url_2_label} T={T} isDark={isDark} />
+            )}
           </View>
         )}
       </View>
@@ -1285,7 +1291,7 @@ export default function DhikrScreen() {
       setSiblings(sibs);
     }, 80);
     return () => clearTimeout(timer);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [params.dhikrId]);
 
   // Deep-link from home widgets: open a specific group with an optional pre-expanded section.
@@ -1299,7 +1305,7 @@ export default function DhikrScreen() {
       setSelGruppInitialOpenIdx(Number.isFinite(sectionIdx) ? sectionIdx : null);
     }, 80);
     return () => clearTimeout(timer);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [params.openGroup, params.openSection]);
 
   const saveFavs = (val: string[]) => AsyncStorage.setItem(STORAGE_FAV, JSON.stringify(val));

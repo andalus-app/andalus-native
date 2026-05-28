@@ -9,6 +9,10 @@ import SvgIcon from '../SvgIcon';
 import QuranVerseView from './QuranVerseView';
 import { fetchComposedMushafPage, getComposedPageSync } from '../../services/mushafApi';
 import type { ComposedMushafPage } from '../../services/mushafApi';
+import { isPageCached } from '../../services/quranOfflineManifest';
+import { isQCFPageFontAvailableOffline } from '../../services/mushafFontManager';
+import { prioritize } from '../../services/quranOfflineManager';
+import { usePageVerified } from '../../hooks/useOfflineStats';
 import { useTheme } from '../../context/ThemeContext';
 import { useQuranContext, useActiveVerseKey } from '../../context/QuranContext';
 import type { LongPressedVerse } from '../../context/QuranContext';
@@ -296,6 +300,10 @@ function QuranPageView({ pageNumber, width, height, viewportHeight, screenWidth,
 
   const openSurahSheet       = useCallback((id: number) => setSelectedSurahId(id), []);
   const setPressedSurahIdCb  = useCallback((id: number | null) => setPressedSurahId(id), []);
+
+  // Offline verification gate: polls until page is fully verified offline (data + font on disk)
+  const pageVerified = usePageVerified(pageNumber);
+
   const mountedRef       = useRef(true);
   const abortRef         = useRef<AbortController | null>(null);
   // Initialize to 1 so that when verse mode switches to mushaf mode, the
@@ -319,6 +327,11 @@ function QuranPageView({ pageNumber, width, height, viewportHeight, screenWidth,
     const isVerse = readingModeRef.current === 'verse';
     if (!isVerse) fadeAnim.setValue(0);
     setLoadState({ status: 'loading' });
+
+    // Offline gate: if page is not cached, trigger high-priority download
+    if (!isPageCached(pageNumber)) {
+      prioritize(pageNumber);
+    }
 
     abortRef.current?.abort();
     const controller = new AbortController();
@@ -459,6 +472,21 @@ function QuranPageView({ pageNumber, width, height, viewportHeight, screenWidth,
   if (!slotLayout) return <View style={{ width, height, backgroundColor: T.bg }} />;
 
   const { padV, slotH, verticalShift, pageLastVerseKey } = slotLayout;
+
+  // Verified gate: page must have data on disk AND font on disk before rendering.
+  // usePageVerified polls until both conditions are met, so we can trust pageVerified.
+  // If not verified, show spinner and trigger download (prioritize is called in load())
+  const isDataCached = isPageCached(pageNumber);
+  const pageDataAndFontVerified = loadState.status === 'ready' && isDataCached && pageVerified;
+
+  if (!pageDataAndFontVerified) {
+    // Page is not fully verified offline — show spinner instead of rendering
+    return (
+      <View style={{ width, height, backgroundColor: T.bg, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator size="large" color={T.accent} />
+      </View>
+    );
+  }
 
   // Highlight priority: confirmed long-press > active audio > touch
   const highlightKey = longPressedVerse?.verseKey ?? activeVerseKey ?? null;

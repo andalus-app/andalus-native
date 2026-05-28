@@ -62,3 +62,6 @@ ios/Pods_delete_me/
 ios/Pods/
 ios/Pods_delete_me/
 ios/Pods/
+
+# Nominatim reverse-geocode cache (Phase 2A mosque address backfill)
+scripts/.cache/

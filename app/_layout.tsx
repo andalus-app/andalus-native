@@ -35,7 +35,7 @@ NativeSplash.preventAutoHideAsync();
 // No await needed; QuranAudioPlayer's own useEffect enqueues itself on the same
 // promise and picks up the result when it resolves.
 Asset.fromModule(
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
+   
   require('../assets/images/icon.png'),
 ).downloadAsync().catch(() => {});
 
@@ -210,6 +210,10 @@ function AppContent({ onFontsReady }: { onFontsReady: () => void }) {
         <Stack.Screen name="wudu-guide"   options={{ fullScreenGestureEnabled: false }} />
         <Stack.Screen name="prayer-steps" options={{ fullScreenGestureEnabled: false }} />
         <Stack.Screen name="tasbih" options={{ fullScreenGestureEnabled: false }} />
+        {/* Närmaste masjid: isolated map+list screen — unmounting it tears down the MapLibre WebView */}
+        <Stack.Screen name="masjid" options={{ fullScreenGestureEnabled: false }} />
+        {/* Admin · Masjid moderation — reached from the existing admin area (same session) */}
+        <Stack.Screen name="admin-mosques" options={{ fullScreenGestureEnabled: false }} />
       </Stack>
 
       {/* YouTube background audio player — always mounted outside the tab/stack

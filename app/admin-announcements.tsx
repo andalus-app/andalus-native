@@ -12,10 +12,6 @@ import {
   KeyboardAvoidingView, Platform, Alert, RefreshControl,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-// Lazy-load expo-image-picker — the native module requires a rebuilt binary.
-// Until the app is rebuilt, this degrades gracefully instead of crashing on import.
-let ImagePicker: typeof import('expo-image-picker') | null = null;
-try { ImagePicker = require('expo-image-picker'); } catch { ImagePicker = null; }
 import Svg, { Path, Rect } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -27,6 +23,10 @@ import {
   deleteAnnouncement, uploadAnnouncementImage,
 } from '../services/announcementsApi';
 import BackButton from '../components/BackButton';
+// Lazy-load expo-image-picker — the native module requires a rebuilt binary.
+// Until the app is rebuilt, this degrades gracefully instead of crashing on import.
+let ImagePicker: typeof import('expo-image-picker') | null = null;
+try { ImagePicker = require('expo-image-picker'); } catch { ImagePicker = null; }
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type FormState = {
@@ -367,6 +367,28 @@ export default function AdminAnnouncementsScreen() {
         contentContainerStyle={{ padding: 16, paddingBottom: 120 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={T.accent} />}
       >
+        {/* ── Masjid-moderering (Närmaste masjid) ─────────────────────────── */}
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={() => router.push('/admin-mosques' as any)}
+          style={[styles.card, { backgroundColor: T.card, borderColor: T.border, marginBottom: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: T.accent + '22', alignItems: 'center', justifyContent: 'center' }}>
+              <Svg width={18} height={18} viewBox="0 0 24 24">
+                <Path d="M12 3l8 5v3H4V8zM5 11v7m4-7v7m6-7v7m4-7v7M3 21h18" stroke={T.accent} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+              </Svg>
+            </View>
+            <View>
+              <Text style={{ fontSize: 15, fontWeight: '600', color: T.text }}>Masjid-moderering</Text>
+              <Text style={{ fontSize: 12, color: T.textMuted, marginTop: 1 }}>Godkänn, redigera & hantera masjid</Text>
+            </View>
+          </View>
+          <Svg width={18} height={18} viewBox="0 0 24 24">
+            <Path d="M9 6l6 6-6 6" stroke={T.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </Svg>
+        </TouchableOpacity>
+
         {/* ── Hem-banner topp ─────────────────────────────────────────────── */}
         <TouchableOpacity
           activeOpacity={0.8}

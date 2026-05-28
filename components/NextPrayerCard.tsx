@@ -23,11 +23,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing, AppState, type AppStateStatus } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
-
-const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/context/ThemeContext';
 import { useApp } from '@/context/AppContext';
+
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 // ── Internal constants ─────────────────────────────────────────────────────────
 

@@ -4,8 +4,9 @@
  * When running a proper development build, swap this back to react-native-pdf.
  */
 import React, { forwardRef, useImperativeHandle, useRef, useState } from 'react';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator , StyleSheet } from 'react-native';
 import { WebView, WebViewMessageEvent } from 'react-native-webview';
+
 
 interface Source {
   uri: string;
@@ -231,6 +232,4 @@ const NativePdf = forwardRef<{ setPage: (n: number) => void }, PdfProps>(
     );
   }
 );
-
-import { StyleSheet } from 'react-native';
 export default NativePdf;

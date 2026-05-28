@@ -321,6 +321,93 @@ ifisCity: string                   // IFIS city slug (default: 'stockholm')
 
 ---
 
+## Närmaste masjid (Nearest Mosque)
+
+UI name is always **"Närmaste masjid"** and items are always called **masjid** (even if the DB row is a mosque,
+Islamic center, or prayer hall). Opened from a masjid icon **left of** the monthly-calendar icon in the prayer-times
+topbar (`app/(tabs)/index.tsx`). The icon is `constants/masjidIcon.ts` (placeholder until `mosuq-places.svg` is dropped
+in — swap the `MASJID_ICON_SVG` constant, keep `__C__` for the themed colour).
+
+### Architecture: MapLibre GL JS in a WebView + Supabase
+* The map is **MapLibre GL JS rendered inside `react-native-webview`** — NO native map module, NO Podfile/prebuild
+  changes. `components/masjid/masjidMapHtml.ts` builds the map document; `components/masjid/MasjidMapView.tsx` is the
+  RN wrapper. Bridge: RN→map via `injectJavaScript(window.__masjid.handle(...))`, map→RN via `postMessage`.
+* Basemap = **OpenStreetMap raster tiles** (no API key). The `TILE_STYLE` constant in `masjidMapHtml.ts` is the single
+  place to swap in MapTiler/self-hosted tiles for production (OSM's policy discourages heavy in-app traffic).
+* Supabase is the **only** data source. Reads go through the `nearby_mosques` RPC (`services/mosques.ts`).
+
+### NO Google APIs (hard rule)
+No Google Maps/Places/Geocoding/Nearby Search/data fetch anywhere. Google Maps is only **opened externally** via a
+lat/lng URL for directions (`components/masjid/DirectionsSheet.tsx`). Geocoding (Phase 2) uses **Nominatim/OSM**.
+
+### Isolation / cleanup (CRITICAL)
+The whole feature lives in the `app/masjid.tsx` route. Navigating back unmounts it → the WebView unmounts (killing all
+map JS, listeners and CSS animations). The screen starts **no** intervals/timeouts/geolocation watchers/realtime
+subscriptions/background retries. On unmount it aborts the in-flight Supabase request (`AbortController`) and blocks
+late `setState` via a `mountedRef`. Nothing masjid-related runs on the prayer-times tab when the feature is closed.
+
+### Permission flow (`hooks/useMasjidLocation.ts`)
+No map and no GPS mount until permission is granted. The gate (`MasjidPermissionGate.tsx`) shows
+*"Platsåtkomst krävs"* + *"Tillåt åtkomst till platsinfo"*. First time → system prompt; previously denied →
+`Linking.openSettings()`. Re-checks on `AppState` 'active'; mounts the map once granted.
+
+### List / card / "Min position"
+* List is a **live-draggable** bottom sheet (its height is an `Animated.Value`). Two snap points: **default**
+  (3 nearest, map visible) and **expanded** (all loaded, nearly full screen, scrollable). The grab handle follows
+  the finger during the drag (PanResponder `setValue`) and **springs** to the nearest snap on release (by velocity,
+  else by distance) — no instant state switch. **"Visa fler" / "Visa färre"** and selecting a masjid also spring
+  to a snap. One RPC fetch (up to `MASJID_FETCH_LIMIT`) loads everything; expand/collapse is client-side. The
+  Animated listener is removed and the animation stopped on unmount; the map/WebView is a sibling, so sheet
+  animation never relayouts it.
+* Tapping a row or marker focuses the map and opens `MasjidCard` (name, address, distance, opening hours, parking
+  Ja/Nej, access info, approved image, **"Vägbeskrivning"**). Only approved data/images are ever shown.
+* **"Min position"** FAB re-reads GPS, recenters, clears search, restores distance sort from the real position.
+
+### Database (`supabase/migrations/20260527_mosques.sql`)
+* `mosques` (status pending/approved/rejected/blocked), `submission_rate_limits`, `blocked_submitters`.
+* RLS: anon/authenticated **SELECT only `status='approved'`**; linked admins (`is_linked_admin()`) read all + write.
+  No anon INSERT on `mosques` — submissions go through the RPC only.
+* `nearby_mosques(p_lat,p_lng,p_limit,p_offset)` — SECURITY DEFINER Haversine, approved-only, returns
+  `distance_meters`, sorted ascending.
+* `submit_mosque(...)` — SECURITY DEFINER; forces `status='pending'`, enforces **blocked-submitter** check and
+  **rate limits (3/hour, 10/day)** server-side using hashed `device_id_hash` (never raw device id). Used by Phase 2.
+* Storage bucket `mosque-images`: public read, 5 MB, images only; admin upload/delete; user submissions restricted to
+  the `submissions/` folder. Max 1 image per masjid, compressed before upload (Phase 2).
+* App-user ids are TEXT (`app_users.id`), so `submitted_by_user_id` and rate-limit `user_id` are TEXT;
+  `approved_by_admin_id` is the admin's `auth.uid()` (UUID).
+
+### Phases
+* **Phase 1 (built):** DB, permission gate, map + markers (nearest pulses), list + "Visa fler", card, directions,
+  "Min position".
+* **Phase 2A (built):** admin-only address backfill. `scripts/backfill-mosque-addresses.mjs` reverse-geocodes approved
+  mosques that lack an address via **Nominatim** (≤1 req/sec, disk-cached, service_role, never touches lat/lng), filling
+  address/postal_code/city/country and marking `address_source='nominatim'`, `address_verified=false` (admin verifies
+  later). Columns added in `supabase/migrations/20260528_mosque_address_source.sql`. NOT run in-app / for end users.
+* **Phase 2 search (built):** `MasjidSearchBar` at the top of the map. Masjid text search in Supabase
+  (`searchApprovedMosques` — approved name/city/address/postal_code, debounced, AbortController) and free-text
+  **place** search via Nominatim (`services/nominatim.ts`, AbortController, biased to `se`). A place result recenters
+  the map, drops the searched-place marker, and reruns `nearby_mosques` from the searched lat/lng (nearest pulses);
+  a masjid result recenters + opens its card. "Min position" clears the search and restores the GPS-based list.
+* **Phase 2 add-masjid (built):** round **+** FAB on the map (directly above the min-position FAB) opens
+  `AddMasjidModal` (name, address, postal, city, position via current GPS *or* on-map picker `MasjidLocationPicker`,
+  opening hours, parking Ja/Nej, access info, optional ≤5 MB image compressed on pick). Submits via `submitMosque`
+  → `submit_mosque` RPC (always `status='pending'`; users can never create approved). Image uploads to
+  `mosque-images/submissions/` (`uploadMosqueSubmissionImage`). Identity is `sha256(device_id)` (raw id never sent)
+  + app_users.id when known. Swedish confirmation on success; RPC errors mapped to Swedish
+  (`rate_limit_hour`/`rate_limit_day`/`submitter_blocked`) plus network/permission handling. No Google APIs.
+* **Phase 3 admin (built):** reached from **Admin · Notiser → "Masjid-moderering"** (same existing Supabase Auth +
+  PIN session — NO separate login). `app/admin-mosques.tsx`: segmented **Väntande / Publicerade / Dolda** lists with
+  full submission details + image. Actions: **Godkänn** (approved + approver + timestamp), **Avvisa** (rejected +
+  optional reason), **Blockera** (inserts into `blocked_submitters` by `submitted_by_user_id` and/or
+  `submitted_device_hash`, permanent or 7/30 days, and hides the masjid), **Avpublicera** (approved→rejected),
+  **Återställ** (→approved), **Redigera** + **manuell add** (`MasjidAdminEditModal` → direct `approved`,
+  replace/remove image to `mosque-images/approved/`, on-map position, **Adress verifierad** → `address_verified=true`,
+  `address_source='admin'`). All writes via RLS-gated admin functions in `services/mosques.ts` (`is_linked_admin()`,
+  no client-only checks). Schema add `mosques.submitted_device_hash` in `supabase/migrations/20260529_mosque_admin.sql`.
+  No polling/realtime — loads on mount/tab-change/refresh/after-action; clean unmount.
+
+---
+
 ## External Docs
 
 See:

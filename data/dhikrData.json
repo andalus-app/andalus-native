@@ -191,6 +191,25 @@
       ]
     },
     {
+      "id": "lycklig",
+      "label": "Lycklig",
+      "synonyms": [
+        "lycklig",
+        "glad",
+        "glädjefylld",
+        "glädje",
+        "glad över något",
+        "upprymd",
+        "tacksam över livet"
+      ],
+      "description": "När användaren känner glädje och vill uttrycka den till Allah.",
+      "intent_tags": [
+        "gladje",
+        "shukr",
+        "lovprisning"
+      ]
+    },
+    {
       "id": "angerfull",
       "label": "Ångerfull",
       "synonyms": [
@@ -669,6 +688,61 @@
         "intent_tags": [
           "shukr",
           "gladje",
+          "lovprisning"
+        ],
+        "recommended_item_ids": [
+          "gladje-och-ilska-vad-man-sager-nar-man-forvanas-eller-glads-allah-ar-storst",
+          "gladje-och-ilska-vad-man-sager-nar-man-forvanas-eller-glads-fri-ar-allah-fran-alla-brister",
+          "gladje-och-ilska-vad-man-ska-gora-nar-nagot-gladjande-intraffar-i-tacksamhet-till-allah",
+          "gladje-och-ilska-vad-man-sager-nar-nagot-hander-som-man-gillar-eller-ogillar-lov-och-pris-tillkommer-allah"
+        ],
+        "recommended_preview": [
+          {
+            "id": "gladje-och-ilska-vad-man-sager-nar-man-forvanas-eller-glads-allah-ar-storst",
+            "titel": "Allah är störst!",
+            "kategori": "Glädje och ilska",
+            "undersida": "Vad man säger när man förvånas eller gläds",
+            "priority_score": 72
+          },
+          {
+            "id": "gladje-och-ilska-vad-man-sager-nar-man-forvanas-eller-glads-fri-ar-allah-fran-alla-brister",
+            "titel": "Fri är Allah från alla brister!",
+            "kategori": "Glädje och ilska",
+            "undersida": "Vad man säger när man förvånas eller gläds",
+            "priority_score": 72
+          },
+          {
+            "id": "gladje-och-ilska-vad-man-ska-gora-nar-nagot-gladjande-intraffar-i-tacksamhet-till-allah",
+            "titel": "I tacksamhet till Allah",
+            "kategori": "Glädje och ilska",
+            "undersida": "Vad man ska göra när något glädjande inträffar",
+            "priority_score": 72
+          },
+          {
+            "id": "gladje-och-ilska-vad-man-sager-nar-nagot-hander-som-man-gillar-eller-ogillar-lov-och-pris-tillkommer-allah",
+            "titel": "Lov och pris tillkommer Allah",
+            "kategori": "Glädje och ilska",
+            "undersida": "Vad man säger när något händer som man gillar eller ogillar",
+            "priority_score": 72
+          }
+        ]
+      },
+      {
+        "id": "lycklig",
+        "label": "Lycklig",
+        "synonyms": [
+          "lycklig",
+          "glad",
+          "glädjefylld",
+          "glädje",
+          "glad över något",
+          "upprymd",
+          "tacksam över livet"
+        ],
+        "description": "När användaren känner glädje och vill uttrycka den till Allah.",
+        "intent_tags": [
+          "gladje",
+          "shukr",
           "lovprisning"
         ],
         "recommended_item_ids": [
@@ -1455,11 +1529,14 @@
             {
               "titel": "Fri från alla brister är Han som låter oss förfoga över detta [färdmedel]",
               "url": "https://islam.nu/dhikr/akallan-i-samband-med-resa/fri-fran-alla-brister-ar-han-som-later-oss-forfoga-over-detta-fardmedel/",
-              "arabisk_text": "اللهُ أكْبَرُ، اللهُ أكْبَرُ، اللهُ أكْبَرُ، {سُبحَان الذِي سَخر لَنا هَذا و ما كُنا له ُمُقرِنِين وَإِنَّا إِلَىٰ رَبِّنَا لَمُنقَلِبُونَ} اللَّهُمَّ إنَّا نَسْأَلُكَ فِي سَفَرِنَا هَذَا البِرَّ والتَّقْوى، ومِنَ العَمَلِ مَا تَرْضَى، اللَّهُمَّ هَوِّنْ عَلَيْنَا سَفَرَنَا هَذَا وَاطْوِ عَنَّا بُعْدَهُ، اللَّهُمَّ أنْتَ الصَّاحِبُ فِي السَّفَرِ، والخَلِيفَةُ فِي الأهْلِ، اللَّهُمَّ إنِّي أعُوذُ بِكَ مِنْ وَعْثَاءِ السَّفَرِ، وَكآبَةِ الـمَنْظَرِ، وسُوءِ الـمُنْقَلَبِ فِي الـمَالِ والأهْلِآيبُونَ، تَائِبُونَ، عَابِدُونَ، لِرَبِّنَا حَامِدُونَ",
-              "translitteration": "Allahu Akbar, Allahu Akbar, Allahu Akbar, ”Subhânal-lathî sakhkhara lanâ hâthâ wa mâ kunnâ lahu muqrinîn. Wa innâ ilâ Rabbinâ lamunqalibûn.” Allahumma innâ nas´aluka fî safarinâ hâthal-birra wattaqwâ, wa minal-'amali mâ tardhâ, Allahumma hawwin 'alaynâ safaranâ hâthâ watwi 'annâ bu'dah, Allahumma Antas-sâhibu fis-safar, walkhalîfatu fil-ahl, Allahumma innî a'ûthu bika min wa'thâ´is-safar, wa ka´âbatil-mandhar, wa sû´il-munqalabi fil-mâli wal ahl.",
-              "svensk_text": "Allah är större. Allah är större. Allah är större. Fri från alla brister är Han som låter oss förfoga över detta [färdmedel]; själva skulle vi inte ha kunnat ta det i vår tjänst, och vi skall [en dag] vända tillbaka till vår Herre [efter döden] . Allah! Vi ber dig om fromhet, gudsfruktan och handlingar som behagar Dig under vår resa. Allah! Underlätta för oss vår resa och förkorta för oss det långa avståndet. Du är Den som vakar över oss under resan och bevarar familjen vi lämnat bakom oss. Allah! Jag söker skydd hos Dig mot resans svårigheter, en tragisk syn och en dålig återkomst till min egendom och familj.På hemvägen sade han samma sak samt lade till:Vi återvänder, ångrar oss, dyrkar och lovprisar vår Herre.",
+              "arabisk_text": "اللهُ أكْبَرُ، اللهُ أكْبَرُ، اللهُ أكْبَرُ، {سُبحَان الذِي سَخر لَنا هَذا و ما كُنا له ُمُقرِنِين وَإِنَّا إِلَىٰ رَبِّنَا لَمُنقَلِبُونَ} اللَّهُمَّ إنَّا نَسْأَلُكَ فِي سَفَرِنَا هَذَا البِرَّ والتَّقْوى، ومِنَ العَمَلِ مَا تَرْضَى، اللَّهُمَّ هَوِّنْ عَلَيْنَا سَفَرَنَا هَذَا وَاطْوِ عَنَّا بُعْدَهُ، اللَّهُمَّ أنْتَ الصَّاحِبُ فِي السَّفَرِ، والخَلِيفَةُ فِي الأهْلِ، اللَّهُمَّ إنِّي أعُوذُ بِكَ مِنْ وَعْثَاءِ السَّفَرِ، وَكآبَةِ الـمَنْظَرِ، وسُوءِ الـمُنْقَلَبِ فِي الـمَالِ والأهْلِ\n\nPå hemvägen sade han samma sak samt lade till:\n\nآيبُونَ، تَائِبُونَ، عَابِدُونَ، لِرَبِّنَا حَامِدُونَ",
+              "translitteration": "Allahu Akbar, Allahu Akbar, Allahu Akbar, ”Subhânal-lathî sakhkhara lanâ hâthâ wa mâ kunnâ lahu muqrinîn. Wa innâ ilâ Rabbinâ lamunqalibûn.” Allahumma innâ nas´aluka fî safarinâ hâthal-birra wattaqwâ, wa minal-'amali mâ tardhâ, Allahumma hawwin 'alaynâ safaranâ hâthâ watwi 'annâ bu'dah, Allahumma Antas-sâhibu fis-safar, walkhalîfatu fil-ahl, Allahumma innî a'ûthu bika min wa'thâ´is-safar, wa ka´âbatil-mandhar, wa sû´il-munqalabi fil-mâli wal ahl.\n\nPå hemvägen sade han samma sak samt lade till:\n\nÂyibûna, tâ´ibûna, 'âbidûn, lirabbinâ hâmidûn.",
+              "svensk_text": "Allah är större. Allah är större. Allah är större. Fri från alla brister är Han som låter oss förfoga över detta [färdmedel]; själva skulle vi inte ha kunnat ta det i vår tjänst, och vi skall [en dag] vända tillbaka till vår Herre [efter döden] . Allah! Vi ber dig om fromhet, gudsfruktan och handlingar som behagar Dig under vår resa. Allah! Underlätta för oss vår resa och förkorta för oss det långa avståndet. Du är Den som vakar över oss under resan och bevarar familjen vi lämnat bakom oss. Allah! Jag söker skydd hos Dig mot resans svårigheter, en tragisk syn och en dålig återkomst till min egendom och familj.\n\nPå hemvägen sade han samma sak samt lade till:\n\nVi återvänder, ångrar oss, dyrkar och lovprisar vår Herre.",
               "kallhanvisning": "Muslim 2/998 nr 1342.",
               "mp3_url": "https://fra1.digitaloceanspaces.com/islamnu/dhikr/remembrance/audio/207-a.mp3",
+              "mp3_label": "Hela åkallan",
+              "mp3_url_2": "https://fra1.digitaloceanspaces.com/islamnu/dhikr/remembrance/attachment/207-b.mp3",
+              "mp3_url_2_label": "På hemvägen",
               "source_integrity": {
                 "original_post_index": 0,
                 "source_url_present": true
@@ -8028,7 +8105,8 @@
                 "id": "gladje-och-ilska-vad-man-sager-nar-nagot-hander-som-man-gillar-eller-ogillar-lov-och-pris-tillkommer-allah",
                 "mood_tags": [
                   "arg",
-                  "tacksam"
+                  "tacksam",
+                  "lycklig"
                 ],
                 "problem_tags": [
                   "ilska"
@@ -8086,7 +8164,8 @@
                 "id": "gladje-och-ilska-vad-man-sager-nar-man-forvanas-eller-glads-fri-ar-allah-fran-alla-brister",
                 "mood_tags": [
                   "arg",
-                  "tacksam"
+                  "tacksam",
+                  "lycklig"
                 ],
                 "problem_tags": [
                   "ilska"
@@ -8135,7 +8214,8 @@
                 "id": "gladje-och-ilska-vad-man-sager-nar-man-forvanas-eller-glads-allah-ar-storst",
                 "mood_tags": [
                   "arg",
-                  "tacksam"
+                  "tacksam",
+                  "lycklig"
                 ],
                 "problem_tags": [
                   "ilska"
@@ -8193,7 +8273,8 @@
                 "id": "gladje-och-ilska-vad-man-ska-gora-nar-nagot-gladjande-intraffar-i-tacksamhet-till-allah",
                 "mood_tags": [
                   "arg",
-                  "tacksam"
+                  "tacksam",
+                  "lycklig"
                 ],
                 "problem_tags": [
                   "ilska"
@@ -15434,7 +15515,8 @@
       "undersida": "Vad man säger när något händer som man gillar eller ogillar",
       "mood_tags": [
         "arg",
-        "tacksam"
+        "tacksam",
+        "lycklig"
       ],
       "problem_tags": [
         "ilska"
@@ -15468,7 +15550,8 @@
       "undersida": "Vad man säger när man förvånas eller gläds",
       "mood_tags": [
         "arg",
-        "tacksam"
+        "tacksam",
+        "lycklig"
       ],
       "problem_tags": [
         "ilska"
@@ -15502,7 +15585,8 @@
       "undersida": "Vad man säger när man förvånas eller gläds",
       "mood_tags": [
         "arg",
-        "tacksam"
+        "tacksam",
+        "lycklig"
       ],
       "problem_tags": [
         "ilska"
@@ -15536,7 +15620,8 @@
       "undersida": "Vad man ska göra när något glädjande inträffar",
       "mood_tags": [
         "arg",
-        "tacksam"
+        "tacksam",
+        "lycklig"
       ],
       "problem_tags": [
         "ilska"

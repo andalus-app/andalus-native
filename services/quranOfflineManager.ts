@@ -241,22 +241,60 @@ async function _initWithDelay(
 }
 
 /**
- * Enqueues all pages that are not yet cached on disk, sorted by distance
- * from currentPage so nearby pages download first.
+ * Enqueues all pages that are not yet cached on disk with priority sorting.
+ *
+ * Priority:
+ *   P0: Current page (distance = 0 from currentPage)
+ *   P1: Nearby pages (distance ≤ 2) + prioritized surah pages + remaining ±2 distance
+ *       Prioritized surah pages in order: Al-Fatiha (1), Al-Kahf (293-304),
+ *       Al-Baqarah (2-49), Juz Amma (582-604)
+ *   P2: All other pages
  */
 function _enqueueAllMissing(currentPage: number): void {
   const missing = getMissingPages();
+  const missingSet = new Set(missing);
 
   const p0: number[] = [];
   const p1: number[] = [];
   const p2: number[] = [];
 
+  // Define priority surah page ranges
+  const PRIORITY_PAGES = [
+    [1],              // Al-Fatiha
+    ...Array.from({ length: 12 }, (_, i) => 293 + i), // Al-Kahf (293-304)
+    ...Array.from({ length: 48 }, (_, i) => 2 + i),   // Al-Baqarah (2-49)
+    ...Array.from({ length: 23 }, (_, i) => 582 + i), // Juz Amma (582-604)
+  ];
+
+  const prioritySet = new Set(PRIORITY_PAGES);
+
+  // Separate missing pages into priority buckets
   for (const n of missing) {
     const dist = Math.abs(n - currentPage);
-    if (dist === 0)     p0.push(n);
-    else if (dist <= 2) p1.push(n);
-    else                p2.push(n);
+    if (dist === 0) {
+      // Current page is always p0
+      p0.push(n);
+    } else if (dist <= 2) {
+      // Nearby pages (±2) are p1
+      p1.push(n);
+    } else if (prioritySet.has(n)) {
+      // Prioritized surahs (Al-Fatiha, Al-Kahf, Al-Baqarah, Juz Amma) → p1
+      p1.push(n);
+    } else {
+      // Everything else → p2
+      p2.push(n);
+    }
   }
+
+  // Sort p1 by priority surah order to ensure Al-Fatiha downloads before Al-Kahf, etc.
+  p1.sort((a, b) => {
+    const aIdx = PRIORITY_PAGES.indexOf(a);
+    const bIdx = PRIORITY_PAGES.indexOf(b);
+    if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx; // Both in priority list
+    if (aIdx !== -1) return -1; // a is prioritized, a comes first
+    if (bIdx !== -1) return 1;  // b is prioritized, b comes first
+    return a - b; // Both are nearby (±2), sort numerically
+  });
 
   if (p0.length) enqueuePages(p0, 0);
   if (p1.length) enqueuePages(p1, 1);

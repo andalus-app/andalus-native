@@ -310,6 +310,42 @@ export async function getPrayerTimesWithFallback(
 }
 
 /**
+ * Returns prayer times for N consecutive days starting from today, from the
+ * yearly cache. Used by the notification scheduler to schedule up to 7 days
+ * ahead in a single call. Days not in cache are simply absent from the result —
+ * the caller schedules whatever is available.
+ *
+ * Coordinate check is identical to getTodayFromYearlyCache so stale suburb-vs-
+ * city-centre cache is rejected the same way.
+ */
+export async function getPrayerTimesForRange(
+  city: string, method: number, school: number,
+  lat: number | undefined, lng: number | undefined,
+  days: number,
+): Promise<Record<string, Record<string, string>>> {
+  const c = await readCityCache(city, method, school);
+  if (!c) return {};
+  if (lat !== undefined && lng !== undefined &&
+      (Math.abs(c.lat - lat) > COORD_THRESHOLD || Math.abs(c.lng - lng) > COORD_THRESHOLD)) {
+    return {};
+  }
+
+  const out: Record<string, Record<string, string>> = {};
+  const now = new Date();
+  for (let i = 0; i < days; i++) {
+    const d      = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
+    const mk     = monthKey(d.getFullYear(), d.getMonth() + 1);
+    const dayNum = d.getDate();
+    const row    = c.months[mk]?.[dayNum - 1];
+    if (!row) continue;
+    const dateStr =
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+    out[dateStr] = dayRowToTimings(row);
+  }
+  return out;
+}
+
+/**
  * Returns cached DayRow[] for a given month, or null on miss.
  * Pass lat/lng so the cache is rejected when its stored coordinates differ
  * by more than COORD_THRESHOLD — forces a fresh Aladhan fetch for the exact

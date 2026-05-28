@@ -3259,13 +3259,13 @@ export default function BookingScreen() {
     const d = parseISO(dateParam);
     d.setHours(0, 0, 0, 0);
     setSelectedDate(d);
-  }, [dateParam, storageReady]); // eslint-disable-line
+  }, [dateParam, storageReady]);  
 
   useEffect(() => {
     if (!bookingIdParam || !storageReady) return;
     // Always land on calendar view so DayPanel + detail modal are both visible
     setView('calendar');
-  }, [bookingIdParam, storageReady]); // eslint-disable-line
+  }, [bookingIdParam, storageReady]);  
 
   // Fetch bookings from Supabase (silent — never toggles dbLoading after first load)
   const lastFetchTimeRef = useRef(0);
@@ -3394,7 +3394,7 @@ export default function BookingScreen() {
   useEffect(() => {
     if (!bookingIdParam || !hasFetchedRef.current) return;
     fetchAll();
-  }, [bookingIdParam, fetchAll]); // eslint-disable-line
+  }, [bookingIdParam, fetchAll]);  
 
   const myBookingIds = useMemo(() => {
     const userId = Storage.getItem(SK_USER_ID);
@@ -3421,7 +3421,7 @@ export default function BookingScreen() {
     const occs = getOccurrencesForDate(bookings, exceptions, targetDate);
     const occ = occs.find(o => o.id === bookingIdParam) ?? { ...booking, date: targetDate };
     setDetailOcc({ occ, booking });
-  }, [bookingIdParam, dbLoading, bookings, exceptions, dateParam]); // eslint-disable-line
+  }, [bookingIdParam, dbLoading, bookings, exceptions, dateParam]);  
 
   // ── Actions ──────────────────────────────────────────────────────────────────
   const handleLoginSuccess = useCallback(async (user: any) => {

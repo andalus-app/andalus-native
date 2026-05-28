@@ -26,6 +26,11 @@ export interface WidgetData {
   hijri: WidgetHijriDate;
   /** "yyyy-MM-dd" gregorian date string — used by widget to detect stale data */
   date: string;
+  /** UTC offset in minutes when this data was cached (device timezone when JS wrote it).
+   *  Used by iOS widget to parse prayer times in the original timezone, protecting
+   *  against offline timezone-change bugs (e.g. Sweden UTC+120 → Turkey UTC+180).
+   *  If absent (legacy data), widget falls back to device's current timezone. */
+  timezoneOffsetMinutes?: number;
   timestamp: number;
 }
 
@@ -167,6 +172,11 @@ export interface NotificationScheduleState {
   school:                   number;
   todayT?:                  Record<string, string>;
   tomT?:                    Record<string, string>;
+  /** Stable fingerprint of the full 1-to-7 day prayer schedule that was queued.
+   *  Written by JS when a multi-day schedule is set; absent when native writes
+   *  state (native only covers today+tomorrow). When present, scheduleStateUnchanged
+   *  can short-circuit the per-day comparison loop. */
+  weekTimesHash?:           string;
   dhikrEnabled:             boolean;
   prePrayerOffset:          number;   // 0 = off; matches hidayah_prayer_reminder_offset
   updatedAt:                number;   // Unix seconds

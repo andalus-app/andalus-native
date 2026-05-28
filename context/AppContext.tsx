@@ -5,13 +5,13 @@ import { Platform, AppState } from 'react-native';
 import { fetchPrayerTimes, fetchTomorrowPrayerTimes, calcMidnight, reverseGeocode } from '../services/prayerApi';
 import { startBackgroundLocationUpdates, stopBackgroundLocationUpdates } from '../services/backgroundLocation';
 import { warmupNativeCache } from '../services/nativeCacheWarmup';
-import { buildYearlyCache, getPrayerTimesWithFallback } from '../services/monthlyCache';
+import { buildYearlyCache, getPrayerTimesWithFallback, getPrayerTimesForRange } from '../services/monthlyCache';
 import {
   getIfisTodayAndTomorrow, warmIfisCache, matchIfisCity, fetchIfisCities,
   getIfisCityDisplayNames, getIfisCityDisplayName, normalizeIfisCity,
-  refreshIfisVisitedPlaceCache, getIfisCitiesForMatching,
+  refreshIfisVisitedPlaceCache, getIfisCitiesForMatching, getIfisTimesForRange,
 } from '../services/ifisApi';
-import { schedulePrayerNotifications, cancelPrayerNotifications, scheduleDhikrReminder, cancelDhikrReminder, scheduleFridayDuaReminder, cancelFridayDuaReminder, refreshPrePrayerReminderNotifications, getNotificationDisplayName } from '../services/notifications';
+import { schedulePrayerNotifications, cancelPrayerNotifications, scheduleDhikrReminder, cancelDhikrReminder, scheduleFridayDuaReminder, cancelFridayDuaReminder, refreshPrePrayerReminderNotifications, getNotificationDisplayName, computeWeekTimesHash, PRAYER_LOOKAHEAD_DAYS } from '../services/notifications';
 import {
   updateWidgetData,
   updateDailyContent,
@@ -142,10 +142,6 @@ type ContextType = State & {
 const AppContext = createContext<ContextType | null>(null);
 
 // ── Cache helpers ──
-function isCacheToday(dateStr: string): boolean {
-  return dateStr === getTodayStr() || dateStr === new Date().toDateString();
-}
-
 async function setCached(loc: LocationType, method: number, school: number, todayT: any, tomT: any, hijri: any) {
   if (!loc) return;
   try {
@@ -232,20 +228,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
         // Hydrate prayer times immediately from cache — handles both AppContext and
         // prayer-tab cache formats (they share the same key but differ in structure).
+        // Accept stale cache (any date): prayer times drift by ~1 min/day, so showing
+        // last-known data offline is far better than empty state. Without this, multi-
+        // day offline scenarios leave state.prayerTimes null, which makes the
+        // notification scheduling effect bail and the user gets zero reminders after
+        // the previously scheduled iOS slots expire. loadPrayers() overwrites with
+        // fresh data as soon as connectivity returns.
         if (savedLocation && cacheRaw) {
           try {
             const cached = JSON.parse(cacheRaw);
-            if (isCacheToday(cached.date)) {
-              // AppContext format: todayT field
-              // Prayer tab format: timings field
-              const todayT = cached.todayT ?? cached.timings ?? null;
-              const tomT   = cached.tomT   ?? cached.tomorrowTimings ?? null;
-              const hijri  = cached.hijri  ?? null;
-              if (todayT) {
-                dispatch({ type: 'SET_PRAYER_TIMES',   payload: todayT });
-                if (tomT)  dispatch({ type: 'SET_TOMORROW_TIMES', payload: tomT });
-                if (hijri) dispatch({ type: 'SET_HIJRI',          payload: hijri });
-              }
+            // AppContext format: todayT field
+            // Prayer tab format: timings field
+            const todayT = cached.todayT ?? cached.timings ?? null;
+            const tomT   = cached.tomT   ?? cached.tomorrowTimings ?? null;
+            const hijri  = cached.hijri  ?? null;
+            if (todayT) {
+              dispatch({ type: 'SET_PRAYER_TIMES',   payload: todayT });
+              if (tomT)  dispatch({ type: 'SET_TOMORROW_TIMES', payload: tomT });
+              if (hijri) dispatch({ type: 'SET_HIJRI',          payload: hijri });
             }
           } catch {}
         }
@@ -548,6 +548,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             };
           })(),
           date:      todayIso,
+          timezoneOffsetMinutes: new Date().getTimezoneOffset() * -1,
           timestamp: Date.now() / 1000,
         }).catch(() => {});
 
@@ -712,6 +713,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                     year:        h ? parseInt(h.year,         10) : 0,
                   },
                   date:      localIsoDate(),
+                  timezoneOffsetMinutes: new Date().getTimezoneOffset() * -1,
                   timestamp: Date.now() / 1000,
                 }).catch(() => {});
               }
@@ -822,12 +824,50 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!state.settings.notifications) {
       cancelPrayerNotifications().catch(() => {});
     } else {
-      schedulePrayerNotifications(
-        state.prayerTimes,
-        state.tomorrowTimes,
-        notifCity,
-        { method: state.settings.calculationMethod, school: state.settings.school },
-      ).catch(() => {});
+      // Build a multi-day prayer dict: today + tomorrow come from canonical
+      // state (just-fetched), days 2..PRAYER_LOOKAHEAD_DAYS-1 are pulled from
+      // the already-warm local cache. Missing days are silently skipped so the
+      // first call after install (cache cold) still works.
+      const todayTimes    = state.prayerTimes;
+      const tomorrowTimes = state.tomorrowTimes;
+      const loc           = state.location;
+      const method        = state.settings.calculationMethod;
+      const school        = state.settings.school;
+      const ifisCity      = state.settings.ifisCity ?? 'stockholm';
+      (async () => {
+        const now      = new Date();
+        const todayStr = localIsoDate(now);
+        const tomStr   = localIsoDate(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1));
+        const dailyTimes: Record<string, Record<string, string>> = {};
+        dailyTimes[todayStr] = todayTimes;
+        if (tomorrowTimes) dailyTimes[tomStr] = tomorrowTimes;
+
+        const extra = isIfis
+          ? await getIfisTimesForRange(ifisCity, PRAYER_LOOKAHEAD_DAYS).catch(() => ({} as Record<string, Record<string, string>>))
+          : await getPrayerTimesForRange(
+              getEffectivePrayerCity(loc.city),
+              method, school,
+              loc.latitude, loc.longitude,
+              PRAYER_LOOKAHEAD_DAYS,
+            ).catch(() => ({} as Record<string, Record<string, string>>));
+        for (const [d, t] of Object.entries(extra)) {
+          if (!dailyTimes[d]) dailyTimes[d] = t;
+        }
+
+        await schedulePrayerNotifications(dailyTimes, notifCity, { method, school });
+
+        // Stitch the multi-day hash into the schedule state so future calls
+        // (and the native scheduler) can short-circuit when nothing changed.
+        // Best-effort: missing state or failed read is non-fatal.
+        const existingState = await getNotificationScheduleState().catch(() => null);
+        if (existingState) {
+          await setNotificationScheduleState({
+            ...existingState,
+            weekTimesHash: computeWeekTimesHash(dailyTimes),
+            updatedAt:     Date.now() / 1000,
+          }).catch(() => {});
+        }
+      })().catch(() => {});
     }
     // Dhikr reminder: 1 hour before Maghrib — independent of the main prayer toggle
     if (!state.settings.dhikrReminder) {

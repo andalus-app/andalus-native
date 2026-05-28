@@ -118,12 +118,36 @@ export function getNotificationDisplayName(displayName: string): string {
   return commaIdx === -1 ? trimmed : trimmed.slice(commaIdx + 1).trim();
 }
 
+// Look-ahead window: 8 days so a day-7 Isha at 23:59 still fits, but no
+// further. iOS allows max 64 pending notifications per app; with 7 days × 5
+// prayers = 35 slots reserved for prayer this leaves room for Allah's Names
+// (14), pre-prayer (≤10), dhikr/Friday/Kahf/Zakat (~7) under the cap.
+export const PRAYER_LOOKAHEAD_DAYS = 7;
+const MAX_LOOKAHEAD_MS = (PRAYER_LOOKAHEAD_DAYS + 1) * 24 * 3_600_000;
+
+/**
+ * Stable fingerprint of a multi-day prayer schedule — used to skip a
+ * cancel+reschedule cycle when nothing has changed since the last call.
+ * Order-independent (keys are sorted), and tolerant of missing prayers
+ * (absent values stringify as empty).
+ */
+export function computeWeekTimesHash(
+  dailyTimes: Record<string, Record<string, string>>,
+): string {
+  const dates = Object.keys(dailyTimes).sort();
+  const parts: string[] = [];
+  for (const d of dates) {
+    const t = dailyTimes[d];
+    parts.push(`${d}:${t.Fajr ?? ''}|${t.Dhuhr ?? ''}|${t.Asr ?? ''}|${t.Maghrib ?? ''}|${t.Isha ?? ''}`);
+  }
+  return parts.join(';');
+}
+
 function scheduleStateUnchanged(
-  todayTimes:    Record<string, string>,
-  tomorrowTimes: Record<string, string> | null,
-  cityName:      string,
-  existing:      Awaited<ReturnType<typeof getNotificationScheduleState>>,
-  context?:      { method?: number; school?: number },
+  dailyTimes: Record<string, Record<string, string>>,
+  cityName:   string,
+  existing:   Awaited<ReturnType<typeof getNotificationScheduleState>>,
+  context?:   { method?: number; school?: number },
 ): boolean {
   if (!existing?.todayT) return false;
 
@@ -141,8 +165,6 @@ function scheduleStateUnchanged(
   // Compare the derived notification labels, not raw displayNames, so that moves
   // within the same municipality (e.g. Kista → Spånga, both → "Stockholm") do
   // not trigger an unnecessary reschedule when prayer times are also unchanged.
-  // Fall back to deriving the label from displayName when notificationDisplayName
-  // is absent (old native-written state without the field).
   const currentNotifLabel  = getNotificationDisplayName(cityName);
   const existingNotifLabel = existing.notificationDisplayName
     ?? getNotificationDisplayName(existing.displayName ?? '');
@@ -152,25 +174,43 @@ function scheduleStateUnchanged(
   if (context?.method !== undefined && context.method !== existing.method) return false;
   if (context?.school !== undefined && context.school !== existing.school) return false;
 
-  const prayers = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
-
-  // Today's times changed by >= 1 minute
-  if (!prayers.every(p => Math.abs(timeToMin(todayTimes[p]) - timeToMin(existing.todayT![p])) < 1)) return false;
-
-  // Tomorrow's times changed by >= 1 minute
-  if (tomorrowTimes && existing.tomT) {
-    if (!prayers.every(p => Math.abs(timeToMin(tomorrowTimes[p]) - timeToMin(existing.tomT![p])) < 1)) return false;
+  // Multi-day comparison via hash. When the stored state already carries a
+  // weekTimesHash (written by a previous JS call), a single equality check
+  // covers all 7 days. Mismatch → reschedule.
+  // When the stored state is missing weekTimesHash (written by native or by an
+  // older JS version), fall back to today/tomorrow per-minute comparison so we
+  // still avoid unnecessary work for the days the native scheduler covers.
+  if (existing.weekTimesHash) {
+    return existing.weekTimesHash === computeWeekTimesHash(dailyTimes);
   }
 
+  const prayers   = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
+  const tomLocal  = new Date(n.getFullYear(), n.getMonth(), n.getDate() + 1);
+  const tomLocStr = `${tomLocal.getFullYear()}-${String(tomLocal.getMonth() + 1).padStart(2, '0')}-${String(tomLocal.getDate()).padStart(2, '0')}`;
+  const todayT    = dailyTimes[todayLocalDate];
+  const tomT      = dailyTimes[tomLocStr];
+  if (!todayT) return false;
+  if (!prayers.every(p => Math.abs(timeToMin(todayT[p]) - timeToMin(existing.todayT![p])) < 1)) return false;
+  if (tomT && existing.tomT) {
+    if (!prayers.every(p => Math.abs(timeToMin(tomT[p]) - timeToMin(existing.tomT![p])) < 1)) return false;
+  }
   return true;
 }
 
-// ── Schedule today + tomorrow ────────────────────────────────────────────────
+// ── Schedule up to PRAYER_LOOKAHEAD_DAYS ahead ──────────────────────────────
+/**
+ * dailyTimes: ISO-date keyed dict of prayer timings. Day 0 (today) must always
+ * be present; days 1..6 are scheduled only when present, so a caller with only
+ * today+tomorrow available still works (degrades to the old 2-day behavior).
+ *
+ * Identifier per notification: hidayah-prayer-YYYY-MM-DD-{prayer}.
+ * Cancels all hidayah-prayer-* before rescheduling so old 2-day-format
+ * notifications from a previous build are cleaned up in the same pass.
+ */
 export async function schedulePrayerNotifications(
-  todayTimes:    Record<string, string>,
-  tomorrowTimes: Record<string, string> | null,
-  cityName:      string,
-  context?:      { method?: number; school?: number },
+  dailyTimes: Record<string, Record<string, string>>,
+  cityName:   string,
+  context?:   { method?: number; school?: number },
 ): Promise<void> {
   if (!N) return;
   try {
@@ -191,99 +231,94 @@ export async function schedulePrayerNotifications(
       ]);
       const hasPrayerPending = (pending as Array<{ identifier: string }>)
         .some(n => n.identifier.startsWith(PRAYER_ID_PREFIX));
-      if (existing && hasPrayerPending && scheduleStateUnchanged(todayTimes, tomorrowTimes, cityName, existing, context)) return;
+      if (existing && hasPrayerPending && scheduleStateUnchanged(dailyTimes, cityName, existing, context)) return;
     }
 
     // Claim a generation so any older concurrent call aborts at its next await.
     const gen = ++_prayerScheduleGen;
 
+    // Clear ALL old prayer notifications first (both old format and passed ones)
     await cancelPrayerNotifications();
+    if (_prayerScheduleGen !== gen) return; // newer call took over
+
+    // Clean any passed notifications from the previous schedule to keep queue bounded
+    await cancelPassedPrayerNotifications();
     if (_prayerScheduleGen !== gen) return; // newer call took over
 
     const now = new Date();
 
-    // Build explicit Date objects for today and tomorrow using local calendar
-    // components so that fire dates are always anchored to the correct day —
-    // never derived from setHours() on a live new Date() which can place a
-    // tomorrowTimes entry on the current day if its HH:MM is still in the future.
-    const todayBase   = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const tomBase     = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-    const todayStr    = _localIsoDate(todayBase);
-    const tomStr      = _localIsoDate(tomBase);
-
-    // Hard look-ahead limits: a today-slot prayer cannot be scheduled more than
-    // 26 h in the future (covers Fajr in extreme latitudes); tomorrow-slot is
-    // at most ~38 h away (Isha at midnight, next Fajr up to 38 h out).
-    const MAX_TODAY_MS    = 26 * 3_600_000;
-    const MAX_TOMORROW_MS = 50 * 3_600_000;
-
     // Dedup guard: at most one notification per prayer × calendar date.
     const scheduled = new Set<string>();
+    let totalQueued = 0;
 
-    const queue = async (
-      key:        string,
-      timeStr:    string,
-      baseDate:   Date,
-      targetStr:  string,
-      maxAheadMs: number,
-    ) => {
-      const [hh, mm] = timeStr.split(':').map(Number);
-      if (isNaN(hh) || isNaN(mm)) return;
+    // Sort dates chronologically so iOS sees them in fire-time order — purely
+    // cosmetic for debugging but makes pending-request logs readable.
+    const dates = Object.keys(dailyTimes).sort();
 
-      // Construct fire from the target date's year/month/day + parsed HH:MM.
-      // This guarantees the fire date is always on targetStr regardless of when
-      // schedulePrayerNotifications is called (no reliance on base.setHours).
-      const fire = new Date(
-        baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate(),
-        hh, mm, 0, 0,
-      );
+    outer: for (const dateStr of dates) {
+      if (_prayerScheduleGen !== gen) return; // newer call took over
+      const dayTimes = dailyTimes[dateStr];
+      if (!dayTimes) continue;
 
-      const prayerKey  = key.toLowerCase();
-      const dedupKey   = `${targetStr}-${prayerKey}`;
-      const identifier = `${PRAYER_ID_PREFIX}${targetStr}-${prayerKey}`;
+      const [yy, mo, dd] = dateStr.split('-').map(Number);
+      if (!yy || !mo || !dd) continue;
 
-      if (__DEV__) {
-        const label = fire <= now ? 'SKIP-past' :
-          (fire.getTime() - now.getTime() > maxAheadMs) ? 'SKIP-far' :
-          (_localIsoDate(fire) !== targetStr) ? 'SKIP-date' :
-          scheduled.has(dedupKey) ? 'SKIP-dup' : 'SCHEDULE';
-        console.log(
-          `[PrayerNotif] ${label.padEnd(9)} | ${key.padEnd(7)} | target=${targetStr}` +
-          ` | fire=${fire.toISOString().slice(0, 19)}Z | now=${now.toISOString().slice(0, 19)}Z` +
-          ` | id=${identifier}`,
-        );
+      for (const key of Object.keys(PRAYERS)) {
+        if (_prayerScheduleGen !== gen) return;
+
+        const timeStr = dayTimes[key];
+        if (!timeStr) continue;
+
+        const [hh, mm] = timeStr.split(':').map(Number);
+        if (isNaN(hh) || isNaN(mm)) continue;
+
+        // Construct fire from the target date's year/month/day + parsed HH:MM.
+        const fire = new Date(yy, mo - 1, dd, hh, mm, 0, 0);
+
+        const prayerKey  = key.toLowerCase();
+        const dedupKey   = `${dateStr}-${prayerKey}`;
+        const identifier = `${PRAYER_ID_PREFIX}${dateStr}-${prayerKey}`;
+
+        if (__DEV__) {
+          const label = fire <= now ? 'SKIP-past' :
+            (fire.getTime() - now.getTime() > MAX_LOOKAHEAD_MS) ? 'SKIP-far' :
+            (_localIsoDate(fire) !== dateStr) ? 'SKIP-date' :
+            scheduled.has(dedupKey) ? 'SKIP-dup' : 'SCHEDULE';
+          console.log(
+            `[PrayerNotif] ${label.padEnd(9)} | ${key.padEnd(7)} | target=${dateStr}` +
+            ` | fire=${fire.toISOString().slice(0, 19)}Z` +
+            ` | id=${identifier}`,
+          );
+        }
+
+        if (fire <= now) continue;
+        if (fire.getTime() - now.getTime() > MAX_LOOKAHEAD_MS) continue;
+        // DST guard: verify fire lands on the intended local date.
+        if (_localIsoDate(fire) !== dateStr) continue;
+        if (scheduled.has(dedupKey)) continue;
+        scheduled.add(dedupKey);
+
+        await N!.scheduleNotificationAsync({
+          identifier,
+          content: {
+            title: `Det är dags för ${PRAYERS[key]}`,
+            body:  `i ${getNotificationDisplayName(cityName)}`,
+            sound: true,
+            data:  { screen: 'prayer' },
+          },
+          trigger: {
+            type: N!.SchedulableTriggerInputTypes.DATE,
+            date: fire,
+          },
+        });
+        totalQueued += 1;
+
+        // Hard cap: reserve room for other notification systems (dhikr, friday dua, etc).
+        // iOS allows ~64 pending notifications — we use at most 40 for safety.
+        if (totalQueued >= 35) break outer;
       }
-
-      if (fire <= now) return;
-      if (fire.getTime() - now.getTime() > maxAheadMs) return;
-      // Verify fire lands on targetStr — guards against DST edge-cases.
-      if (_localIsoDate(fire) !== targetStr) return;
-      if (scheduled.has(dedupKey)) return;
-      scheduled.add(dedupKey);
-
-      await N!.scheduleNotificationAsync({
-        identifier,
-        content: {
-          title: `Det är dags för ${PRAYERS[key]}`,
-          body:  `i ${getNotificationDisplayName(cityName)}`,
-          sound: true,
-          data:  { screen: 'prayer' },
-        },
-        trigger: {
-          type: N!.SchedulableTriggerInputTypes.DATE,
-          date: fire,
-        },
-      });
-    };
-
-    for (const key of Object.keys(PRAYERS)) {
-      if (_prayerScheduleGen !== gen) return; // newer call, abort
-      if (todayTimes[key])
-        await queue(key, todayTimes[key], todayBase, todayStr, MAX_TODAY_MS);
-      if (_prayerScheduleGen !== gen) return;
-      if (tomorrowTimes?.[key])
-        await queue(key, tomorrowTimes[key], tomBase, tomStr, MAX_TOMORROW_MS);
     }
+    if (__DEV__) console.log(`[PrayerNotif] Queued ${totalQueued} prayer notifications across ${dates.length} day(s)`);
   } catch {}
 }
 
@@ -320,6 +355,37 @@ export async function cancelPrayerNotifications(): Promise<void> {
     // abort the remaining cancels. Each cancel is fire-and-forget with its own
     // error boundary so an iOS API hiccup on one identifier never leaves others
     // uncancelled.
+    for (const n of ours) {
+      await N!.cancelScheduledNotificationAsync(n.identifier).catch(() => {});
+    }
+  } catch {}
+}
+
+// ── Cancel old passed prayer notifications ────────────────────────────────────
+// Removes any hidayah-prayer-* notifications that fired in the past.
+// Called before scheduling new ones to keep the pending queue fresh and bounded.
+// Does NOT remove future notifications — only clears stale ones.
+async function cancelPassedPrayerNotifications(): Promise<void> {
+  if (!N) return;
+  try {
+    const all = await N.getAllScheduledNotificationsAsync();
+    const now = Date.now();
+    const ours = all.filter(n => {
+      if (!n.identifier.startsWith(PRAYER_ID_PREFIX)) return false;
+      // Parse trigger date — expo-notifications stores as Date object or timestamp
+      if (!n.trigger || typeof n.trigger !== 'object') return false;
+      const trigger = n.trigger as { type?: string; date?: Date | number };
+      if (!trigger.date) return false;
+      const fireTime = trigger.date instanceof Date
+        ? trigger.date.getTime()
+        : typeof trigger.date === 'number'
+          ? trigger.date
+          : 0;
+      return fireTime < now; // Notification already passed
+    });
+    if (__DEV__ && ours.length > 0) {
+      console.log(`[PrayerNotif] Cleaning ${ours.length} passed prayer notifications`);
+    }
     for (const n of ours) {
       await N!.cancelScheduledNotificationAsync(n.identifier).catch(() => {});
     }
@@ -785,8 +851,11 @@ export async function cancelZakatNotifications(): Promise<void> {
 const ALLAH_NAMES_PREFIX        = 'andalus-allah-names-';
 const ALLAH_NAMES_ENABLED_KEY   = 'allahNamesNotificationEnabled';
 // Bump this when fire time or schedule logic changes — forces a re-schedule for all users.
-const ALLAH_NAMES_SCHEDULE_VERSION     = '4';
+// v5: reduced look-ahead window from 30 → 14 days to free notification slots for
+// the extended 7-day prayer schedule (iOS 64 pending limit per app).
+const ALLAH_NAMES_SCHEDULE_VERSION     = '5';
 const ALLAH_NAMES_SCHEDULE_VERSION_KEY = 'allahNamesScheduleVersion';
+const ALLAH_NAMES_DAYS_AHEAD           = 14;
 
 // Fixed epoch — do not change. Makes the rotation deterministic across devices.
 const ALLAH_NAMES_EPOCH_MS = new Date('2025-01-01T00:00:00Z').getTime();
@@ -808,8 +877,10 @@ function allahNamesIndexForDate(localDate: Date): number {
 
 const ALLAH_NAMES_HOUR = 9; // Daily notification time — 09:00
 
-/** Schedules daily 09:00 notifications for the next 30 days.
- *  Each notification carries the sequential name for that calendar day. */
+/** Schedules daily 09:00 notifications for the next ALLAH_NAMES_DAYS_AHEAD days.
+ *  Each notification carries the sequential name for that calendar day.
+ *  Window kept short so the iOS 64-pending-notification budget leaves room for
+ *  the 7-day prayer schedule (35 slots) and other reminders. */
 export async function scheduleAllahNamesNotifications(): Promise<void> {
   if (!N) return;
   try {
@@ -820,7 +891,7 @@ export async function scheduleAllahNamesNotifications(): Promise<void> {
 
     const now = new Date();
 
-    for (let dayOffset = 0; dayOffset < 30; dayOffset++) {
+    for (let dayOffset = 0; dayOffset < ALLAH_NAMES_DAYS_AHEAD; dayOffset++) {
       const fire = new Date(now);
       fire.setDate(fire.getDate() + dayOffset);
       fire.setHours(ALLAH_NAMES_HOUR, 0, 0, 0);
@@ -844,7 +915,7 @@ export async function scheduleAllahNamesNotifications(): Promise<void> {
         },
       });
     }
-    console.log('[AllahNames] Scheduled 30-day notifications at 09:00');
+    console.log(`[AllahNames] Scheduled ${ALLAH_NAMES_DAYS_AHEAD}-day notifications at 09:00`);
   } catch (e) {
     console.warn('[AllahNames] scheduleAllahNamesNotifications error:', e);
   }
@@ -933,9 +1004,11 @@ export async function sendAnnouncementNotification(id: string, title: string, bo
   } catch {}
 }
 
-// ── Pre-prayer reminders (5-day rolling schedule) ────────────────────────────
+// ── Pre-prayer reminders (2-day rolling schedule) ────────────────────────────
 // Schedules a reminder X minutes before each of the 5 daily prayers for the
-// next 5 days. Self-contained: reads location and settings from AsyncStorage.
+// next 2 days. Self-contained: reads location and settings from AsyncStorage.
+// Window reduced from 5 → 2 days so the iOS 64-pending-notification budget
+// fits the 7-day prayer schedule + 14-day Allah's Names + other reminders.
 
 export type PrayerReminderOffset = 'off' | 15 | 30 | 45 | 60;
 export const PRE_PRAYER_REMINDER_STORAGE_KEY = 'hidayah_prayer_reminder_offset';
@@ -1012,9 +1085,10 @@ export async function refreshPrePrayerReminderNotifications(): Promise<void> {
 
     let daySets: { date: Date; times: Record<string, string> | null }[];
 
+    const PRE_PRAYER_DAYS_AHEAD = 2;
     if (prayerSource === 'ifis') {
       daySets = await Promise.all(
-        Array.from({ length: 5 }, async (_, i) => {
+        Array.from({ length: PRE_PRAYER_DAYS_AHEAD }, async (_, i) => {
           const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
           const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
           try {
@@ -1028,7 +1102,7 @@ export async function refreshPrePrayerReminderNotifications(): Promise<void> {
       );
     } else {
       daySets = await Promise.all(
-        Array.from({ length: 5 }, (_, i) => {
+        Array.from({ length: PRE_PRAYER_DAYS_AHEAD }, (_, i) => {
           const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
           return fetchDayTimings(loc.lat, loc.lng, d, method, school).then(times => ({ date: d, times }));
         }),
@@ -1067,7 +1141,7 @@ export async function refreshPrePrayerReminderNotifications(): Promise<void> {
         });
       }
     }
-    console.log(`[PrePrayerReminder] Scheduled 5-day reminders (${offsetMinutes} min)`);
+    console.log(`[PrePrayerReminder] Scheduled ${PRE_PRAYER_DAYS_AHEAD}-day reminders (${offsetMinutes} min)`);
   } catch (e) {
     console.warn('[PrePrayerReminder] refreshPrePrayerReminderNotifications error:', e);
   }

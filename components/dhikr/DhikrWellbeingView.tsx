@@ -38,6 +38,7 @@ const MOOD_EMOJI: Record<string, string> = {
   radd:       '😨',
   hopplos:    '😞',
   tacksam:    '🤲',
+  lycklig:    '🥰',
   angerfull:  '😓',
 };
 

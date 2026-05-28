@@ -51,6 +51,9 @@ type RawDhikrPost = {
   svensk_text: string;
   kallhanvisning: string;
   mp3_url: string;
+  mp3_label?: string;
+  mp3_url_2?: string;
+  mp3_url_2_label?: string;
   wellbeing_metadata: RawWellbeingMeta;
   source_integrity?: { original_post_index: number; source_url_present: boolean };
   lases_info?: string;
@@ -154,6 +157,10 @@ export type DhikrPost = {
   svensk_text: string;
   kallhanvisning: string;
   mp3_url: string;
+  // Optional second audio clip with labels (e.g. travel dua: full + return)
+  mp3_label?: string;
+  mp3_url_2?: string;
+  mp3_url_2_label?: string;
   // Navigation context (injected during build)
   _undersida: string;
   _kategori: string;
@@ -229,6 +236,9 @@ export const KATEGORIER: Kategori[] = data.kategorier.map((rawCat) => ({
         svensk_text: rawPost.svensk_text,
         kallhanvisning: rawPost.kallhanvisning,
         mp3_url: rawPost.mp3_url,
+        mp3_label: rawPost.mp3_label,
+        mp3_url_2: rawPost.mp3_url_2,
+        mp3_url_2_label: rawPost.mp3_url_2_label,
         _undersida: rawUs.titel,
         _kategori: rawCat.kategori,
         _wellbeing: rawPost.wellbeing_metadata

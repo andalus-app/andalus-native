@@ -3,7 +3,9 @@ import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { fetchPrayerTimes, fetchTomorrowPrayerTimes, calcMidnight } from './prayerApi';
-import { schedulePrayerNotifications, refreshPrePrayerReminderNotifications, getNotificationDisplayName } from './notifications';
+import { schedulePrayerNotifications, refreshPrePrayerReminderNotifications, getNotificationDisplayName, computeWeekTimesHash, PRAYER_LOOKAHEAD_DAYS } from './notifications';
+import { getPrayerTimesForRange } from './monthlyCache';
+import { getIfisTimesForRange } from './ifisApi';
 import { nativeReverseGeocode } from './geocoding';
 import {
   getIfisTodayAndTomorrow, matchIfisCity, getIfisCityDisplayName,
@@ -312,9 +314,33 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }: TaskMan
     const notifCity            = isIfis ? effectiveCity : getEffectivePrayerCity(city);
     const timesChangedByMinute = !prevTodayT || maxAbsPrayerDiffMinutes(prevTodayT, todayT) >= 1;
     const cityNameChanged      = prevScheduleDisplayName !== null && notifCity !== prevScheduleDisplayName;
+    let weekTimesHash: string | undefined;
     if (timesChangedByMinute || cityNameChanged) {
-      await schedulePrayerNotifications(todayT, tomT, notifCity, { method, school });
+      // Build the multi-day dict (today/tomorrow + cache lookup) so we schedule
+      // the full PRAYER_LOOKAHEAD_DAYS window even from the background path.
+      const now      = new Date();
+      const todayStr = localIsoDate(now);
+      const tomStr   = localIsoDate(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1));
+      const dailyTimes: Record<string, Record<string, string>> = {};
+      dailyTimes[todayStr] = todayT;
+      if (tomT) dailyTimes[tomStr] = tomT;
+
+      const extra = isIfis
+        ? await getIfisTimesForRange(normalizeIfisCity(effectiveCity), PRAYER_LOOKAHEAD_DAYS)
+            .catch(() => ({} as Record<string, Record<string, string>>))
+        : await getPrayerTimesForRange(
+            getEffectivePrayerCity(city),
+            method, school,
+            coords.latitude, coords.longitude,
+            PRAYER_LOOKAHEAD_DAYS,
+          ).catch(() => ({} as Record<string, Record<string, string>>));
+      for (const [d, t] of Object.entries(extra)) {
+        if (!dailyTimes[d]) dailyTimes[d] = t;
+      }
+
+      await schedulePrayerNotifications(dailyTimes, notifCity, { method, school });
       await refreshPrePrayerReminderNotifications();
+      weekTimesHash = computeWeekTimesHash(dailyTimes);
     }
 
     // Write schedule state AFTER scheduling so schedulePrayerNotifications does not
@@ -323,6 +349,7 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }: TaskMan
     // skip-check inside schedulePrayerNotifications to always match (it read back
     // the state we just wrote) and silently bypass the actual scheduling.
     if (scheduleState) {
+      if (weekTimesHash) scheduleState.weekTimesHash = weekTimesHash;
       await setNotificationScheduleState(scheduleState).catch(() => {});
     }
   } catch {}

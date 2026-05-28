@@ -53,7 +53,7 @@ function DagensHadithCard({ testMode = false }: { testMode?: boolean }) {
   const animHeight  = useRef(new Animated.Value(COLLAPSED_HEIGHT)).current;
   const expandedRef = useRef(false);
 
-  const hadith = useMemo(() => { // eslint-disable-line react-hooks/exhaustive-deps
+  const hadith = useMemo(() => {  
     const eff = testMode ? { day: '2', month: { number: 12 } } : hijriDate;
     return getDailyHadith(new Date(), eff);
   }, [dateKey, hijriDate, testMode]);

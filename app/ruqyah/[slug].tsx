@@ -201,6 +201,7 @@ function RuqyahDetailScreen() {
               key={a.slug}
               article={a}
               onPress={() => router.push(`/ruqyah/${a.slug}` as any)}
+              hideCategory
             />
           ))}
         </>
