@@ -9,7 +9,7 @@
  * No background polling, no realtime subscriptions — data loads on mount, on tab
  * change, on pull-to-refresh, and after an action. Clean unmount via mountedRef.
  */
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, ActivityIndicator, StyleSheet,
   RefreshControl, Alert, Modal, TextInput, KeyboardAvoidingView, Platform,
@@ -47,6 +47,7 @@ export default function AdminMosquesScreen() {
   const [items, setItems] = useState<AdminMosque[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [search, setSearch] = useState('');
 
   const [editVisible, setEditVisible] = useState(false);
   const [editMode, setEditMode] = useState<'edit' | 'create'>('edit');
@@ -92,6 +93,16 @@ export default function AdminMosquesScreen() {
   useEffect(() => { load(tab); }, [tab, load]);
 
   const refreshCurrent = useCallback(() => load(tab, true), [tab, load]);
+
+  const filteredItems = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return items;
+    return items.filter((m) => {
+      const hay = [m.name, m.address, m.city, m.postal_code, m.access_info]
+        .filter(Boolean).join(' ').toLowerCase();
+      return hay.includes(q);
+    });
+  }, [items, search]);
 
   // ── Actions ────────────────────────────────────────────────────────────────
   const runAction = useCallback(async (fn: () => Promise<void>) => {
@@ -218,18 +229,44 @@ export default function AdminMosquesScreen() {
         })}
       </View>
 
+      {/* Search */}
+      <View style={[styles.searchWrap, { backgroundColor: T.card, borderColor: T.border }]}>
+        <Ionicons name="search" size={16} color={T.textMuted} />
+        <TextInput
+          style={[styles.searchInput, { color: T.text }]}
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Sök masjid (namn, adress, stad)"
+          placeholderTextColor={T.textMuted}
+          autoCorrect={false}
+          autoCapitalize="none"
+          returnKeyType="search"
+          clearButtonMode="while-editing"
+        />
+        {search.length > 0 && Platform.OS !== 'ios' && (
+          <TouchableOpacity onPress={() => setSearch('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="close-circle" size={18} color={T.textMuted} />
+          </TouchableOpacity>
+        )}
+      </View>
+
       {loading ? (
         <View style={styles.center}><ActivityIndicator color={T.accent} size="large" /></View>
       ) : (
         <ScrollView
           contentContainerStyle={{ padding: 16, paddingBottom: 120 }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refreshCurrent} tintColor={T.accent} />}
+          keyboardShouldPersistTaps="handled"
         >
-          {items.length === 0 ? (
+          {filteredItems.length === 0 ? (
             <Text style={[styles.empty, { color: T.textMuted }]}>
-              {tab === 'pending' ? 'Inga väntande förslag.' : tab === 'approved' ? 'Inga publicerade masjid.' : 'Inga dolda masjid.'}
+              {search.trim()
+                ? `Inga träffar för “${search.trim()}”.`
+                : tab === 'pending' ? 'Inga väntande förslag.'
+                : tab === 'approved' ? 'Inga publicerade masjid.'
+                : 'Inga dolda masjid.'}
             </Text>
-          ) : items.map(renderCard)}
+          ) : filteredItems.map(renderCard)}
         </ScrollView>
       )}
 
@@ -320,6 +357,8 @@ const styles = StyleSheet.create({
   segments: { flexDirection: 'row', margin: 16, marginBottom: 8, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, padding: 4, gap: 4 },
   segment: { flex: 1, alignItems: 'center', paddingVertical: 9, borderRadius: 9 },
   segmentText: { fontSize: 14, fontWeight: '600' },
+  searchWrap: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginBottom: 8, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth },
+  searchInput: { flex: 1, fontSize: 15, paddingVertical: Platform.OS === 'ios' ? 4 : 0 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   empty: { fontSize: 14, textAlign: 'center', paddingVertical: 40 },
   card: { borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, padding: 14, marginBottom: 14, overflow: 'hidden' },

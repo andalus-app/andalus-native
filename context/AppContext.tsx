@@ -13,6 +13,11 @@ import {
 } from '../services/ifisApi';
 import { schedulePrayerNotifications, cancelPrayerNotifications, scheduleDhikrReminder, cancelDhikrReminder, scheduleFridayDuaReminder, cancelFridayDuaReminder, refreshPrePrayerReminderNotifications, getNotificationDisplayName, computeWeekTimesHash, PRAYER_LOOKAHEAD_DAYS } from '../services/notifications';
 import {
+  loadPrayerNotificationModes,
+  subscribePrayerNotificationModes,
+} from '../storage/prayerNotificationPreferences';
+import { PRAYER_KEYS } from '../types/prayerNotificationTypes';
+import {
   updateWidgetData,
   updateDailyContent,
   setAutoLocation,
@@ -29,6 +34,7 @@ import {
   clearPrayerCachesForMigration,
   type NotificationScheduleState,
   type EffectivePrayerSchedule,
+  type NativePerPrayerMode,
 } from '../modules/WidgetData';
 import { getDailyWidgetPayload, updateVerse30DayCache } from '../services/dailyWidgetContent';
 import { refreshVisitedPlaceMultiDayCache } from '../services/visitedPlacesRefresh';
@@ -371,9 +377,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []); // eslint-disable-line
 
   // ── Hämta bönetider automatiskt när location/method/school/prayerSource/ifisCity ändras ──
+  // Note: vi nollställer INTE lastFetchRef här — `loadPrayers` har en egen
+  // key-baserad dedupe (lat/lng-truncated + method + school, eller `ifis:{city}`)
+  // som tar hand om duplikerade triggar när `state.location` strömmar igenom
+  // null → cache → GPS med samma koordinater. Manuell refresh (refreshPrayers)
+  // och fel-väg (catch) nollställer fortfarande ref:en så återförsök fungerar.
   useEffect(() => {
     if (!state.location) return;
-    lastFetchRef.current = null;
     loadPrayers(
       state.location,
       state.settings.calculationMethod,
@@ -735,13 +745,29 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // ── Bakgrundsplatstask: start/stop + mirror settings to App Group ──
   // App Group copies let the native layer (LocationBackgroundManager +
   // NativeNotificationScheduler) read settings without the JS runtime.
+  //
+  // The per-prayer notification modes are part of the mirrored settings — without
+  // them the native scheduler falls back to `.default` for every prayer and would
+  // override JS-scheduled silent/vibration/adhan notifications with the standard
+  // sound when iOS relaunches the app for a significant-location-change.
   useEffect(() => {
     if (Platform.OS === 'ios') {
       setAutoLocation(state.settings.autoLocation).catch(() => {});
       // Also read the pre-prayer reminder offset (stored separately from main settings)
-      AsyncStorage.getItem('hidayah_prayer_reminder_offset').then(raw => {
-        const offset    = raw ? parseInt(raw, 10) : 0;
-        const isIfis    = (state.settings.prayerSource ?? 'aladhan') === 'ifis';
+      // and the per-prayer modes (cached after load(); loadPrayerNotificationModes() is
+      // called at startup elsewhere, but we await once here to handle the very first
+      // mount before the cache has been populated).
+      Promise.all([
+        AsyncStorage.getItem('hidayah_prayer_reminder_offset'),
+        loadPrayerNotificationModes(),
+      ]).then(([raw, modes]) => {
+        const offset = raw ? parseInt(raw, 10) : 0;
+        const isIfis = (state.settings.prayerSource ?? 'aladhan') === 'ifis';
+        const perPrayerModes: Record<string, NativePerPrayerMode> = {};
+        for (const key of PRAYER_KEYS) {
+          const cfg = modes[key];
+          perPrayerModes[key] = { mode: cfg.mode, reciter: cfg.reciter };
+        }
         return setNativeSettings({
           notifications:           state.settings.notifications,
           // When IFIS is active mirror method=3 / school=0 so NativeNotificationScheduler's
@@ -754,6 +780,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           school:                  isIfis ? 0 : state.settings.school,
           dhikrReminder:           state.settings.dhikrReminder,
           prePrayerReminderOffset: isNaN(offset) ? 0 : offset,
+          perPrayerModes,
         });
       }).catch(() => {});
     }
@@ -764,6 +791,44 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [ // eslint-disable-line
     state.settings.autoLocation,
+    state.settings.notifications,
+    state.settings.calculationMethod,
+    state.settings.school,
+    state.settings.dhikrReminder,
+    state.settings.prayerSource,
+  ]);
+
+  // ── Re-mirror native settings whenever per-prayer modes change ───────────
+  // The useEffect above only fires on the listed `state.settings.*` deps, so
+  // a mode toggle (silent → adhan etc.) would otherwise not propagate to the
+  // native scheduler until the next time one of those settings changed. This
+  // subscriber re-writes the whole `andalus_settings_native` blob with the
+  // current per-prayer modes embedded so native sees the change on its next
+  // run (significant-location-change or app foreground).
+  useEffect(() => {
+    if (Platform.OS !== 'ios') return;
+    const unsubscribe = subscribePrayerNotificationModes(async modes => {
+      try {
+        const raw    = await AsyncStorage.getItem('hidayah_prayer_reminder_offset');
+        const offset = raw ? parseInt(raw, 10) : 0;
+        const isIfis = (state.settings.prayerSource ?? 'aladhan') === 'ifis';
+        const perPrayerModes: Record<string, NativePerPrayerMode> = {};
+        for (const key of PRAYER_KEYS) {
+          const cfg = modes[key];
+          perPrayerModes[key] = { mode: cfg.mode, reciter: cfg.reciter };
+        }
+        await setNativeSettings({
+          notifications:           state.settings.notifications,
+          calculationMethod:       isIfis ? 3 : state.settings.calculationMethod,
+          school:                  isIfis ? 0 : state.settings.school,
+          dhikrReminder:           state.settings.dhikrReminder,
+          prePrayerReminderOffset: isNaN(offset) ? 0 : offset,
+          perPrayerModes,
+        });
+      } catch {}
+    });
+    return unsubscribe;
+  }, [ // eslint-disable-line
     state.settings.notifications,
     state.settings.calculationMethod,
     state.settings.school,
@@ -902,6 +967,57 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     cancelPrayerNotifications().catch(() => {});
   }, [state.settings.prayerSource, state.settings.calculationMethod, state.settings.school]); // eslint-disable-line
+
+  // ── Per-prayer notification mode changes → cancel + reschedule ───────────
+  // Subscribes to the modes storage. Whenever the user toggles a mode
+  // (silent / vibration / standard / adhan_short) in settings,
+  // we cancel the pending prayer notifications and immediately re-schedule
+  // using the current cached prayer times — without re-fetching from network.
+  // The cancel step is essential: scheduleStateUnchanged() inside the scheduler
+  // would otherwise short-circuit because times/method/school/city are unchanged.
+  // After cancel, hasPrayerPending becomes false → the guard is bypassed.
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  useEffect(() => {
+    const unsubscribe = subscribePrayerNotificationModes(() => {
+      const s = stateRef.current;
+      const loc = s.location;
+      const todayTimes = s.prayerTimes;
+      if (!todayTimes || !loc || !s.settings.notifications) return;
+      const isIfis    = (s.settings.prayerSource ?? 'aladhan') === 'ifis';
+      const notifCity = isIfis
+        ? getIfisCityDisplayName(s.settings.ifisCity ?? 'stockholm')
+        : getEffectivePrayerCity(loc.city);
+      const method = s.settings.calculationMethod;
+      const school = s.settings.school;
+      const ifisCity = s.settings.ifisCity ?? 'stockholm';
+      const tomorrowTimes = s.tomorrowTimes;
+      (async () => {
+        try {
+          await cancelPrayerNotifications();
+          const now      = new Date();
+          const todayStr = localIsoDate(now);
+          const tomStr   = localIsoDate(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1));
+          const dailyTimes: Record<string, Record<string, string>> = {};
+          dailyTimes[todayStr] = todayTimes;
+          if (tomorrowTimes) dailyTimes[tomStr] = tomorrowTimes;
+          const extra = isIfis
+            ? await getIfisTimesForRange(ifisCity, PRAYER_LOOKAHEAD_DAYS).catch(() => ({} as Record<string, Record<string, string>>))
+            : await getPrayerTimesForRange(
+                getEffectivePrayerCity(loc.city),
+                method, school,
+                loc.latitude, loc.longitude,
+                PRAYER_LOOKAHEAD_DAYS,
+              ).catch(() => ({} as Record<string, Record<string, string>>));
+          for (const [d, t] of Object.entries(extra)) {
+            if (!dailyTimes[d]) dailyTimes[d] = t;
+          }
+          await schedulePrayerNotifications(dailyTimes, notifCity, { method, school });
+        } catch {}
+      })();
+    });
+    return unsubscribe;
+  }, []);
 
   const value = useMemo(() => ({ ...state, dispatch, refreshPrayers, refreshLocation }), [state]); // eslint-disable-line
 

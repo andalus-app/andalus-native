@@ -27,6 +27,11 @@ export type MasjidMapHandle = {
   flyTo: (lat: number, lng: number, zoom?: number, padBottom?: number, padTop?: number) => void;
   setSearchMarker: (lat: number, lng: number) => void;
   clearSearchMarker: () => void;
+  // RN-owned +/- controls (see app/masjid.tsx). MapLibre's built-in
+  // NavigationControl was removed so the buttons can live in the app's design
+  // system instead of floating in the top-right corner of the map.
+  zoomIn: () => void;
+  zoomOut: () => void;
 };
 
 type Props = {
@@ -75,6 +80,8 @@ const MasjidMapView = forwardRef<MasjidMapHandle, Props>(function MasjidMapView(
     flyTo: (lat, lng, zoom, padBottom, padTop) => post({ type: 'flyTo', lat, lng, zoom, padBottom, padTop }),
     setSearchMarker: (lat, lng) => post({ type: 'searchMarker', lat, lng }),
     clearSearchMarker: () => post({ type: 'clearSearchMarker' }),
+    zoomIn:  () => post({ type: 'zoomIn' }),
+    zoomOut: () => post({ type: 'zoomOut' }),
   }), [post]);
 
   const handleMessage = useCallback((e: WebViewMessageEvent) => {

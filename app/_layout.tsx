@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Animated, View, StyleSheet, AppState, DeviceEventEmitter } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { setAudioModeAsync } from 'expo-audio';
+import { stopAdhan } from '../services/adhanAudioService';
 import { ThemeProvider, useTheme } from '../context/ThemeContext';
 import { AppProvider, useApp } from '../context/AppContext';
 import { NotificationProvider } from '../context/NotificationContext';
@@ -173,6 +174,12 @@ function AppContent({ onFontsReady }: { onFontsReady: () => void }) {
     const sub = N.addNotificationResponseReceivedListener(handleResponse);
     return () => sub.remove();
   }, [router, fontsLoaded]);
+
+  // Stop any in-flight adhan on unmount (app teardown). Safety net so a leaked
+  // player can never linger past the lifecycle of the root component.
+  useEffect(() => {
+    return () => { try { stopAdhan(); } catch {} };
+  }, []);
 
   if (!fontsLoaded) return null;
 

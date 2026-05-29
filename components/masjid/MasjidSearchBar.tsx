@@ -16,6 +16,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { searchApprovedMosques, type MosqueSearchResult } from '../../services/mosques';
+import { masjidIconColor, masjidLabelColor, masjidSubColor } from './colors';
 
 export default function MasjidSearchBar({
   onSelectMosque,
@@ -94,11 +95,11 @@ export default function MasjidSearchBar({
   return (
     <View style={styles.wrap}>
       <View style={[styles.bar, { backgroundColor: T.card, borderColor: T.border }]}>
-        <Ionicons name="search" size={18} color={T.textMuted} />
+        <Ionicons name="search" size={18} color={masjidIconColor(T)} />
         <TextInput
           style={[styles.input, { color: T.text }]}
           placeholder="Sök masjid, stad eller adress"
-          placeholderTextColor={T.textMuted}
+          placeholderTextColor={masjidLabelColor(T)}
           value={text}
           onChangeText={setText}
           onFocus={() => setFocused(true)}
@@ -106,10 +107,10 @@ export default function MasjidSearchBar({
           returnKeyType="search"
           autoCorrect={false}
         />
-        {searching && <ActivityIndicator size="small" color={T.textMuted} />}
+        {searching && <ActivityIndicator size="small" color={masjidLabelColor(T)} />}
         {text.length > 0 && !searching && (
           <TouchableOpacity onPress={() => setText('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="close-circle" size={18} color={T.textMuted} />
+            <Ionicons name="close-circle" size={18} color={masjidLabelColor(T)} />
           </TouchableOpacity>
         )}
       </View>
@@ -126,10 +127,10 @@ export default function MasjidSearchBar({
                   onPress={() => handlePickMosque(m)}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="business-outline" size={18} color={T.accent} />
+                  <Ionicons name="business-outline" size={18} color={masjidIconColor(T)} />
                   <View style={styles.rowMain}>
                     <Text style={[styles.rowName, { color: T.text }]} numberOfLines={1}>{m.name}</Text>
-                    {!!sub && <Text style={[styles.rowSub, { color: T.textMuted }]} numberOfLines={1}>{sub}</Text>}
+                    {!!sub && <Text style={[styles.rowSub, { color: masjidSubColor(T) }]} numberOfLines={1}>{sub}</Text>}
                   </View>
                 </TouchableOpacity>
               );
@@ -137,10 +138,10 @@ export default function MasjidSearchBar({
 
             {/* Always offer a place/address search for the typed text */}
             <TouchableOpacity style={styles.row} onPress={handlePickPlace} activeOpacity={0.7}>
-              <Ionicons name="location-outline" size={18} color={T.textMuted} />
+              <Ionicons name="location-outline" size={18} color={masjidLabelColor(T)} />
               <View style={styles.rowMain}>
                 <Text style={[styles.rowName, { color: T.text }]} numberOfLines={1}>Sök plats: “{text.trim()}”</Text>
-                <Text style={[styles.rowSub, { color: T.textMuted }]}>Visa närmaste masjid där</Text>
+                <Text style={[styles.rowSub, { color: masjidSubColor(T) }]}>Visa närmaste masjid där</Text>
               </View>
             </TouchableOpacity>
           </ScrollView>

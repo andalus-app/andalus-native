@@ -760,7 +760,7 @@ export const QuranAudioEngine = {
     if (_initialized) return;
     if (_initializing) return _initializing;
     _initializing = (async () => {
-      if (__DEV__) console.error('[QuranEngine] init() starting');
+      if (__DEV__) console.log('[QuranEngine] init() starting');
       try {
         await TrackPlayer.setupPlayer({
           // .playback = audio plays even with the silent switch on, and audio
@@ -814,7 +814,7 @@ export const QuranAudioEngine = {
 
       await TrackPlayer.setRepeatMode(RepeatMode.Off);
 
-      if (__DEV__) console.error('[QuranEngine] init() completed — capabilities registered');
+      if (__DEV__) console.log('[QuranEngine] init() completed — capabilities registered');
 
       // Native event wiring. Each handler is intentionally minimal — we want
       // the smallest possible JS footprint per event so iOS doesn't bill us

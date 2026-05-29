@@ -19,6 +19,7 @@ import { updateWidgetData } from '../../modules/WidgetData';
 import PrayerEmptyState from '../../components/PrayerEmptyState';
 import type { CityResult } from '../../components/CitySearchModal';
 import { masjidIconXml } from '../../constants/masjidIcon';
+import MasjidTipBubble from '../../components/masjid/MasjidTipBubble';
 
 const MONTHLY_CALENDAR_SVG = `<svg width="800px" height="800px" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M17 14C17.5523 14 18 13.5523 18 13C18 12.4477 17.5523 12 17 12C16.4477 12 16 12.4477 16 13C16 13.5523 16.4477 14 17 14Z" fill="__C__"/><path d="M17 18C17.5523 18 18 17.5523 18 17C18 16.4477 17.5523 16 17 16C16.4477 16 16 16.4477 16 17C16 17.5523 16.4477 18 17 18Z" fill="__C__"/><path d="M13 13C13 13.5523 12.5523 14 12 14C11.4477 14 11 13.5523 11 13C11 12.4477 11.4477 12 12 12C12.5523 12 13 12.4477 13 13Z" fill="__C__"/><path d="M13 17C13 17.5523 12.5523 18 12 18C11.4477 18 11 17.5523 11 17C11 16.4477 11.4477 16 12 16C12.5523 16 13 16.4477 13 17Z" fill="__C__"/><path d="M7 14C7.55229 14 8 13.5523 8 13C8 12.4477 7.55229 12 7 12C6.44772 12 6 12.4477 6 13C6 13.5523 6.44772 14 7 14Z" fill="__C__"/><path d="M7 18C7.55229 18 8 17.5523 8 17C8 16.4477 7.55229 16 7 16C6.44772 16 6 16.4477 6 17C6 17.5523 6.44772 18 7 18Z" fill="__C__"/><path fill-rule="evenodd" clip-rule="evenodd" d="M7 1.75C7.41421 1.75 7.75 2.08579 7.75 2.5V3.26272C8.412 3.24999 9.14133 3.24999 9.94346 3.25H14.0564C14.8586 3.24999 15.588 3.24999 16.25 3.26272V2.5C16.25 2.08579 16.5858 1.75 17 1.75C17.4142 1.75 17.75 2.08579 17.75 2.5V3.32709C18.0099 3.34691 18.2561 3.37182 18.489 3.40313C19.6614 3.56076 20.6104 3.89288 21.3588 4.64124C22.1071 5.38961 22.4392 6.33855 22.5969 7.51098C22.75 8.65018 22.75 10.1058 22.75 11.9435V14.0564C22.75 15.8941 22.75 17.3498 22.5969 18.489C22.4392 19.6614 22.1071 20.6104 21.3588 21.3588C20.6104 22.1071 19.6614 22.4392 18.489 22.5969C17.3498 22.75 15.8942 22.75 14.0565 22.75H9.94359C8.10585 22.75 6.65018 22.75 5.51098 22.5969C4.33856 22.4392 3.38961 22.1071 2.64124 21.3588C1.89288 20.6104 1.56076 19.6614 1.40314 18.489C1.24997 17.3498 1.24998 15.8942 1.25 14.0564V11.9436C1.24998 10.1058 1.24997 8.65019 1.40314 7.51098C1.56076 6.33855 1.89288 5.38961 2.64124 4.64124C3.38961 3.89288 4.33856 3.56076 5.51098 3.40313C5.7439 3.37182 5.99006 3.34691 6.25 3.32709V2.5C6.25 2.08579 6.58579 1.75 7 1.75ZM5.71085 4.88976C4.70476 5.02502 4.12511 5.27869 3.7019 5.7019C3.27869 6.12511 3.02502 6.70476 2.88976 7.71085C2.86685 7.88123 2.8477 8.06061 2.83168 8.25H21.1683C21.1523 8.06061 21.1331 7.88124 21.1102 7.71085C20.975 6.70476 20.7213 6.12511 20.2981 5.7019C19.8749 5.27869 19.2952 5.02502 18.2892 4.88976C17.2615 4.75159 15.9068 4.75 14 4.75H10C8.09318 4.75 6.73851 4.75159 5.71085 4.88976ZM2.75 12C2.75 11.146 2.75032 10.4027 2.76309 9.75H21.2369C21.2497 10.4027 21.25 11.146 21.25 12V14C21.25 15.9068 21.2484 17.2615 21.1102 18.2892C20.975 19.2952 20.7213 19.8749 20.2981 20.2981C19.8749 20.7213 19.2952 20.975 18.2892 21.1102C17.2615 21.2484 15.9068 21.25 14 21.25H10C8.09318 21.25 6.73851 21.2484 5.71085 21.1102C4.70476 20.975 4.12511 20.7213 3.7019 20.2981C3.27869 19.8749 3.02502 19.2952 2.88976 18.2892C2.75159 17.2615 2.75 15.9068 2.75 14V12Z" fill="__C__"/></svg>`;
 const calendarXml = (color: string) => MONTHLY_CALENDAR_SVG.replace(/__C__/g, color);
@@ -32,6 +33,14 @@ const SETTINGS_ICON_SIZE = 19; // identical to home.tsx + more.tsx ("Visa mer") 
 const TOPBAR_HIT_SLOP    = { top: 8, right: 8, bottom: 8, left: 8 };
 
 const PRAYER_CACHE_KEY = 'andalus_prayer_cache';
+// First-run hint pointing at the "Närmaste masjid" topbar icon. Shown at most
+// once per 24h (Date.now() timestamp persisted; auto-hides after 10s).
+const MASJID_TIP_KEY = 'andalus_masjid_tip_last_shown_v1';
+const MASJID_TIP_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const MASJID_TIP_DURATION_MS = 10 * 1000;
+// Vertical offset for the bubble inside the topbar container: paddingTop(56)
+// + icon row height(~28) + caret gap(~6) → sits just below the icon.
+const MASJID_TIP_TOP = 90;
 
 const PRAYER_NAMES: Record<string, string> = {
   Fajr: 'Fajr', Sunrise: 'Shuruq', Dhuhr: 'Dhuhr',
@@ -154,6 +163,7 @@ export default function PrayerTimesScreen() {
   const [refreshing,           setRefreshing]           = useState(false);
   const [showNoLocation,       setShowNoLocation]       = useState(false);
   const [noLocationGpsLoading, setNoLocationGpsLoading] = useState(false);
+  const [showMasjidTip,        setShowMasjidTip]        = useState(false);
 
   // Refs must match the seeded initial state so the countdown interval that
   // fires immediately on mount uses the correct data.
@@ -167,6 +177,9 @@ export default function PrayerTimesScreen() {
   // Always points to the latest loadPrayerTimes closure — safe to call from interval.
   const doReloadRef    = useRef<() => void>(() => {});
   const intervalRef    = useRef<any>(null);
+  // Auto-hide timer for the "Hitta närmaste masjid" tip bubble. Kept in a ref
+  // so re-renders don't restart the 10s countdown and unmount can clear it.
+  const masjidTipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoLocationRef  = useRef(true);
   const appStateRef      = useRef(AppState.currentState);
   const refreshOpacity   = useRef(new Animated.Value(0)).current;
@@ -233,6 +246,51 @@ export default function PrayerTimesScreen() {
       loadPrayerTimes();
       if (timingsRef.current) startCountdownInterval();
       return () => { clearInterval(intervalRef.current); };
+    }, [])
+  );
+
+  // ── "Hitta närmaste masjid" hint bubble ───────────────────────────────────
+  // Shown the first time the prayer-times tab is focused, then at most once
+  // every 24h. Auto-hides after 10s; the timestamp is persisted in
+  // AsyncStorage the moment we decide to show, so leaving and re-entering the
+  // tab within the same day does not re-trigger it.
+  const dismissMasjidTip = useCallback(() => {
+    if (masjidTipTimerRef.current) {
+      clearTimeout(masjidTipTimerRef.current);
+      masjidTipTimerRef.current = null;
+    }
+    setShowMasjidTip(false);
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      (async () => {
+        try {
+          const raw = await AsyncStorage.getItem(MASJID_TIP_KEY);
+          const last = raw ? Number(raw) : 0;
+          const now = Date.now();
+          if (!Number.isFinite(last) || now - last >= MASJID_TIP_INTERVAL_MS) {
+            await AsyncStorage.setItem(MASJID_TIP_KEY, String(now));
+            if (cancelled) return;
+            setShowMasjidTip(true);
+            masjidTipTimerRef.current = setTimeout(() => {
+              masjidTipTimerRef.current = null;
+              setShowMasjidTip(false);
+            }, MASJID_TIP_DURATION_MS);
+          }
+        } catch {
+          // Best-effort: if storage fails we simply don't show the hint.
+        }
+      })();
+      return () => {
+        cancelled = true;
+        if (masjidTipTimerRef.current) {
+          clearTimeout(masjidTipTimerRef.current);
+          masjidTipTimerRef.current = null;
+        }
+        setShowMasjidTip(false);
+      };
     }, [])
   );
 
@@ -718,6 +776,7 @@ export default function PrayerTimesScreen() {
             <SvgIcon name="settings" size={SETTINGS_ICON_SIZE} color={T.textMuted} />
           </TouchableOpacity>
         </View>
+        <MasjidTipBubble visible={showMasjidTip} top={MASJID_TIP_TOP} onDismiss={dismissMasjidTip} />
       </View>
       <PrayerEmptyState
         T={T}
@@ -767,6 +826,7 @@ export default function PrayerTimesScreen() {
             <SvgIcon name="settings" size={SETTINGS_ICON_SIZE} color={T.textMuted} />
           </TouchableOpacity>
         </View>
+        <MasjidTipBubble visible={showMasjidTip} top={MASJID_TIP_TOP} onDismiss={dismissMasjidTip} />
       </View>
 
       {/* ── Refresh spinner (fades above date) ── */}
@@ -875,16 +935,18 @@ export default function PrayerTimesScreen() {
               // When post-midnight (halva natten passed, still before 00:00), the countdown
               // points to tomorrow's Fajr — don't highlight any row in today's list.
               const isNext    = key === nextPrayer && !isPostMidnight;
-              const isPassed  = !isActive && !isNext && key !== 'Midnight' &&
-                !!timings?.[key] && timeToMinutes(timings[key]) < nowMinutes();
-              const isFuture  = !isActive && !isNext && !isPassed;
 
               const nextColor  = isDark ? '#cab488' : T.accent;
               const activeColor = isDark ? '#ffffff' : '#000000';
-              const nameColor = isActive ? activeColor : isNext ? nextColor : isPassed ? T.textMuted : T.text;
-              const timeColor = isActive ? activeColor : isNext ? nextColor : isPassed ? T.textMuted : T.text;
-              const weight: '700' | '600' | '400' = isActive ? '700' : isNext ? '600' : '400';
-              const rowOpacity = isFuture ? 0.4 : 1;
+              // Passed and upcoming prayers render in full text colour at 100% opacity;
+              // only the active/next prayer gets a tinted highlight.
+              const nameColor = isActive ? activeColor : isNext ? nextColor : T.text;
+              const timeColor = isActive ? activeColor : isNext ? nextColor : T.text;
+              // Shuruq is not a prayer — its row must never render in bold/semibold,
+              // even when it's the active or next event. Colour/glow stay as-is.
+              const weight: '700' | '600' | '400' =
+                key === 'Sunrise' ? '400' : isActive ? '700' : isNext ? '600' : '400';
+              const rowOpacity = 1;
 
               return (
                 <React.Fragment key={key}>
@@ -955,7 +1017,9 @@ export default function PrayerTimesScreen() {
               // Highlight it the same way as isNext on page 1.
               const isTomNext = isPostMidnight && key === 'Fajr';
               const nextColor = isDark ? '#cab488' : T.accent;
-              const tomRowOpacity = isTomNext ? 1 : 0.4;
+              // Tomorrow's prayers also render at 100% opacity — only the
+              // post-midnight Fajr highlight uses the accent colour.
+              const tomRowOpacity = 1;
               const nameColor = isTomNext ? nextColor : T.text;
               const weight: '600' | '400' = isTomNext ? '600' : '400';
 

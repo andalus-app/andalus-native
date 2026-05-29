@@ -712,14 +712,16 @@ struct MediumWidgetView: View {
                             .frame(width: 1, height: 20)
                     }
                     VStack(alignment: .center, spacing: 2) {
+                        // Passed and upcoming prayers render in full white at 100 %;
+                        // only the next-prayer highlight keeps the gold tint.
                         Text(prayer.name)
                             .font(.system(size: 9, weight: isHighlit ? .semibold : .regular))
-                            .foregroundColor(isHighlit ? kGold : .white.opacity(0.4))
+                            .foregroundColor(isHighlit ? kGold : .white)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
                         Text(timeFmt.string(from: prayer.time))
                             .font(.system(size: 10, weight: isHighlit ? .semibold : .regular).monospacedDigit())
-                            .foregroundColor(isHighlit ? kGold : .white.opacity(0.35))
+                            .foregroundColor(isHighlit ? kGold : .white)
                             .lineLimit(1)
                     }
                     .frame(maxWidth: .infinity)

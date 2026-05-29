@@ -525,7 +525,7 @@ export default function QiblaScreen() {
       {/* ── Plats + live-status ── */}
       <View style={{ alignItems: 'center', marginTop: 14, gap: 4 }}>
         {locationLabel ? (
-          <Text style={{ fontSize: 13, color: T.textMuted, opacity: 0.6 }}>
+          <Text style={{ fontSize: 13, color: T.textMuted }}>
             🌙 {locationLabel}
           </Text>
         ) : null}

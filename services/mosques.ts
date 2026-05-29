@@ -23,6 +23,9 @@ export type Mosque = {
   opening_hours: Record<string, string> | null;
   parking_available: boolean | null;
   access_info: string | null;
+  phone: string | null;
+  website: string | null;
+  prayer_times_url: string | null;
   image_url: string | null;
   distance_meters: number;
 };
@@ -83,7 +86,7 @@ export async function searchApprovedMosques(
 
   let q = supabase
     .from('mosques')
-    .select('id,name,address,postal_code,city,country,latitude,longitude,opening_hours,parking_available,access_info,image_url')
+    .select('id,name,address,postal_code,city,country,latitude,longitude,opening_hours,parking_available,access_info,phone,website,prayer_times_url,image_url')
     .eq('status', 'approved')
     .or(`name.ilike.${like},city.ilike.${like},address.ilike.${like},postal_code.ilike.${like}`)
     .limit(8);
@@ -110,6 +113,9 @@ export type MosqueSubmission = {
   opening_hours: Record<string, string> | null;
   parking_available: boolean | null;
   access_info: string | null;
+  phone: string | null;
+  website: string | null;
+  prayer_times_url: string | null;
   image_url: string | null;
   image_storage_path: string | null;
 };
@@ -209,6 +215,9 @@ export async function submitMosque(
     p_image_storage_path: input.image_storage_path,
     p_user_id: userId,
     p_device_id_hash: deviceIdHash,
+    p_phone: input.phone,
+    p_website: input.website,
+    p_prayer_times_url: input.prayer_times_url,
   });
   if (error) return { errorCode: classifySubmitError(error.message), error: error.message };
   return { id: data as string };
@@ -236,6 +245,9 @@ export type AdminMosque = {
   opening_hours: Record<string, string> | null;
   parking_available: boolean | null;
   access_info: string | null;
+  phone: string | null;
+  website: string | null;
+  prayer_times_url: string | null;
   image_url: string | null;
   image_storage_path: string | null;
   status: MosqueStatus;
@@ -261,6 +273,9 @@ export type AdminMosqueInput = {
   opening_hours: Record<string, string> | null;
   parking_available: boolean | null;
   access_info: string | null;
+  phone: string | null;
+  website: string | null;
+  prayer_times_url: string | null;
   image_url: string | null;
   image_storage_path: string | null;
   address_verified?: boolean;
@@ -269,7 +284,7 @@ export type AdminMosqueInput = {
 
 const ADMIN_COLS =
   'id,name,address,postal_code,city,country,latitude,longitude,opening_hours,' +
-  'parking_available,access_info,image_url,image_storage_path,status,' +
+  'parking_available,access_info,phone,website,prayer_times_url,image_url,image_storage_path,status,' +
   'submitted_by_user_id,submitted_device_hash,approved_by_admin_id,rejection_reason,' +
   'address_source,address_verified,created_at,updated_at,approved_at';
 

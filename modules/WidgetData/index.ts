@@ -88,6 +88,16 @@ export async function clearNeedsPrayerRefresh(): Promise<void> {
   return NativeModule.clearNeedsPrayerRefresh();
 }
 
+/** Per-prayer notification mode, mirrored from `hidayah_prayer_notification_modes_v1`.
+ *  Keep the field names in sync with the Swift `PerPrayerMode` Decodable struct in
+ *  `ios/Hidayah/NativeNotificationScheduler.swift`. */
+export interface NativePerPrayerMode {
+  /** "silent" | "vibration" | "standard" | "adhan_short" */
+  mode:    string;
+  /** "medina" | "mecca" | "egyptian" | "turkish"; null for non-adhan modes. */
+  reciter: string | null;
+}
+
 /** Settings the native notification scheduler needs — mirrored to App Group on change. */
 export interface NativeSettings {
   notifications:              boolean;
@@ -95,6 +105,10 @@ export interface NativeSettings {
   school:                     number;
   dhikrReminder:              boolean;
   prePrayerReminderOffset:    number;  // 0 = off; 15 / 30 / 45 / 60 = enabled
+  /** Per-prayer notification modes keyed by `Fajr|Dhuhr|Asr|Maghrib|Isha`. Optional
+   *  so older native builds (without the matching decode) keep working. When absent
+   *  native falls back to `.default` for all prayers. */
+  perPrayerModes?:            Record<string, NativePerPrayerMode>;
 }
 
 /**

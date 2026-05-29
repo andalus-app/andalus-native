@@ -25,6 +25,10 @@ import {
   type SubmitErrorCode,
 } from '../../services/mosques';
 import MasjidLocationPicker from './MasjidLocationPicker';
+import MasjidOpeningHoursPicker from './MasjidOpeningHoursPicker';
+import { formatSwedishPostalCode } from './format';
+import { reverseGeocode } from '../../services/nominatim';
+import { masjidIconColor, masjidLabelColor } from './colors';
 
 function errorMessage(code?: SubmitErrorCode): string {
   switch (code) {
@@ -57,19 +61,70 @@ export default function AddMasjidModal({
   const [city, setCity] = useState('');
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [hours, setHours] = useState('');
+  const [phone, setPhone] = useState('');
+  const [website, setWebsite] = useState('');
+  const [prayerTimesUrl, setPrayerTimesUrl] = useState('');
   const [parking, setParking] = useState<boolean | null>(null);
   const [accessInfo, setAccessInfo] = useState('');
   const [image, setImage] = useState<{ uri: string; mime: string; size: number; base64: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [pickerVisible, setPickerVisible] = useState(false);
+  const [hoursPickerVisible, setHoursPickerVisible] = useState(false);
+  const [fillingAddress, setFillingAddress] = useState(false);
+
+  // Refs mirror the latest values so the awaited reverse-geocode callback below
+  // never overwrites a field the user typed while the request was in flight
+  // (CLAUDE.md async-safety rule).
+  const addressRef = useRef(address); addressRef.current = address;
+  const postalRef  = useRef(postal);  postalRef.current  = postal;
+  const cityRef    = useRef(city);    cityRef.current    = city;
+  const reverseAbortRef = useRef<AbortController | null>(null);
+  useEffect(() => () => { reverseAbortRef.current?.abort(); }, []);
 
   const reset = useCallback(() => {
+    reverseAbortRef.current?.abort();
     setName(''); setAddress(''); setPostal(''); setCity('');
-    setCoords(null); setHours(''); setParking(null); setAccessInfo('');
+    setCoords(null); setHours(''); setPhone(''); setWebsite(''); setPrayerTimesUrl('');
+    setParking(null); setAccessInfo('');
     setImage(null); setSubmitting(false); setPickerVisible(false);
+    setHoursPickerVisible(false);
+    setFillingAddress(false);
   }, []);
 
   const closeReset = useCallback(() => { reset(); onClose(); }, [reset, onClose]);
+
+  /**
+   * "Använd min plats" — set the coordinate AND auto-fill empty address/postal/
+   * city fields via Nominatim reverse geocoding. Non-destructive: any field the
+   * user has already typed is preserved (re-checked at fill-time via refs).
+   */
+  const handleUseMyLocation = useCallback(async () => {
+    if (!userLoc) return;
+    setCoords(userLoc);
+
+    // Skip the network round-trip entirely when every field is already filled.
+    if (addressRef.current.trim() && postalRef.current.trim() && cityRef.current.trim()) return;
+
+    reverseAbortRef.current?.abort();
+    const controller = new AbortController();
+    reverseAbortRef.current = controller;
+
+    setFillingAddress(true);
+    try {
+      const geo = await reverseGeocode(userLoc.lat, userLoc.lng, controller.signal);
+      if (!mountedRef.current || controller.signal.aborted) return;
+      if (geo) {
+        if (geo.address    && !addressRef.current.trim()) setAddress(geo.address);
+        if (geo.postalCode && !postalRef.current.trim())  setPostal(formatSwedishPostalCode(geo.postalCode));
+        if (geo.city       && !cityRef.current.trim())    setCity(geo.city);
+      }
+    } catch {
+      // Silent: empty fields stay empty, user can type manually. No alert —
+      // they still got the coordinate, which is what the button promises.
+    } finally {
+      if (mountedRef.current && reverseAbortRef.current === controller) setFillingAddress(false);
+    }
+  }, [userLoc]);
 
   const pickImage = useCallback(async () => {
     let ImagePicker: typeof import('expo-image-picker') | null = null;
@@ -119,7 +174,7 @@ export default function AddMasjidModal({
 
   const handleSubmit = useCallback(async () => {
     if (!name.trim()) { Alert.alert('Namn krävs', 'Ange masjidens namn.'); return; }
-    if (!coords) { Alert.alert('Plats krävs', "Välj plats med “Använd nuvarande plats” eller “Välj på kartan”."); return; }
+    if (!coords) { Alert.alert('Plats krävs', "Välj plats med “Använd min plats” eller “Välj på kartan”."); return; }
 
     setSubmitting(true);
     try {
@@ -159,6 +214,9 @@ export default function AddMasjidModal({
         opening_hours: hours.trim() ? { alla: hours.trim() } : null,
         parking_available: parking,
         access_info: accessInfo.trim() || null,
+        phone: phone.trim() || null,
+        website: website.trim() || null,
+        prayer_times_url: prayerTimesUrl.trim() || null,
         image_url,
         image_storage_path,
       });
@@ -178,7 +236,7 @@ export default function AddMasjidModal({
         Alert.alert('Något gick fel', 'Kontrollera din anslutning och försök igen.');
       }
     }
-  }, [name, coords, image, address, postal, city, hours, parking, accessInfo, closeReset]);
+  }, [name, coords, image, address, postal, city, hours, phone, website, prayerTimesUrl, parking, accessInfo, closeReset]);
 
   const coordLabel = coords ? `${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}` : 'Ingen plats vald';
 
@@ -187,7 +245,7 @@ export default function AddMasjidModal({
       <View style={[styles.root, { backgroundColor: T.bg }]}>
         <View style={[styles.header, { paddingTop: insets.top + 8, borderBottomColor: T.separator }]}>
           <TouchableOpacity onPress={closeReset} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Text style={[styles.headerBtn, { color: T.textMuted }]}>Avbryt</Text>
+            <Text style={[styles.headerBtn, { color: masjidLabelColor(T) }]}>Avbryt</Text>
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: T.text }]}>Lägg till masjid</Text>
           <View style={{ width: 54 }} />
@@ -199,7 +257,14 @@ export default function AddMasjidModal({
             <Field label="Adress" value={address} onChangeText={setAddress} placeholder="Gata och nummer" T={T} />
             <View style={styles.rowFields}>
               <View style={{ flex: 1 }}>
-                <Field label="Postnummer" value={postal} onChangeText={setPostal} placeholder="123 45" keyboardType="numbers-and-punctuation" T={T} />
+                <Field
+                  label="Postnummer"
+                  value={postal}
+                  onChangeText={t => setPostal(formatSwedishPostalCode(t))}
+                  placeholder="123 45"
+                  keyboardType="numbers-and-punctuation"
+                  T={T}
+                />
               </View>
               <View style={{ flex: 2 }}>
                 <Field label="Stad" value={city} onChangeText={setCity} placeholder="Stad" T={T} />
@@ -207,35 +272,89 @@ export default function AddMasjidModal({
             </View>
 
             {/* Position */}
-            <Text style={[styles.label, { color: T.textMuted }]}>Plats *</Text>
+            <Text style={[styles.label, { color: masjidLabelColor(T) }]}>Plats *</Text>
             <View style={[styles.coordBox, { backgroundColor: T.card, borderColor: T.border }]}>
-              <Ionicons name="location" size={18} color={coords ? T.accent : T.textMuted} />
-              <Text style={[styles.coordText, { color: coords ? T.text : T.textMuted }]}>{coordLabel}</Text>
+              <Ionicons name="location" size={18} color={coords ? masjidIconColor(T) : masjidLabelColor(T)} />
+              <Text style={[styles.coordText, { color: coords ? T.text : masjidLabelColor(T) }]}>{coordLabel}</Text>
             </View>
             <View style={styles.posButtons}>
               <TouchableOpacity
                 style={[styles.posBtn, { backgroundColor: T.card, borderColor: T.border, opacity: userLoc ? 1 : 0.5 }]}
-                onPress={() => userLoc && setCoords(userLoc)}
-                disabled={!userLoc}
+                onPress={handleUseMyLocation}
+                disabled={!userLoc || fillingAddress}
                 activeOpacity={0.8}
               >
-                <Ionicons name="navigate" size={16} color={T.accent} />
-                <Text style={[styles.posBtnText, { color: T.text }]}>Använd nuvarande plats</Text>
+                {fillingAddress
+                  ? <ActivityIndicator size="small" color={masjidIconColor(T)} />
+                  : <Ionicons name="navigate" size={16} color={masjidIconColor(T)} />}
+                <Text style={[styles.posBtnText, { color: T.text }]} numberOfLines={1}>Använd min plats</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.posBtn, { backgroundColor: T.card, borderColor: T.border }]}
                 onPress={() => setPickerVisible(true)}
                 activeOpacity={0.8}
               >
-                <Ionicons name="map" size={16} color={T.accent} />
+                <Ionicons name="map" size={16} color={masjidIconColor(T)} />
                 <Text style={[styles.posBtnText, { color: T.text }]}>Välj på kartan</Text>
               </TouchableOpacity>
             </View>
 
-            <Field label="Öppettider" value={hours} onChangeText={setHours} placeholder="t.ex. 05:00–23:00" T={T} />
+            {/* Öppettider — tryckbar rad öppnar scroll-pickern (Från / Till) */}
+            <Text style={[styles.label, { color: masjidLabelColor(T) }]}>Öppettider</Text>
+            <TouchableOpacity
+              style={[styles.hoursRow, { backgroundColor: T.card, borderColor: T.border }]}
+              onPress={() => setHoursPickerVisible(true)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="time-outline" size={18} color={masjidIconColor(T)} />
+              <Text style={[styles.hoursText, { color: hours ? T.text : masjidLabelColor(T) }]} numberOfLines={1}>
+                {hours || 'Välj tid'}
+              </Text>
+              {!!hours && (
+                <TouchableOpacity
+                  onPress={() => setHours('')}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Ionicons name="close-circle" size={18} color={masjidLabelColor(T)} />
+                </TouchableOpacity>
+              )}
+            </TouchableOpacity>
+
+            {/* Telefon */}
+            <View style={{ marginBottom: 14 }}>
+              <Text style={[styles.label, { color: masjidLabelColor(T) }]}>Telefon</Text>
+              <TextInput
+                style={[styles.input, { backgroundColor: T.card, borderColor: T.border, color: T.text }]}
+                value={phone} onChangeText={setPhone}
+                placeholder="t.ex. 070-123 45 67" placeholderTextColor={masjidLabelColor(T)}
+                keyboardType="phone-pad" autoCorrect={false}
+              />
+            </View>
+
+            {/* Hemsida */}
+            <View style={{ marginBottom: 14 }}>
+              <Text style={[styles.label, { color: masjidLabelColor(T) }]}>Hemsida</Text>
+              <TextInput
+                style={[styles.input, { backgroundColor: T.card, borderColor: T.border, color: T.text }]}
+                value={website} onChangeText={setWebsite}
+                placeholder="t.ex. https://moskén.se" placeholderTextColor={masjidLabelColor(T)}
+                keyboardType="url" autoCapitalize="none" autoCorrect={false}
+              />
+            </View>
+
+            {/* Bönetider — länk till moskéns bönetidsida (visas i appen, ej Safari) */}
+            <View style={{ marginBottom: 14 }}>
+              <Text style={[styles.label, { color: masjidLabelColor(T) }]}>Bönetider (länk)</Text>
+              <TextInput
+                style={[styles.input, { backgroundColor: T.card, borderColor: T.border, color: T.text }]}
+                value={prayerTimesUrl} onChangeText={setPrayerTimesUrl}
+                placeholder="t.ex. https://moskén.se/bonetider" placeholderTextColor={masjidLabelColor(T)}
+                keyboardType="url" autoCapitalize="none" autoCorrect={false}
+              />
+            </View>
 
             {/* Parking */}
-            <Text style={[styles.label, { color: T.textMuted }]}>Parkering</Text>
+            <Text style={[styles.label, { color: masjidLabelColor(T) }]}>Parkering</Text>
             <View style={styles.segment}>
               {([['Ja', true], ['Nej', false]] as const).map(([lbl, val]) => {
                 const active = parking === val;
@@ -255,7 +374,7 @@ export default function AddMasjidModal({
             <Field label="Tillgänglighet / övrig info" value={accessInfo} onChangeText={setAccessInfo} placeholder="t.ex. rullstolsanpassad entré" multiline T={T} />
 
             {/* Image */}
-            <Text style={[styles.label, { color: T.textMuted }]}>Bild (valfri)</Text>
+            <Text style={[styles.label, { color: masjidLabelColor(T) }]}>Bild (valfri)</Text>
             {image ? (
               <View style={[styles.imageWrap, { borderColor: T.border }]}>
                 <Image source={{ uri: image.uri }} style={styles.image} contentFit="cover" />
@@ -265,7 +384,7 @@ export default function AddMasjidModal({
               </View>
             ) : (
               <TouchableOpacity style={[styles.imagePick, { backgroundColor: T.card, borderColor: T.border }]} onPress={pickImage} activeOpacity={0.8}>
-                <Ionicons name="image-outline" size={20} color={T.accent} />
+                <Ionicons name="image-outline" size={20} color={masjidIconColor(T)} />
                 <Text style={[styles.posBtnText, { color: T.text }]}>Lägg till en bild (max 5 MB)</Text>
               </TouchableOpacity>
             )}
@@ -278,17 +397,31 @@ export default function AddMasjidModal({
             >
               {submitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>Skicka för granskning</Text>}
             </TouchableOpacity>
-            <Text style={[styles.note, { color: T.textMuted }]}>
+            <Text style={[styles.note, { color: masjidLabelColor(T) }]}>
               Ditt förslag granskas av en administratör innan det publiceras.
             </Text>
           </ScrollView>
         </KeyboardAvoidingView>
       </View>
 
+      <MasjidOpeningHoursPicker
+        visible={hoursPickerVisible}
+        initialValue={hours}
+        onCancel={() => setHoursPickerVisible(false)}
+        onConfirm={v => { setHours(v); setHoursPickerVisible(false); }}
+      />
+
       <MasjidLocationPicker
         visible={pickerVisible}
         initialLat={coords?.lat ?? userLoc?.lat ?? null}
         initialLng={coords?.lng ?? userLoc?.lng ?? null}
+        // Auto-geocode the typed address on first open via Nominatim's
+        // STRUCTURED search (each field hits the right index → precise hit
+        // even for "Fornbyvägen 29, 163 70 Stockholm"). Once the user has
+        // confirmed a coordinate we pass `null` so re-opening the picker
+        // doesn't yank the crosshair back to the address and overwrite their
+        // manual pan.
+        addressQuery={coords ? null : { street: address, postalCode: postal, city }}
         onCancel={() => setPickerVisible(false)}
         onPicked={(lat, lng) => { setCoords({ lat, lng }); setPickerVisible(false); }}
       />
@@ -304,7 +437,7 @@ function Field({
 }) {
   return (
     <View style={{ marginBottom: 14 }}>
-      <Text style={[styles.label, { color: T.textMuted }]}>{label}</Text>
+      <Text style={[styles.label, { color: masjidLabelColor(T) }]}>{label}</Text>
       <TextInput
         style={[
           styles.input,
@@ -314,7 +447,7 @@ function Field({
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor={T.textMuted}
+        placeholderTextColor={masjidLabelColor(T)}
         multiline={multiline}
         keyboardType={keyboardType}
         autoCorrect={false}
@@ -336,6 +469,12 @@ const styles = StyleSheet.create({
   rowFields: { flexDirection: 'row', gap: 12 },
   coordBox: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 14, paddingVertical: 12 },
   coordText: { fontSize: 15 },
+  hoursRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    borderRadius: 12, borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 14, paddingVertical: 12, marginBottom: 14,
+  },
+  hoursText: { fontSize: 15, flex: 1 },
   posButtons: { flexDirection: 'row', gap: 12, marginTop: 10, marginBottom: 14 },
   posBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, paddingVertical: 12 },
   posBtnText: { fontSize: 14, fontWeight: '600' },

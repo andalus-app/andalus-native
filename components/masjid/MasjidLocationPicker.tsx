@@ -21,7 +21,9 @@ import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
+import { geocodeAddress, type AddressQuery } from '../../services/nominatim';
 import { buildPickerHtml } from './masjidPickerHtml';
+import { masjidIconColor } from './colors';
 
 const DEFAULT_LAT = 59.3293, DEFAULT_LNG = 18.0686; // Stockholm fallback
 
@@ -29,12 +31,20 @@ export default function MasjidLocationPicker({
   visible,
   initialLat,
   initialLng,
+  addressQuery,
   onCancel,
   onPicked,
 }: {
   visible: boolean;
   initialLat: number | null;
   initialLng: number | null;
+  /** Structured address (street + postal + city). When the user hasn't already
+   *  picked coords, the picker forward-geocodes this via Nominatim's structured
+   *  search on open and centers the crosshair there. Pass `null` once coords
+   *  are committed so re-opens don't yank the crosshair away from a manual pan.
+   *  Structured fields are required for precision — free-text q= returns the
+   *  wrong house for "Fornbyvägen 29, 163 70 Stockholm". */
+  addressQuery?: AddressQuery | null;
   onCancel: () => void;
   onPicked: (lat: number, lng: number) => void;
 }) {
@@ -45,7 +55,7 @@ export default function MasjidLocationPicker({
 
   const webRef = useRef<WebView>(null);
   const readyRef = useRef(false);
-  const pendingRef = useRef<{ lat: number; lng: number } | null>(null);
+  const pendingRef = useRef<{ lat: number; lng: number; withUserDot: boolean } | null>(null);
   const mountedRef = useRef(true);
   const centerRef = useRef({ lat: startLat, lng: startLng });
 
@@ -58,13 +68,16 @@ export default function MasjidLocationPicker({
     webRef.current?.injectJavaScript(`window.__picker && window.__picker.handle(${JSON.stringify(msg)}); true;`);
   }, []);
 
-  // Recenter the map (moves the crosshair) + show the user dot. Queues until ready.
-  const centerMap = useCallback((lat: number, lng: number) => {
+  // Recenter the map (moves the crosshair). Optionally drops the blue user
+  // dot — true for GPS-based recentering, false for address geocoding (the
+  // crosshair alone is enough; a "user dot" at a geocoded address would lie).
+  // Queues until the WebView reports ready.
+  const centerMap = useCallback((lat: number, lng: number, withUserDot: boolean) => {
     if (readyRef.current) {
       post({ type: 'center', lat, lng });
-      post({ type: 'user', lat, lng });
+      if (withUserDot) post({ type: 'user', lat, lng });
     } else {
-      pendingRef.current = { lat, lng };
+      pendingRef.current = { lat, lng, withUserDot };
     }
   }, [post]);
 
@@ -87,7 +100,7 @@ export default function MasjidLocationPicker({
       const lat = loc.coords.latitude, lng = loc.coords.longitude;
       centerRef.current = { lat, lng };
       setCoordLabel(`${lat.toFixed(5)}, ${lng.toFixed(5)}`);
-      centerMap(lat, lng);
+      centerMap(lat, lng, true);
     } catch {
       /* GPS failed — keep current view */
     } finally {
@@ -95,13 +108,45 @@ export default function MasjidLocationPicker({
     }
   }, [centerMap]);
 
-  // On open: reset bridge state and auto-center on the user (if already allowed).
+  // On open: reset bridge state, then choose the starting view in this order:
+  //   1) Forward-geocode the structured address via Nominatim if the parent
+  //      provided one — auto-finds the exact house on the map so the user
+  //      doesn't have to pan from their GPS location.
+  //   2) Otherwise auto-center on the user's GPS position (silently — no
+  //      permission prompt; the FAB is the user-initiated path).
+  // The geocode is aborted if the picker is closed mid-flight, and an empty /
+  // failed geocode falls back to GPS so the picker always has a sane view.
   useEffect(() => {
     if (!visible) return;
     readyRef.current = false;
     pendingRef.current = null;
-    goToMyLocation(false);
-  }, [visible, goToMyLocation]);
+
+    const a = addressQuery;
+    const hasAnyField =
+      !!(a && ((a.street && a.street.trim()) || (a.postalCode && a.postalCode.trim()) || (a.city && a.city.trim())));
+    if (!hasAnyField) {
+      goToMyLocation(false);
+      return;
+    }
+
+    const ctl = new AbortController();
+    geocodeAddress(a!, ctl.signal)
+      .then(res => {
+        if (!mountedRef.current || ctl.signal.aborted) return;
+        if (res) {
+          centerRef.current = { lat: res.lat, lng: res.lng };
+          setCoordLabel(`${res.lat.toFixed(5)}, ${res.lng.toFixed(5)}`);
+          centerMap(res.lat, res.lng, false);
+        } else {
+          goToMyLocation(false);
+        }
+      })
+      .catch(() => {
+        if (mountedRef.current && !ctl.signal.aborted) goToMyLocation(false);
+      });
+
+    return () => { ctl.abort(); };
+  }, [visible, addressQuery, centerMap, goToMyLocation]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -114,10 +159,10 @@ export default function MasjidLocationPicker({
     if (msg.type === 'ready') {
       readyRef.current = true;
       if (pendingRef.current) {
-        const { lat, lng } = pendingRef.current;
+        const { lat, lng, withUserDot } = pendingRef.current;
         pendingRef.current = null;
         post({ type: 'center', lat, lng });
-        post({ type: 'user', lat, lng });
+        if (withUserDot) post({ type: 'user', lat, lng });
       }
     } else if (msg.type === 'center' && typeof msg.lat === 'number') {
       centerRef.current = { lat: msg.lat, lng: msg.lng };
@@ -156,7 +201,7 @@ export default function MasjidLocationPicker({
           onPress={() => goToMyLocation(true)}
           activeOpacity={0.8}
         >
-          {locating ? <ActivityIndicator color={T.accent} /> : <Ionicons name="locate" size={22} color={T.accent} />}
+          {locating ? <ActivityIndicator color={masjidIconColor(T)} /> : <Ionicons name="locate" size={22} color={masjidIconColor(T)} />}
         </TouchableOpacity>
 
         <View style={[styles.coordBar, { backgroundColor: T.card, bottom: insets.bottom + 16 }]} pointerEvents="none">

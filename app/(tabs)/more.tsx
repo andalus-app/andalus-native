@@ -3,12 +3,14 @@ import { useRef, useCallback } from 'react';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SvgXml } from 'react-native-svg';
 import SvgIcon from '../../components/SvgIcon';
 import { useTheme } from '../../context/ThemeContext';
+import { masjidIconXml } from '../../constants/masjidIcon';
 
 // ── Data ──────────────────────────────────────────────────────────────────────
 
-type IconName = 'allahs-namn' | 'ruqyah' | 'zakat' | 'calendar' | 'book' | 'heart' | 'info' | 'umrah' | 'hajj' | 'quiz' | 'hadith' | 'settings' | 'prayer' | 'bon-tvagning';
+type IconName = 'allahs-namn' | 'ruqyah' | 'zakat' | 'calendar' | 'book' | 'heart' | 'info' | 'umrah' | 'hajj' | 'quiz' | 'hadith' | 'settings' | 'prayer' | 'bon-tvagning' | 'masjid';
 
 type Row = {
   key:   string;
@@ -30,7 +32,7 @@ const SECTIONS: Section[] = [
       { key: 'umrah',   title: 'Umrah Guide',       icon: 'umrah',       route: '/umrah'   },
       { key: 'hajj',         title: 'Hajj Guide',        icon: 'hajj',    route: '/hajj'          },
       { key: 'prayer-guide', title: 'Bön & Tvagning',  icon: 'bon-tvagning',  route: '/prayer-guide'  },
-      { key: 'ruqyah',       title: 'Ruqyah',           icon: 'ruqyah',  route: '/ruqyah'        },
+      { key: 'masjid',       title: 'Hitta närmaste moské', icon: 'masjid',  route: '/masjid'        },
     ],
   },
   {
@@ -45,6 +47,7 @@ const SECTIONS: Section[] = [
       { key: 'hadith',  title: 'Hadithsamling',       icon: 'hadith',      route: '/hadith'  },
       { key: 'ebooks',  title: 'E-böcker',           icon: 'book',        route: '/ebooks'  },
       { key: 'quiz',    title: 'Frågesport',          icon: 'quiz',        route: '/quiz'    },
+      { key: 'ruqyah',  title: 'Ruqyah',              icon: 'ruqyah',      route: '/ruqyah'  },
     ],
   },
   {
@@ -149,7 +152,12 @@ function ListRow({
       >
         {/* Icon container */}
         <View style={[styles.iconWrap, { backgroundColor: C.iconBg }]}>
-          <SvgIcon name={item.icon} size={20} color={C.icon} />
+          {item.icon === 'masjid' ? (
+            // Portrait pin SVG — render at 22 so optical height matches the 20-px icons
+            <SvgXml xml={masjidIconXml(C.icon)} width={22} height={22} />
+          ) : (
+            <SvgIcon name={item.icon} size={20} color={C.icon} />
+          )}
         </View>
 
         {/* Title */}

@@ -170,6 +170,12 @@ const FALLBACK_CITIES: FallbackCity[] = [
   { name: 'ulricehamn',       displayName: 'Ulricehamn',       lat: 57.7916, lng: 13.4142 },
 ];
 
+// Keyed by `${method}_${school}` so two concurrent callers with the same
+// settings share one in-flight warmup instead of triple-fetching the city
+// list. A different method/school is unusual mid-session but still runs
+// independently (no point blocking on an unrelated key set).
+const _inFlightByKey = new Map<string, Promise<void>>();
+
 /**
  * Warms up andalus_multi_city_cache for all 110 bundled fallback cities.
  * Safe to call on every app open — skips cities already fresh for today.
@@ -178,10 +184,30 @@ const FALLBACK_CITIES: FallbackCity[] = [
  * After this completes, NativeNotificationScheduler can reschedule for any
  * bundled city (e.g. Haparanda, Kiruna, Visby) without the user having
  * previously visited that city.
+ *
+ * Concurrent callers with the same method/school share one in-flight Promise
+ * — re-entry during the ~20 s warmup window is a no-op (returns the running
+ * promise). See `_inFlightByKey` above.
  */
 export async function warmupNativeCache(method: number, school: number): Promise<void> {
   if (Platform.OS !== 'ios') return;
 
+  const inFlightKey = `${method}_${school}`;
+  const existing    = _inFlightByKey.get(inFlightKey);
+  if (existing) return existing;
+
+  const run = (async () => {
+    try {
+      await _warmupNativeCacheImpl(method, school);
+    } finally {
+      _inFlightByKey.delete(inFlightKey);
+    }
+  })();
+  _inFlightByKey.set(inFlightKey, run);
+  return run;
+}
+
+async function _warmupNativeCacheImpl(method: number, school: number): Promise<void> {
   const today = localIsoDate();
 
   // Read current cache to avoid redundant fetches

@@ -3,6 +3,9 @@ import { Platform } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { getNotificationScheduleState } from '../modules/WidgetData';
 import { getIfisTimesForDate } from './ifisApi';
+import { loadPrayerNotificationModes } from '../storage/prayerNotificationPreferences';
+import { modeUsesSystemSound } from './prayerNotificationModes';
+import { adhanSoundFileForMode, type PrayerKey } from '../types/prayerNotificationTypes';
 
 // Lazy-load expo-notifications so a missing native module (e.g. in Expo Go or
 // before a native rebuild) never crashes the app — all functions degrade to no-ops.
@@ -245,6 +248,13 @@ export async function schedulePrayerNotifications(
     await cancelPassedPrayerNotifications();
     if (_prayerScheduleGen !== gen) return; // newer call took over
 
+    // Per-prayer notification modes (silent / vibration / standard / adhan_*).
+    // Each prayer can carry its own sound + payload so the receive handler in
+    // app/_layout.tsx knows whether to trigger local adhan playback. Falls back
+    // to the all-standard default if storage is empty or corrupt.
+    const perPrayerModes = await loadPrayerNotificationModes();
+    if (_prayerScheduleGen !== gen) return;
+
     const now = new Date();
 
     // Dedup guard: at most one notification per prayer × calendar date.
@@ -298,13 +308,37 @@ export async function schedulePrayerNotifications(
         if (scheduled.has(dedupKey)) continue;
         scheduled.add(dedupKey);
 
+        const perPrayer = perPrayerModes[key as PrayerKey];
+        const mode      = perPrayer?.mode    ?? 'standard';
+        const reciter   = perPrayer?.reciter ?? null;
+        // Sound resolution — all four modes are delivered entirely by iOS so
+        // the chosen behaviour applies even when the app is killed:
+        //   • standard    → iOS default notification sound + system vibration.
+        //   • silent      → no sound, no vibration (iOS doesn't vibrate for a
+        //     truly silent notification).
+        //   • vibration   → bundled 1 s `silent.caf` so iOS "plays" an
+        //     inaudible file and triggers its standard vibration. Without a
+        //     sound iOS would not vibrate at all.
+        //   • adhan_short → bundled `<reciter>_short.caf` in ios/Hidayah/Sounds/.
+        // CAF filenames must match a project.pbxproj resource entry.
+        const adhanFile: string | null = adhanSoundFileForMode(mode, reciter);
+        const sound: string | boolean =
+          adhanFile          ? adhanFile :
+          mode === 'vibration' ? 'silent.caf' :
+          modeUsesSystemSound(mode);
+
         await N!.scheduleNotificationAsync({
           identifier,
           content: {
             title: `Det är dags för ${PRAYERS[key]}`,
             body:  `i ${getNotificationDisplayName(cityName)}`,
-            sound: true,
-            data:  { screen: 'prayer' },
+            sound,
+            data:  {
+              screen:    'prayer',
+              prayerKey: key,
+              mode,
+              reciter,
+            },
           },
           trigger: {
             type: N!.SchedulableTriggerInputTypes.DATE,
@@ -844,7 +878,7 @@ export async function cancelZakatNotifications(): Promise<void> {
 }
 
 // ── Allah's 99 Names daily notification ──────────────────────────────────────
-// Fires every day at 09:00 local time with the next name in sequential rotation.
+// Fires every day at 10:00 local time with the next name in sequential rotation.
 // Schedules the next 30 days in advance so notifications fire even if the app
 // isn't opened daily. Re-synced on app startup and when the toggle changes.
 
@@ -853,7 +887,8 @@ const ALLAH_NAMES_ENABLED_KEY   = 'allahNamesNotificationEnabled';
 // Bump this when fire time or schedule logic changes — forces a re-schedule for all users.
 // v5: reduced look-ahead window from 30 → 14 days to free notification slots for
 // the extended 7-day prayer schedule (iOS 64 pending limit per app).
-const ALLAH_NAMES_SCHEDULE_VERSION     = '5';
+// v6: fire time moved from 09:00 → 10:00.
+const ALLAH_NAMES_SCHEDULE_VERSION     = '6';
 const ALLAH_NAMES_SCHEDULE_VERSION_KEY = 'allahNamesScheduleVersion';
 const ALLAH_NAMES_DAYS_AHEAD           = 14;
 
@@ -875,9 +910,9 @@ function allahNamesIndexForDate(localDate: Date): number {
     ALLAH_NAMES_DATA.length;
 }
 
-const ALLAH_NAMES_HOUR = 9; // Daily notification time — 09:00
+const ALLAH_NAMES_HOUR = 10; // Daily notification time — 10:00
 
-/** Schedules daily 09:00 notifications for the next ALLAH_NAMES_DAYS_AHEAD days.
+/** Schedules daily 10:00 notifications for the next ALLAH_NAMES_DAYS_AHEAD days.
  *  Each notification carries the sequential name for that calendar day.
  *  Window kept short so the iOS 64-pending-notification budget leaves room for
  *  the 7-day prayer schedule (35 slots) and other reminders. */
@@ -915,7 +950,7 @@ export async function scheduleAllahNamesNotifications(): Promise<void> {
         },
       });
     }
-    console.log(`[AllahNames] Scheduled ${ALLAH_NAMES_DAYS_AHEAD}-day notifications at 09:00`);
+    console.log(`[AllahNames] Scheduled ${ALLAH_NAMES_DAYS_AHEAD}-day notifications at 10:00`);
   } catch (e) {
     console.warn('[AllahNames] scheduleAllahNamesNotifications error:', e);
   }

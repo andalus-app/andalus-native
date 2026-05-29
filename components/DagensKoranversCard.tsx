@@ -42,7 +42,7 @@ const DHUL_HIJJAH_CONTENT: Record<Exclude<DhulHijjahPhase, 'none'>, {
     source: '[Koranen 2:152]',
   },
   days10to13: {
-    title:  'Eid Mubarak från Hidayah 🌙',
+    title:  'Eid Mubarak 🌙',
     body:   'En dag fylld av barmhärtighet, gemenskap och tacksamhet. Glöm inte att nämna Allah ofta och sprida glädje till människor omkring dig idag.',
     quote:  '',
     source: '',

@@ -21,6 +21,7 @@
  *   { type:'flyTo', lat, lng, zoom }
  *   { type:'focus', id }
  *   { type:'searchMarker', lat, lng } | { type:'clearSearchMarker' }
+ *   { type:'zoomIn' } | { type:'zoomOut' }
  * Message types (map → RN):
  *   { type:'ready' } | { type:'markerTap', id }
  */
@@ -47,6 +48,7 @@ const TILE_STYLE = {
 
 export function buildMasjidMapHtml(accent: string, isDark: boolean): string {
   const bg = isDark ? '#000000' : '#F2F2F7';
+
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -57,15 +59,15 @@ export function buildMasjidMapHtml(accent: string, isDark: boolean): string {
 <style>
   html, body, #map { margin:0; padding:0; height:100%; width:100%; background:${bg}; }
   .maplibregl-ctrl-attrib { font-size:9px; }
-  /* mosque pin — fixed-size box; the SVG tip sits at the box's bottom-centre and
-     MapLibre owns positioning via anchor:'bottom'. NO transform on the marker
-     element itself, so the anchor never shifts when zooming. */
+  /* Mosque pin — fixed-size box; the SVG tip sits at the box's bottom-centre
+     and MapLibre owns positioning via anchor:'bottom'. NO transform on the
+     marker element itself, so the anchor never shifts when zooming. */
   .mpin { width:26px; height:34px; cursor:pointer; }
   .mpin svg { display:block; position:relative; z-index:1; }
   .mpin.subtle svg { opacity:0.9; }
-  /* pulse ring: absolutely positioned child, pointer-events:none, OUT OF FLOW so
-     it never changes the marker's bounding box / anchor. Only the ring scales —
-     the marker element itself is never transformed. */
+  /* Pulse ring: absolutely positioned child, pointer-events:none, OUT OF FLOW
+     so it never changes the marker's bounding box / anchor. Only the ring
+     scales — the marker element itself is never transformed. */
   .mpin .pulse {
     position:absolute; left:13px; top:13px; width:16px; height:16px;
     margin:-8px 0 0 -8px; border-radius:50%; background:${accent};
@@ -75,10 +77,11 @@ export function buildMasjidMapHtml(accent: string, isDark: boolean): string {
     0%   { transform:scale(1);   opacity:0.45; }
     100% { transform:scale(3.2); opacity:0; }
   }
-  /* user location dot */
+  /* User location dot — Apple-standard blue. */
   .userdot { width:16px; height:16px; border-radius:50%; background:#0A84FF;
              border:3px solid #fff; box-shadow:0 0 0 2px rgba(10,132,255,0.3); }
-  /* searched place marker — centred dot (no rotate → no anchor drift) */
+  /* Searched-place marker — system orange dot, kept distinct from the green
+     mosque pins so users never confuse a search pin with a result. */
   .searchpin { width:16px; height:16px; border-radius:50%; background:#FF9500;
                border:2px solid #fff; box-shadow:0 1px 3px rgba(0,0,0,0.4); }
 </style>
@@ -98,7 +101,8 @@ export function buildMasjidMapHtml(accent: string, isDark: boolean): string {
     zoom: 11,
     attributionControl: true,
   });
-  map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+  // No built-in NavigationControl — the +/- controls are owned by React
+  // Native (see app/masjid.tsx) and dispatch zoomIn/zoomOut messages here.
 
   var markers = {};        // id -> maplibregl.Marker (mosques)
   var userMarker = null;
@@ -106,6 +110,8 @@ export function buildMasjidMapHtml(accent: string, isDark: boolean): string {
 
   // Teardrop pin in a 26x34 box; the point is at (13, 33) ≈ bottom-centre, so
   // anchor:'bottom' puts the tip exactly on the coordinate. No CSS rotate.
+  // Fill = the app accent green (matches the "Vägbeskrivning" CTA so the map
+  // pins read as part of the same visual family).
   var PIN_SVG =
     '<svg width="26" height="34" viewBox="0 0 26 34" xmlns="http://www.w3.org/2000/svg">' +
       '<path d="M13 33 C13 33 24 21 24 12.5 C24 6.15 19.08 1 13 1 C6.92 1 2 6.15 2 12.5 C2 21 13 33 13 33 Z" ' +
@@ -212,6 +218,11 @@ export function buildMasjidMapHtml(accent: string, isDark: boolean): string {
           case 'clearSearchMarker':
             if (searchMarker) { searchMarker.remove(); searchMarker = null; }
             break;
+          // Native +/- controls — RN sends one message per tap; MapLibre's
+          // built-in easeTo provides the same animation the old in-map control
+          // used to.
+          case 'zoomIn':  map.zoomIn();  break;
+          case 'zoomOut': map.zoomOut(); break;
         }
       } catch (e) { /* ignore malformed message */ }
     },

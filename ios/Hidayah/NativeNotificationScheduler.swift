@@ -280,12 +280,26 @@ private struct VisitedPrayerLocation: Decodable {
     let source:                  String
 }
 
+/// One prayer's notification mode + (optional) adhan reciter.
+/// Field names mirror the JS `NativePerPrayerMode` interface in
+/// `modules/WidgetData/index.ts` — keep them in sync.
+private struct PerPrayerMode: Decodable {
+    /// "silent" | "vibration" | "standard" | "adhan_short"
+    let mode:    String
+    /// "medina" | "mecca" | "egyptian" | "turkish" | nil
+    let reciter: String?
+}
+
 private struct NativeSettings: Decodable {
     let notifications:           Bool
     let calculationMethod:       Int
     let school:                  Int
     let dhikrReminder:           Bool
     let prePrayerReminderOffset: Int?   // nil when field absent (old data); treat as 0
+    /// Per-prayer notification modes keyed by "Fajr"/"Dhuhr"/"Asr"/"Maghrib"/"Isha".
+    /// nil when JS has not yet written it (old build, first launch before settings
+    /// mirror runs) — callers must fall back to `.default` for every prayer.
+    let perPrayerModes:          [String: PerPrayerMode]?
 
     var effectivePrePrayerOffset: Int { prePrayerReminderOffset ?? 0 }
 }
@@ -984,7 +998,8 @@ final class NativeNotificationScheduler {
                                  id:    "hidayah-prayer-\(dateStr)-\(idKey)",
                                  title: "Det är dags för \(apiKey)",
                                  body:  "i \(notifLabel)",
-                                 at:    fire)
+                                 at:    fire,
+                                 sound: self.prayerSound(forKey: apiKey, settings: settings))
                         queued += 1
                     }
                 }
@@ -999,7 +1014,8 @@ final class NativeNotificationScheduler {
                              id:    "hidayah-prayer-\(resolved.todayDate)-\(idKey)",
                              title: "Det är dags för \(apiKey)",
                              body:  "i \(notifLabel)",
-                             at:    fire)
+                             at:    fire,
+                             sound: self.prayerSound(forKey: apiKey, settings: settings))
                 }
                 if let tomT = resolved.tomT {
                     for (apiKey, idKey) in prayerMap {
@@ -1009,7 +1025,8 @@ final class NativeNotificationScheduler {
                                  id:    "hidayah-prayer-\(resolved.tomorrowDate)-\(idKey)",
                                  title: "Det är dags för \(apiKey)",
                                  body:  "i \(notifLabel)",
-                                 at:    fire)
+                                 at:    fire,
+                                 sound: self.prayerSound(forKey: apiKey, settings: settings))
                     }
                 }
             }
@@ -1152,12 +1169,18 @@ final class NativeNotificationScheduler {
 
     // MARK: - Helpers
 
+    /// Schedules a single notification.
+    /// `sound` may be nil — passing nil produces a fully silent banner (no sound,
+    /// no vibration). All non-prayer callers pass `.default`; prayer callers pass
+    /// the result of `prayerSound(forKey:settings:)` so per-bön-läget speglas
+    /// från JS-settings (`andalus_settings_native.perPrayerModes`).
     private func add(_ center: UNUserNotificationCenter,
-                     id: String, title: String, body: String, at date: Date) {
+                     id: String, title: String, body: String, at date: Date,
+                     sound: UNNotificationSound? = .default) {
         let content       = UNMutableNotificationContent()
         content.title     = title
         content.body      = body
-        content.sound     = .default
+        content.sound     = sound
         let comps = Calendar.current.dateComponents(
             [.year, .month, .day, .hour, .minute], from: date)
         let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
@@ -1165,6 +1188,37 @@ final class NativeNotificationScheduler {
             if let err {
                 NSLog("[NativeNotif] Failed to schedule %@: %@", id, err.localizedDescription)
             }
+        }
+    }
+
+    /// Maps the per-prayer notification mode to the iOS sound that must be set
+    /// on the scheduled notification:
+    ///   • silent      → nil (truly silent banner — iOS does NOT vibrate)
+    ///   • vibration   → bundled `silent.caf` (1 s of silence → iOS triggers its
+    ///                   standard vibration without an audible sound)
+    ///   • standard    → .default (iOS standard sound + vibration)
+    ///   • adhan_short → bundled `<reciter>_short.caf` (≤30 s adhan clip)
+    ///   • unknown / settings nil → .default (safe fallback)
+    /// CAF filenames MUST match the resources registered in
+    /// `ios/Hidayah.xcodeproj/project.pbxproj`.
+    private func prayerSound(forKey apiKey: String,
+                             settings: NativeSettings) -> UNNotificationSound? {
+        guard let perPrayer = settings.perPrayerModes?[apiKey] else {
+            return .default
+        }
+        switch perPrayer.mode {
+        case "silent":
+            return nil
+        case "vibration":
+            return UNNotificationSound(named: UNNotificationSoundName("silent.caf"))
+        case "adhan_short":
+            // Reciter is required for adhan_short; fall back to medina if missing.
+            let reciter = perPrayer.reciter ?? "medina"
+            return UNNotificationSound(named: UNNotificationSoundName("\(reciter)_short.caf"))
+        case "standard":
+            return .default
+        default:
+            return .default
         }
     }
 

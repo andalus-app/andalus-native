@@ -8,6 +8,11 @@
 
 /* Begin PBXBuildFile section */
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
+		ADBB0001000000000000A001 /* medina_short.caf in Resources */ = {isa = PBXBuildFile; fileRef = ADAA0001000000000000A001 /* medina_short.caf */; };
+		ADBB0002000000000000A002 /* mecca_short.caf in Resources */ = {isa = PBXBuildFile; fileRef = ADAA0002000000000000A002 /* mecca_short.caf */; };
+		ADBB0003000000000000A003 /* egyptian_short.caf in Resources */ = {isa = PBXBuildFile; fileRef = ADAA0003000000000000A003 /* egyptian_short.caf */; };
+		ADBB0004000000000000A004 /* turkish_short.caf in Resources */ = {isa = PBXBuildFile; fileRef = ADAA0004000000000000A004 /* turkish_short.caf */; };
+		ADBB0005000000000000A005 /* silent.caf in Resources */ = {isa = PBXBuildFile; fileRef = ADAA0005000000000000A005 /* silent.caf */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
 		6EBE6C5503E2E314FC98B217 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 35A82D2A37D138C858377FF8 /* PrivacyInfo.xcprivacy */; };
 		9EA94855A80C6A12DE727792 /* libPods-Hidayah.a in Frameworks */ = {isa = PBXBuildFile; fileRef = B87F3ADD0BBC5E26B6F7ADD8 /* libPods-Hidayah.a */; };
@@ -91,6 +96,11 @@
 /* Begin PBXFileReference section */
 		13B07F961A680F5B00A75B9A /* Hidayah.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Hidayah.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = Hidayah/Images.xcassets; sourceTree = "<group>"; };
+		ADAA0001000000000000A001 /* medina_short.caf */ = {isa = PBXFileReference; lastKnownFileType = file; path = medina_short.caf; sourceTree = "<group>"; };
+		ADAA0002000000000000A002 /* mecca_short.caf */ = {isa = PBXFileReference; lastKnownFileType = file; path = mecca_short.caf; sourceTree = "<group>"; };
+		ADAA0003000000000000A003 /* egyptian_short.caf */ = {isa = PBXFileReference; lastKnownFileType = file; path = egyptian_short.caf; sourceTree = "<group>"; };
+		ADAA0004000000000000A004 /* turkish_short.caf */ = {isa = PBXFileReference; lastKnownFileType = file; path = turkish_short.caf; sourceTree = "<group>"; };
+		ADAA0005000000000000A005 /* silent.caf */ = {isa = PBXFileReference; lastKnownFileType = file; path = silent.caf; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = Hidayah/Info.plist; sourceTree = "<group>"; };
 		35A82D2A37D138C858377FF8 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = Hidayah/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		3D08F2F8FF6DFDED23AFCDC9 /* Pods-Hidayah.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Hidayah.debug.xcconfig"; path = "Target Support Files/Pods-Hidayah/Pods-Hidayah.debug.xcconfig"; sourceTree = "<group>"; };
@@ -222,12 +232,26 @@
 				FB9C4D3E1A567B02340BBCD1 /* NativeNotificationScheduler.swift */,
 				F11748442D0722820044C1D9 /* Hidayah-Bridging-Header.h */,
 				BB2F792B24A3F905000567C9 /* Supporting */,
+				ADCC00010000000000000FFF /* Sounds */,
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */,
 				35A82D2A37D138C858377FF8 /* PrivacyInfo.xcprivacy */,
 			);
 			name = Hidayah;
+			sourceTree = "<group>";
+		};
+		ADCC00010000000000000FFF /* Sounds */ = {
+			isa = PBXGroup;
+			children = (
+				ADAA0001000000000000A001 /* medina_short.caf */,
+				ADAA0002000000000000A002 /* mecca_short.caf */,
+				ADAA0003000000000000A003 /* egyptian_short.caf */,
+				ADAA0004000000000000A004 /* turkish_short.caf */,
+				ADAA0005000000000000A005 /* silent.caf */,
+			);
+			name = Sounds;
+			path = Hidayah/Sounds;
 			sourceTree = "<group>";
 		};
 		2D16E6871FA4F8E400B85C8A /* Frameworks */ = {
@@ -459,6 +483,11 @@
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
 				A66CA4B2F8039FB7C896D88B /* PrivacyInfo.xcprivacy in Resources */,
+				ADBB0001000000000000A001 /* medina_short.caf in Resources */,
+				ADBB0002000000000000A002 /* mecca_short.caf in Resources */,
+				ADBB0003000000000000A003 /* egyptian_short.caf in Resources */,
+				ADBB0004000000000000A004 /* turkish_short.caf in Resources */,
+				ADBB0005000000000000A005 /* silent.caf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -679,8 +708,8 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Hidayah/Hidayah.entitlements;
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Development";
-				CURRENT_PROJECT_VERSION = 1.0.146;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1.0.152;
 				DEVELOPMENT_TEAM = EVP8ULXZUC;
 				ENABLE_BITCODE = NO;
 				GCC_PREPROCESSOR_DEFINITIONS = (
@@ -693,7 +722,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.1.6;
+				MARKETING_VERSION = 2.2.2;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ObjC",
@@ -717,8 +746,8 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Hidayah/Hidayah.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Development";
-				CURRENT_PROJECT_VERSION = 1.0.146;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1.0.152;
 				DEVELOPMENT_TEAM = EVP8ULXZUC;
 				INFOPLIST_FILE = Hidayah/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
@@ -726,7 +755,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.1.6;
+				MARKETING_VERSION = 2.2.2;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ObjC",
@@ -735,6 +764,7 @@
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_RELEASE";
 				PRODUCT_BUNDLE_IDENTIFIER = com.anonymous.Hidayah;
 				PRODUCT_NAME = Hidayah;
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OBJC_BRIDGING_HEADER = "Hidayah/Hidayah-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -770,7 +800,7 @@
 				CLANG_WARN_SUSPICIOUS_MOVE = YES;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
 				DEVELOPMENT_TEAM = EVP8ULXZUC;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -834,8 +864,7 @@
 				CLANG_WARN_SUSPICIOUS_MOVE = YES;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-				CODE_SIGN_IDENTITY = "Apple Development";
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = YES;
 				DEVELOPMENT_TEAM = EVP8ULXZUC;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -877,9 +906,8 @@
 				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CODE_SIGN_ENTITLEMENTS = HidayahWatchWidget/HidayahWatchWidget.entitlements;
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1.0.146;
+				CURRENT_PROJECT_VERSION = 1.0.152;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = EVP8ULXZUC;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -894,7 +922,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MARKETING_VERSION = 2.1.6;
+				MARKETING_VERSION = 2.2.2;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_DEBUG";
@@ -926,10 +954,9 @@
 				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CODE_SIGN_ENTITLEMENTS = HidayahWatchWidget/HidayahWatchWidget.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 1.0.146;
+				CURRENT_PROJECT_VERSION = 1.0.152;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = EVP8ULXZUC;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -944,7 +971,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MARKETING_VERSION = 2.1.6;
+				MARKETING_VERSION = 2.2.2;
 				MTL_FAST_MATH = YES;
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_RELEASE";
 				PRODUCT_BUNDLE_IDENTIFIER = com.anonymous.Hidayah.watchkitapp.HidayahWatchWidget;
@@ -971,9 +998,8 @@
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_WEAK = YES;
 				CODE_SIGN_ENTITLEMENTS = HidayahWatchApp/HidayahWatchApp.entitlements;
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1.0.146;
+				CURRENT_PROJECT_VERSION = 1.0.152;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = EVP8ULXZUC;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -987,7 +1013,7 @@
 					"@executable_path/Frameworks",
 				);
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MARKETING_VERSION = 2.1.6;
+				MARKETING_VERSION = 2.2.2;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_DEBUG";
@@ -1015,10 +1041,9 @@
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_WEAK = YES;
 				CODE_SIGN_ENTITLEMENTS = HidayahWatchApp/HidayahWatchApp.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 1.0.146;
+				CURRENT_PROJECT_VERSION = 1.0.152;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = EVP8ULXZUC;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -1032,7 +1057,7 @@
 					"@executable_path/Frameworks",
 				);
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MARKETING_VERSION = 2.1.6;
+				MARKETING_VERSION = 2.2.2;
 				MTL_FAST_MATH = YES;
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_RELEASE";
 				PRODUCT_BUNDLE_IDENTIFIER = com.anonymous.Hidayah.watchkitapp;
@@ -1062,9 +1087,8 @@
 				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CODE_SIGN_ENTITLEMENTS = HidayahWidgetExtension.entitlements;
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1.0.146;
+				CURRENT_PROJECT_VERSION = 1.0.152;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = EVP8ULXZUC;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -1080,7 +1104,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MARKETING_VERSION = 2.1.6;
+				MARKETING_VERSION = 2.2.2;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_DEBUG";
@@ -1113,11 +1137,9 @@
 				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CODE_SIGN_ENTITLEMENTS = HidayahWidgetExtension.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Development";
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 1.0.146;
+				CURRENT_PROJECT_VERSION = 1.0.152;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = EVP8ULXZUC;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -1133,7 +1155,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MARKETING_VERSION = 2.1.6;
+				MARKETING_VERSION = 2.2.2;
 				MTL_FAST_MATH = YES;
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_RELEASE";
 				PRODUCT_BUNDLE_IDENTIFIER = com.anonymous.Hidayah.HidayahWidget;

@@ -42,6 +42,8 @@ import {
   ADVANCE_OPTIONS,
 } from '../services/zakatReminderService';
 import HijriDatePickerModal from '../components/HijriDatePickerModal';
+import PrayerNotificationModeSection from '../components/PrayerNotificationModeSection';
+import Toast from '../components/Toast';
 import { supabase } from '../lib/supabase';
 import { Storage } from '../services/storage';
 
@@ -503,6 +505,18 @@ export default function SettingsScreen() {
             }}
             trackColor={{false:T.border,true:T.accent}} thumbColor="#fff" ios_backgroundColor={T.border}/>}/>
 
+        {settings.notifications && (
+          // Sub-setting of the Böne-påminnelser toggle above — kept tight against
+          // the toggle row (no top margin, slim header gap) so it reads as part of
+          // the same control, not a separate section.
+          <View style={{ marginBottom: 8 }}>
+            <Text style={{fontSize:11,fontWeight:'700',color:T.textMuted,letterSpacing:1.2,marginBottom:6,marginTop:4,paddingHorizontal:4}}>
+              AVISERINGSLÄGE PER BÖN
+            </Text>
+            <PrayerNotificationModeSection T={T} />
+          </View>
+        )}
+
         <Row T={T} iconName="bell" label="Påminnelse före bön"
           value={prayerReminderOffset === 'off'
             ? 'Av'
@@ -776,7 +790,7 @@ export default function SettingsScreen() {
         <View style={{backgroundColor:T.card,borderRadius:14,borderWidth:0.5,borderColor:T.border,padding:16}}>
           <Text style={{fontSize:15,fontWeight:'700',color:T.text}}>Hidayah</Text>
           <Text style={{fontSize:13,color:T.textMuted,marginTop:2}}>Bönetider och Qibla-kompass</Text>
-          <Text style={{fontSize:12,color:T.textMuted,marginTop:6,opacity:0.7}}>Version 2.1.6</Text>
+          <Text style={{fontSize:12,color:T.textMuted,marginTop:6,opacity:0.7}}>Version 2.2.2</Text>
           <Text style={{fontSize:11,color:T.textMuted,marginTop:2,opacity:0.55}}>
             © {new Date().getFullYear()} Fatih Köker. Alla rättigheter förbehållna.
           </Text>
@@ -1060,6 +1074,11 @@ export default function SettingsScreen() {
         onConfirm={handleZakatPickerConfirm}
         onClose={() => setZakatPickerVisible(false)}
       />
+
+      {/* Top-of-screen toast pill — sibling of the ScrollView so it overlays
+          everything without intercepting taps. Rendered last so its zIndex
+          stacks above all other children. */}
+      <Toast T={T} />
     </View>
   );
 }
