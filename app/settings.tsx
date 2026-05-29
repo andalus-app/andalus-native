@@ -30,6 +30,7 @@ import {
   LIVE_NOTIF_ENABLED_KEY,
   cancelPrePrayerReminders,
   refreshPrePrayerReminderNotifications,
+  cancelLastThirdReminder,
   PRE_PRAYER_REMINDER_STORAGE_KEY,
   type PrayerReminderOffset,
 } from '../services/notifications';
@@ -63,6 +64,7 @@ const DEFAULT_SETTINGS = {
   announcementNotifications: true,
   dhikrReminder:             false,
   fridayDuaReminder:         true,
+  lastThirdReminder:         false,
   prayerSource:              'aladhan' as 'aladhan' | 'ifis',
   ifisCity:                  'stockholm',
 };
@@ -545,6 +547,27 @@ export default function SettingsScreen() {
           }
         />
 
+        <Row T={T} iconName="bell" label="Den sista tredjedelen av natten"
+          value="Få en påminnelse när den sista tredjedelen av natten börjar."
+          right={<Switch value={settings.lastThirdReminder ?? false}
+            onValueChange={async (v) => {
+              if (v) {
+                const granted = await requestNotificationPermission();
+                if (!granted) {
+                  Alert.alert(
+                    'Notiser nekade',
+                    'Aktivera notiser för Hidayah i iOS-inställningar.',
+                    [{ text: 'OK' }],
+                  );
+                  return;
+                }
+              } else {
+                cancelLastThirdReminder().catch(() => {});
+              }
+              saveSettings({ lastThirdReminder: v });
+            }}
+            trackColor={{false:T.border,true:T.accent}} thumbColor="#fff" ios_backgroundColor={T.border}/>}/>
+
         <Row T={T} iconName="bell" label="Surah Al-Kahf påminnelse" value="Få en påminnelse varje fredag kl. 14:00"
           right={<Switch value={kahfEnabled}
             onValueChange={async (v) => {
@@ -790,7 +813,7 @@ export default function SettingsScreen() {
         <View style={{backgroundColor:T.card,borderRadius:14,borderWidth:0.5,borderColor:T.border,padding:16}}>
           <Text style={{fontSize:15,fontWeight:'700',color:T.text}}>Hidayah</Text>
           <Text style={{fontSize:13,color:T.textMuted,marginTop:2}}>Bönetider och Qibla-kompass</Text>
-          <Text style={{fontSize:12,color:T.textMuted,marginTop:6,opacity:0.7}}>Version 2.2.7</Text>
+          <Text style={{fontSize:12,color:T.textMuted,marginTop:6,opacity:0.7}}>Version 2.2.8</Text>
           <Text style={{fontSize:11,color:T.textMuted,marginTop:2,opacity:0.55}}>
             © {new Date().getFullYear()} Fatih Köker. Alla rättigheter förbehållna.
           </Text>

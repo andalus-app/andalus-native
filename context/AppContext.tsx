@@ -12,7 +12,7 @@ import {
   refreshIfisVisitedPlaceCache, getIfisCitiesForMatching, getIfisTimesForRange,
   IFIS_NATIVE_METHOD, IFIS_NATIVE_SCHOOL,
 } from '../services/ifisApi';
-import { schedulePrayerNotifications, cancelPrayerNotifications, scheduleDhikrReminder, cancelDhikrReminder, scheduleFridayDuaReminder, cancelFridayDuaReminder, refreshPrePrayerReminderNotifications, getNotificationDisplayName, computeWeekTimesHash, computePerPrayerModesHash, PRAYER_LOOKAHEAD_DAYS } from '../services/notifications';
+import { schedulePrayerNotifications, cancelPrayerNotifications, scheduleDhikrReminder, cancelDhikrReminder, scheduleFridayDuaReminder, cancelFridayDuaReminder, scheduleLastThirdReminder, cancelLastThirdReminder, refreshPrePrayerReminderNotifications, getNotificationDisplayName, computeWeekTimesHash, computePerPrayerModesHash, PRAYER_LOOKAHEAD_DAYS } from '../services/notifications';
 import {
   loadPrayerNotificationModes,
   subscribePrayerNotificationModes,
@@ -84,7 +84,7 @@ function localIsoDate(d: Date = new Date()): string {
 }
 
 type LocationType = { latitude: number; longitude: number; city: string; suburb?: string; country: string } | null;
-type Settings = { calculationMethod: number; school: number; notifications: boolean; announcementNotifications: boolean; autoLocation: boolean; dhikrReminder: boolean; fridayDuaReminder: boolean; prayerSource: 'aladhan' | 'ifis'; ifisCity: string };
+type Settings = { calculationMethod: number; school: number; notifications: boolean; announcementNotifications: boolean; autoLocation: boolean; dhikrReminder: boolean; fridayDuaReminder: boolean; lastThirdReminder: boolean; prayerSource: 'aladhan' | 'ifis'; ifisCity: string };
 type Timings  = Record<string, string> | null;
 
 type State = {
@@ -105,6 +105,7 @@ const DEFAULT_SETTINGS: Settings = {
   autoLocation:              true,
   dhikrReminder:             false,
   fridayDuaReminder:         true,
+  lastThirdReminder:         false,
   prayerSource:              'aladhan',
   ifisCity:                  'stockholm',
 };
@@ -962,9 +963,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         state.tomorrowTimes?.Maghrib ?? null,
       ).catch(() => {});
     }
+    // Last third of the night reminder — optional, OFF by default. Independent
+    // of the main prayer toggle (like dhikr/friday). Uses tonight's Maghrib +
+    // tomorrow's Fajr to compute when the final third of the night begins.
+    if (!state.settings.lastThirdReminder) {
+      cancelLastThirdReminder().catch(() => {});
+    } else if (state.prayerTimes.Maghrib && state.tomorrowTimes?.Fajr) {
+      const ltNow      = new Date();
+      const ltTodayStr = localIsoDate(ltNow);
+      const ltTomStr   = localIsoDate(new Date(ltNow.getFullYear(), ltNow.getMonth(), ltNow.getDate() + 1));
+      scheduleLastThirdReminder({
+        [ltTodayStr]: state.prayerTimes,
+        [ltTomStr]:   state.tomorrowTimes,
+      }).catch(() => {});
+    }
     // Pre-prayer reminders: refresh rolling 5-day schedule whenever prayer times reload
     refreshPrePrayerReminderNotifications().catch(() => {});
-  }, [state.prayerTimes, state.tomorrowTimes, state.settings.notifications, state.settings.dhikrReminder, state.settings.fridayDuaReminder, state.location?.city, state.settings.prayerSource, state.settings.calculationMethod, state.settings.school]); // eslint-disable-line
+  }, [state.prayerTimes, state.tomorrowTimes, state.settings.notifications, state.settings.dhikrReminder, state.settings.fridayDuaReminder, state.settings.lastThirdReminder, state.location?.city, state.settings.prayerSource, state.settings.calculationMethod, state.settings.school]); // eslint-disable-line
 
   // ── Cancel immediately when prayer source or calculation parameters change ──
   // Prevents stale notifications from a previous source firing during the

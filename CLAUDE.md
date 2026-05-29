@@ -178,6 +178,27 @@ Rule:
 * Always request permission first
 * Never spam (deduplicate)
 
+#### Last Third of the Night reminder (optional)
+
+* **OFF by default** — user must explicitly enable it in Settings (`lastThirdReminder`
+  boolean in `andalus_settings`). Independent of the main "Böne-påminnelser" toggle,
+  exactly like the dhikr/Friday-dua reminders.
+* Settings row sits **directly after "Påminnelse före bön"** (`app/settings.tsx`).
+  Title: **"Den sista tredjedelen av natten"** · Description: **"Få en påminnelse när
+  den sista tredjedelen av natten börjar."**
+* Notification: title only — **🌙 Den sista tredjedelen av natten är inne – en tid för
+  bön och åkallan.** — and an **empty body** (by design).
+* Fire time: `LastThirdStart = Maghrib + ((FajrNextDay − Maghrib) × 2 / 3)`, using the
+  current evening's Maghrib and the **following** day's Fajr. Computed with absolute
+  `Date` arithmetic because the night spans midnight.
+* Dedicated identifier prefix `andalus-last-third-` (one per evening:
+  `andalus-last-third-YYYY-MM-DD`, dated by the Maghrib evening). Cancelled +
+  rescheduled on every call → no duplicates. Added to the `SAFE_PREFIXES` allowlist in
+  `cancelPrayerNotifications` so the prayer-cancel pass never removes it.
+* `scheduleLastThirdReminder(dailyTimes)` / `cancelLastThirdReminder()` in
+  `services/notifications.ts`; scheduled from the AppContext notification effect.
+  Disabling the toggle cancels all pending `andalus-last-third-*`.
+
 ---
 
 ## Critical Patterns

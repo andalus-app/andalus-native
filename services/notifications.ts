@@ -401,7 +401,7 @@ export async function cancelPrayerNotifications(): Promise<void> {
     const SAFE_PREFIXES = [
       'andalus-dhikr-', 'andalus-friday-dua-', 'andalus-allah-names-',
       'andalus-live-',  'andalus-announcement-', 'andalus-kahf-',
-      'andalus-zakat-', 'hidayah-pre-prayer-',
+      'andalus-zakat-', 'hidayah-pre-prayer-', 'andalus-last-third-',
     ];
     const ours = all.filter(n => {
       // New date-based format (hidayah-prayer-YYYY-MM-DD-*)
@@ -616,6 +616,93 @@ export async function cancelFridayDuaReminder(): Promise<void> {
   try {
     const all  = await N.getAllScheduledNotificationsAsync();
     const ours = all.filter(n => n.identifier.startsWith(FRIDAY_DUA_PREFIX));
+    await Promise.all(ours.map(n => N!.cancelScheduledNotificationAsync(n.identifier)));
+  } catch {}
+}
+
+// ── Last third of the night reminder ─────────────────────────────────────────
+// Optional, OFF by default. Fires when the final third of the night begins:
+//   LastThirdStart = Maghrib + ((FajrNextDay - Maghrib) * 2 / 3)
+// Uses the current evening's Maghrib and the FOLLOWING day's Fajr, so the night
+// duration is computed with absolute Date arithmetic (it spans midnight). The
+// notification has a title only — no body, by design.
+//
+// Identifier per night: andalus-last-third-YYYY-MM-DD where the date is the
+// EVENING (Maghrib) date the night belongs to. One notification per evening
+// (deduplicated), cancelled + rescheduled on every call so times stay accurate.
+const LAST_THIRD_PREFIX = 'andalus-last-third-';
+const LAST_THIRD_TITLE  =
+  '🌙 Den sista tredjedelen av natten är inne – en tid för bön och åkallan.';
+
+/** Schedules the "last third of the night" reminder for every evening present
+ *  in `dailyTimes` whose following day's Fajr is also present. `dailyTimes` is
+ *  the same ISO-date-keyed prayer dict used by schedulePrayerNotifications.
+ *  Cancels existing reminders first so nothing duplicates. No-op without
+ *  permission. */
+export async function scheduleLastThirdReminder(
+  dailyTimes: Record<string, Record<string, string>>,
+): Promise<void> {
+  if (!N) return;
+  try {
+    const { status } = await N.getPermissionsAsync();
+    if (status !== 'granted') return;
+
+    await cancelLastThirdReminder();
+
+    const now       = new Date();
+    const dates     = Object.keys(dailyTimes).sort();
+    const scheduled = new Set<string>();
+
+    for (const dateStr of dates) {
+      const maghrib = dailyTimes[dateStr]?.Maghrib;
+      if (!maghrib) continue;
+
+      const [yy, mo, dd] = dateStr.split('-').map(Number);
+      if (!yy || !mo || !dd) continue;
+
+      // Following calendar day — its Fajr closes this night.
+      const nextDate    = new Date(yy, mo - 1, dd + 1);
+      const nextDateStr = _localIsoDate(nextDate);
+      const nextFajr    = dailyTimes[nextDateStr]?.Fajr;
+      if (!nextFajr) continue; // no following-day Fajr available — skip this night
+
+      const [mh, mm] = maghrib.split(':').map(Number);
+      const [fh, fm] = nextFajr.split(':').map(Number);
+      if ([mh, mm, fh, fm].some(Number.isNaN)) continue;
+
+      const maghribDate = new Date(yy, mo - 1, dd, mh, mm, 0, 0);
+      const fajrDate    = new Date(nextDate.getFullYear(), nextDate.getMonth(), nextDate.getDate(), fh, fm, 0, 0);
+      const nightMs     = fajrDate.getTime() - maghribDate.getTime();
+      if (nightMs <= 0) continue; // malformed times — Fajr not after Maghrib
+
+      // LastThirdStart = Maghrib + (night duration * 2 / 3)
+      const fire = new Date(maghribDate.getTime() + Math.round(nightMs * 2 / 3));
+      if (fire <= now) continue;            // already passed
+      if (scheduled.has(dateStr)) continue; // dedup per evening
+      scheduled.add(dateStr);
+
+      await N!.scheduleNotificationAsync({
+        identifier: `${LAST_THIRD_PREFIX}${dateStr}`,
+        content: {
+          title: LAST_THIRD_TITLE,
+          body:  '',
+          sound: true,
+          data:  { screen: 'prayer', type: 'last-third' },
+        },
+        trigger: {
+          type: N!.SchedulableTriggerInputTypes.DATE,
+          date: fire,
+        },
+      });
+    }
+  } catch {}
+}
+
+export async function cancelLastThirdReminder(): Promise<void> {
+  if (!N) return;
+  try {
+    const all  = await N.getAllScheduledNotificationsAsync();
+    const ours = all.filter(n => n.identifier.startsWith(LAST_THIRD_PREFIX));
     await Promise.all(ours.map(n => N!.cancelScheduledNotificationAsync(n.identifier)));
   } catch {}
 }
