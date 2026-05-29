@@ -58,6 +58,7 @@ export default function MasjidAdminEditModal({
   const [website, setWebsite] = useState('');
   const [prayerTimesUrl, setPrayerTimesUrl] = useState('');
   const [parking, setParking] = useState<boolean | null>(null);
+  const [wheelchair, setWheelchair] = useState<boolean | null>(null);
   const [accessInfo, setAccessInfo] = useState('');
   const [existingUrl, setExistingUrl] = useState<string | null>(null);
   const [existingPath, setExistingPath] = useState<string | null>(null);
@@ -118,6 +119,7 @@ export default function MasjidAdminEditModal({
       setWebsite(mosque.website ?? '');
       setPrayerTimesUrl(mosque.prayer_times_url ?? '');
       setParking(mosque.parking_available);
+      setWheelchair(mosque.wheelchair_accessible);
       setAccessInfo(mosque.access_info ?? '');
       setExistingUrl(mosque.image_url ?? null);
       setExistingPath(mosque.image_storage_path ?? null);
@@ -128,7 +130,7 @@ export default function MasjidAdminEditModal({
       setLatText(userLoc ? userLoc.lat.toFixed(6) : '');
       setLngText(userLoc ? userLoc.lng.toFixed(6) : '');
       setHours(''); setPhone(''); setWebsite(''); setPrayerTimesUrl('');
-      setParking(null); setAccessInfo('');
+      setParking(null); setWheelchair(null); setAccessInfo('');
       setExistingUrl(null); setExistingPath(null); setVerified(true);
     }
     setPicked(null); setRemoved(false); setSaving(false); setPickerVisible(false);
@@ -147,14 +149,12 @@ export default function MasjidAdminEditModal({
   const removeImage = useCallback(() => { setPicked(null); setRemoved(true); }, []);
 
   /**
-   * "Använd min plats" — set the coordinate AND auto-fill empty address/postal/
-   * city fields via Nominatim reverse geocoding. Non-destructive: any field
-   * already typed (including pre-seeded values from edit mode) is preserved.
+   * Reverse-geocode lat/lng and auto-fill empty address/postal/city fields via
+   * Nominatim. Non-destructive: any field already typed (including pre-seeded
+   * values from edit mode) is preserved. Shared by "Använd min plats" AND the
+   * map picker's "Klar".
    */
-  const handleUseMyLocation = useCallback(async () => {
-    if (!userLoc) return;
-    applyCoords(userLoc.lat, userLoc.lng);
-
+  const fillAddressFromCoords = useCallback(async (lat: number, lng: number) => {
     // Skip the network round-trip entirely when every field is already filled.
     if (addressRef.current.trim() && postalRef.current.trim() && cityRef.current.trim()) return;
 
@@ -164,7 +164,7 @@ export default function MasjidAdminEditModal({
 
     setFillingAddress(true);
     try {
-      const geo = await reverseGeocode(userLoc.lat, userLoc.lng, controller.signal);
+      const geo = await reverseGeocode(lat, lng, controller.signal);
       if (!mountedRef.current || controller.signal.aborted) return;
       if (geo) {
         if (geo.address    && !addressRef.current.trim()) setAddress(geo.address);
@@ -176,7 +176,21 @@ export default function MasjidAdminEditModal({
     } finally {
       if (mountedRef.current && reverseAbortRef.current === controller) setFillingAddress(false);
     }
-  }, [userLoc, applyCoords]);
+  }, []);
+
+  /** "Använd min plats" — set the coordinate and auto-fill empty address fields. */
+  const handleUseMyLocation = useCallback(() => {
+    if (!userLoc) return;
+    applyCoords(userLoc.lat, userLoc.lng);
+    fillAddressFromCoords(userLoc.lat, userLoc.lng);
+  }, [userLoc, applyCoords, fillAddressFromCoords]);
+
+  /** Map picker "Klar" — commit the picked coordinate and auto-fill empty address fields. */
+  const handlePicked = useCallback((lat: number, lng: number) => {
+    applyCoords(lat, lng);
+    setPickerVisible(false);
+    fillAddressFromCoords(lat, lng);
+  }, [applyCoords, fillAddressFromCoords]);
 
   const handleSave = useCallback(async () => {
     if (!name.trim()) { Alert.alert('Namn krävs', 'Ange masjidens namn.'); return; }
@@ -207,6 +221,7 @@ export default function MasjidAdminEditModal({
         longitude: coords.lng,
         opening_hours: hours.trim() ? { alla: hours.trim() } : null,
         parking_available: parking,
+        wheelchair_accessible: wheelchair,
         access_info: accessInfo.trim() || null,
         phone: phone.trim() || null,
         website: website.trim() || null,
@@ -227,7 +242,7 @@ export default function MasjidAdminEditModal({
     } catch (e) {
       if (mountedRef.current) { setSaving(false); Alert.alert('Kunde inte spara', String(e)); }
     }
-  }, [name, coords, existingUrl, existingPath, picked, removed, address, postal, city, hours, phone, website, prayerTimesUrl, parking, accessInfo, verified, mode, mosque, onSaved, onClose]);
+  }, [name, coords, existingUrl, existingPath, picked, removed, address, postal, city, hours, phone, website, prayerTimesUrl, parking, wheelchair, accessInfo, verified, mode, mosque, onSaved, onClose]);
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
@@ -362,7 +377,20 @@ export default function MasjidAdminEditModal({
               })}
             </View>
 
-            <Field label="Tillgänglighet / övrig info" value={accessInfo} onChangeText={setAccessInfo} placeholder="t.ex. rullstolsanpassad entré" multiline T={T} />
+            {/* Rullstolstillgänglig ingång — direkt efter Parkering */}
+            <Text style={[styles.label, { color: masjidLabelColor(T) }]}>Rullstolstillgänglig ingång</Text>
+            <View style={styles.segment}>
+              {([['Ja', true], ['Nej', false]] as const).map(([lbl, val]) => {
+                const active = wheelchair === val;
+                return (
+                  <TouchableOpacity key={lbl} style={[styles.segBtn, { backgroundColor: active ? T.accent : T.card, borderColor: T.border }]} onPress={() => setWheelchair(active ? null : val)} activeOpacity={0.8}>
+                    <Text style={[styles.segText, { color: active ? '#fff' : T.text }]}>{lbl}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <Field label="Tillgänglighet / övrig info" value={accessInfo} onChangeText={setAccessInfo} placeholder="T.ex. Fredagsbön kl. 13:00, separat böneplats för systrar, entré via baksidan eller andra viktiga upplysningar." multiline T={T} />
 
             {/* Image */}
             <Text style={[styles.label, { color: masjidLabelColor(T) }]}>Bild (max 1, ≤ 5 MB)</Text>
@@ -417,7 +445,7 @@ export default function MasjidAdminEditModal({
         // Uses Nominatim's STRUCTURED query for precise house-level matching.
         addressQuery={coords ? null : { street: address, postalCode: postal, city }}
         onCancel={() => setPickerVisible(false)}
-        onPicked={(lat, lng) => { applyCoords(lat, lng); setPickerVisible(false); }}
+        onPicked={handlePicked}
       />
     </Modal>
   );

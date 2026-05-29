@@ -7,11 +7,13 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, useWindowDimensions, Linking } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import { SvgXml } from 'react-native-svg';
 import { useTheme } from '../../context/ThemeContext';
 import type { Mosque } from '../../services/mosques';
 import { formatDistance, formatOpeningHours } from './format';
 import MasjidWebModal from './MasjidWebModal';
 import { masjidIconColor, masjidLabelColor, masjidSubColor } from './colors';
+import { wheelchairIconXml, WHEELCHAIR_ICON_COLOR } from '../../constants/wheelchairIcon';
 
 export default function MasjidCard({
   mosque,
@@ -25,6 +27,7 @@ export default function MasjidCard({
   const { theme: T } = useTheme();
   const { height } = useWindowDimensions();
   const [prayerWebOpen, setPrayerWebOpen] = useState(false);
+  const [accessTipOpen, setAccessTipOpen] = useState(false);
   const hours = formatOpeningHours(mosque.opening_hours);
   const addressLine = [mosque.address, [mosque.postal_code, mosque.city].filter(Boolean).join(' ')]
     .filter(Boolean).join(', ');
@@ -56,18 +59,51 @@ export default function MasjidCard({
 
         {!!addressLine && <Text style={[styles.address, { color: masjidLabelColor(T) }]}>{addressLine}</Text>}
 
-        <View style={styles.chips}>
-          <View style={[styles.chip, { backgroundColor: T.cardElevated }]}>
-            <Ionicons name="navigate" size={13} color={masjidIconColor(T)} />
-            <Text style={[styles.chipText, { color: masjidSubColor(T) }]}>{formatDistance(mosque.distance_meters)}</Text>
-          </View>
-          {mosque.parking_available != null && (
+        <View style={styles.chipsWrap}>
+          <View style={styles.chips}>
             <View style={[styles.chip, { backgroundColor: T.cardElevated }]}>
-              <Ionicons name="car" size={13} color={masjidLabelColor(T)} />
-              <Text style={[styles.chipText, { color: masjidLabelColor(T) }]}>
-                Parkering: {mosque.parking_available ? 'Ja' : 'Nej'}
-              </Text>
+              <Ionicons name="navigate" size={13} color={masjidIconColor(T)} />
+              <Text style={[styles.chipText, { color: masjidSubColor(T) }]}>{formatDistance(mosque.distance_meters)}</Text>
             </View>
+            {mosque.parking_available != null && (
+              <View style={[styles.chip, { backgroundColor: T.cardElevated }]}>
+                <Ionicons name="car" size={13} color={masjidLabelColor(T)} />
+                <Text style={[styles.chipText, { color: masjidLabelColor(T) }]}>
+                  Parkering: {mosque.parking_available ? 'Ja' : 'Nej'}
+                </Text>
+              </View>
+            )}
+            {/* Rullstolstillgänglig — bar ikon (ingen bakgrund) precis till höger
+                om Parkering. Visas bara när masjiden är markerad som tillgänglig.
+                Tryck visar en bubbla med förklaring. Samma ikonstorlek (13) som
+                bil-ikonen. */}
+            {mosque.wheelchair_accessible === true && (
+              <TouchableOpacity
+                style={styles.accessBtn}
+                onPress={() => setAccessTipOpen(o => !o)}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Rullstolstillgänglig ingång"
+              >
+                <SvgXml xml={wheelchairIconXml(WHEELCHAIR_ICON_COLOR)} width={13} height={13} />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {accessTipOpen && (
+            <>
+              <View style={[styles.accessTipCaret, { borderBottomColor: T.card }]} pointerEvents="none" />
+              <TouchableOpacity
+                style={[styles.accessTip, { backgroundColor: T.card, shadowOpacity: T.isDark ? 0.4 : 0.12 }]}
+                onPress={() => setAccessTipOpen(false)}
+                activeOpacity={0.9}
+              >
+                <Text style={[styles.accessTipText, { color: T.text }]} numberOfLines={1}>
+                  Rullstolstillgänglig ingång
+                </Text>
+              </TouchableOpacity>
+            </>
           )}
         </View>
 
@@ -166,9 +202,25 @@ const styles = StyleSheet.create({
   image: { width: '100%', height: 140, borderRadius: 12, marginBottom: 12 },
   name: { fontSize: 18, fontWeight: '700', paddingRight: 28 },
   address: { fontSize: 14, marginTop: 4 },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
+  chipsWrap: { marginTop: 12, position: 'relative' },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 6, paddingHorizontal: 10, borderRadius: 10 },
   chipText: { fontSize: 13, fontWeight: '600' },
+  // Bare wheelchair icon (no chip background) sized to match the car icon.
+  accessBtn: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
+  // Tooltip anchored to the right edge of the chips row (can't overflow the
+  // card) just below the chips. zIndex/elevation keep it above later content.
+  accessTip: {
+    position: 'absolute', top: 40, right: 0, zIndex: 50, elevation: 12,
+    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, maxWidth: '100%',
+    shadowColor: '#000', shadowRadius: 8, shadowOffset: { width: 0, height: 2 },
+  },
+  accessTipText: { fontSize: 13, fontWeight: '500' },
+  accessTipCaret: {
+    position: 'absolute', top: 34, right: 8, zIndex: 51, elevation: 13,
+    width: 0, height: 0, borderLeftWidth: 6, borderRightWidth: 6, borderBottomWidth: 6,
+    borderLeftColor: 'transparent', borderRightColor: 'transparent',
+  },
   section: { marginTop: 14 },
   sectionTitle: { fontSize: 14, fontWeight: '600', marginBottom: 4 },
   sectionText: { fontSize: 14, lineHeight: 20 },

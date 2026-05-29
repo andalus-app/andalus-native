@@ -46,8 +46,14 @@ const TILE_STYLE = {
   layers: [{ id: 'osm', type: 'raster', source: 'osm', minzoom: 0, maxzoom: 19 }],
 };
 
+/** Base map background — matches the WebView/cover background in MasjidMapView
+ *  so there's no white flash before the first paint. Single source of truth. */
+export function masjidMapBg(isDark: boolean): string {
+  return isDark ? '#000000' : '#F2F2F7';
+}
+
 export function buildMasjidMapHtml(accent: string, isDark: boolean): string {
-  const bg = isDark ? '#000000' : '#F2F2F7';
+  const bg = masjidMapBg(isDark);
 
   return `<!DOCTYPE html>
 <html>

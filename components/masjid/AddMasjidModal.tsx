@@ -70,6 +70,7 @@ export default function AddMasjidModal({
   const [website, setWebsite] = useState('');
   const [prayerTimesUrl, setPrayerTimesUrl] = useState('');
   const [parking, setParking] = useState<boolean | null>(null);
+  const [wheelchair, setWheelchair] = useState<boolean | null>(null);
   const [accessInfo, setAccessInfo] = useState('');
   const [image, setImage] = useState<{ uri: string; mime: string; size: number; base64: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -110,7 +111,7 @@ export default function AddMasjidModal({
     reverseAbortRef.current?.abort();
     setName(''); setAddress(''); setPostal(''); setCity('');
     setCoords(null); setLatText(''); setLngText(''); setHours(''); setPhone(''); setWebsite(''); setPrayerTimesUrl('');
-    setParking(null); setAccessInfo('');
+    setParking(null); setWheelchair(null); setAccessInfo('');
     setImage(null); setSubmitting(false); setPickerVisible(false);
     setHoursPickerVisible(false);
     setFillingAddress(false);
@@ -119,14 +120,13 @@ export default function AddMasjidModal({
   const closeReset = useCallback(() => { reset(); onClose(); }, [reset, onClose]);
 
   /**
-   * "Använd min plats" — set the coordinate AND auto-fill empty address/postal/
-   * city fields via Nominatim reverse geocoding. Non-destructive: any field the
-   * user has already typed is preserved (re-checked at fill-time via refs).
+   * Reverse-geocode lat/lng and auto-fill empty address/postal/city fields via
+   * Nominatim. Non-destructive: any field the user has already typed is
+   * preserved (re-checked at fill-time via refs). Shared by "Använd min plats"
+   * AND the map picker's "Klar" so picking a point on the map fills the address
+   * fields too.
    */
-  const handleUseMyLocation = useCallback(async () => {
-    if (!userLoc) return;
-    applyCoords(userLoc.lat, userLoc.lng);
-
+  const fillAddressFromCoords = useCallback(async (lat: number, lng: number) => {
     // Skip the network round-trip entirely when every field is already filled.
     if (addressRef.current.trim() && postalRef.current.trim() && cityRef.current.trim()) return;
 
@@ -136,7 +136,7 @@ export default function AddMasjidModal({
 
     setFillingAddress(true);
     try {
-      const geo = await reverseGeocode(userLoc.lat, userLoc.lng, controller.signal);
+      const geo = await reverseGeocode(lat, lng, controller.signal);
       if (!mountedRef.current || controller.signal.aborted) return;
       if (geo) {
         if (geo.address    && !addressRef.current.trim()) setAddress(geo.address);
@@ -144,12 +144,25 @@ export default function AddMasjidModal({
         if (geo.city       && !cityRef.current.trim())    setCity(geo.city);
       }
     } catch {
-      // Silent: empty fields stay empty, user can type manually. No alert —
-      // they still got the coordinate, which is what the button promises.
+      // Silent: empty fields stay empty, user can type manually.
     } finally {
       if (mountedRef.current && reverseAbortRef.current === controller) setFillingAddress(false);
     }
-  }, [userLoc, applyCoords]);
+  }, []);
+
+  /** "Använd min plats" — set the coordinate and auto-fill empty address fields. */
+  const handleUseMyLocation = useCallback(() => {
+    if (!userLoc) return;
+    applyCoords(userLoc.lat, userLoc.lng);
+    fillAddressFromCoords(userLoc.lat, userLoc.lng);
+  }, [userLoc, applyCoords, fillAddressFromCoords]);
+
+  /** Map picker "Klar" — commit the picked coordinate and auto-fill empty address fields. */
+  const handlePicked = useCallback((lat: number, lng: number) => {
+    applyCoords(lat, lng);
+    setPickerVisible(false);
+    fillAddressFromCoords(lat, lng);
+  }, [applyCoords, fillAddressFromCoords]);
 
   const pickImage = useCallback(async () => {
     let ImagePicker: typeof import('expo-image-picker') | null = null;
@@ -238,6 +251,7 @@ export default function AddMasjidModal({
         longitude: coords.lng,
         opening_hours: hours.trim() ? { alla: hours.trim() } : null,
         parking_available: parking,
+        wheelchair_accessible: wheelchair,
         access_info: accessInfo.trim() || null,
         phone: phone.trim() || null,
         website: website.trim() || null,
@@ -261,7 +275,7 @@ export default function AddMasjidModal({
         Alert.alert('Något gick fel', 'Kontrollera din anslutning och försök igen.');
       }
     }
-  }, [name, coords, image, address, postal, city, hours, phone, website, prayerTimesUrl, parking, accessInfo, closeReset]);
+  }, [name, coords, image, address, postal, city, hours, phone, website, prayerTimesUrl, parking, wheelchair, accessInfo, closeReset]);
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={closeReset}>
@@ -410,7 +424,25 @@ export default function AddMasjidModal({
               })}
             </View>
 
-            <Field label="Tillgänglighet / övrig info" value={accessInfo} onChangeText={setAccessInfo} placeholder="t.ex. rullstolsanpassad entré" multiline T={T} />
+            {/* Rullstolstillgänglig ingång — direkt efter Parkering */}
+            <Text style={[styles.label, { color: masjidLabelColor(T) }]}>Rullstolstillgänglig ingång</Text>
+            <View style={styles.segment}>
+              {([['Ja', true], ['Nej', false]] as const).map(([lbl, val]) => {
+                const active = wheelchair === val;
+                return (
+                  <TouchableOpacity
+                    key={lbl}
+                    style={[styles.segBtn, { backgroundColor: active ? T.accent : T.card, borderColor: T.border }]}
+                    onPress={() => setWheelchair(active ? null : val)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.segText, { color: active ? '#fff' : T.text }]}>{lbl}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <Field label="Tillgänglighet / övrig info" value={accessInfo} onChangeText={setAccessInfo} placeholder="T.ex. Fredagsbön kl. 13:00, separat böneplats för systrar, entré via baksidan eller andra viktiga upplysningar." multiline T={T} />
 
             {/* Image */}
             <Text style={[styles.label, { color: masjidLabelColor(T) }]}>Bild (valfri)</Text>
@@ -462,7 +494,7 @@ export default function AddMasjidModal({
         // manual pan.
         addressQuery={coords ? null : { street: address, postalCode: postal, city }}
         onCancel={() => setPickerVisible(false)}
-        onPicked={(lat, lng) => { applyCoords(lat, lng); setPickerVisible(false); }}
+        onPicked={handlePicked}
       />
     </Modal>
   );

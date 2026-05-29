@@ -11,11 +11,11 @@
  * its animations and its tile requests die with it.
  */
 import React, {
-  forwardRef, useCallback, useImperativeHandle, useMemo, useRef,
+  forwardRef, useCallback, useImperativeHandle, useMemo, useRef, useState,
 } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Animated, StyleSheet, View } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
-import { buildMasjidMapHtml } from './masjidMapHtml';
+import { buildMasjidMapHtml, masjidMapBg } from './masjidMapHtml';
 
 export type MapPoint = { id: string; lat: number; lng: number };
 export type LatLng = { lat: number; lng: number };
@@ -50,6 +50,13 @@ const MasjidMapView = forwardRef<MasjidMapHandle, Props>(function MasjidMapView(
   const webRef = useRef<WebView>(null);
   const readyRef = useRef(false);
   const queueRef = useRef<object[]>([]);
+
+  // Themed cover over the WebView until the map reports 'ready'. Eliminates the
+  // brief white flash the native WebView backing shows before the first paint.
+  // Same colour as the map's HTML background so the fade reveals seamlessly.
+  const bg = masjidMapBg(isDark);
+  const coverFade = useRef(new Animated.Value(1)).current;
+  const [covered, setCovered] = useState(true);
 
   // Latest props mirrored into refs so the 'ready' handler sends current state.
   const userRef = useRef(user);          userRef.current = user;
@@ -100,13 +107,16 @@ const MasjidMapView = forwardRef<MasjidMapHandle, Props>(function MasjidMapView(
       queueRef.current = [];
       queued.forEach(post);
       onReady?.();
+      // Map is up — fade the themed cover out to reveal it (no white flash).
+      Animated.timing(coverFade, { toValue: 0, duration: 220, useNativeDriver: true })
+        .start(() => setCovered(false));
     } else if (msg.type === 'markerTap' && typeof msg.id === 'string') {
       onMarkerTap(msg.id);
     }
   }, [post, onMarkerTap, onReady]);
 
   return (
-    <View style={styles.fill}>
+    <View style={[styles.fill, { backgroundColor: bg }]}>
       <WebView
         ref={webRef}
         originWhitelist={['*']}
@@ -118,10 +128,20 @@ const MasjidMapView = forwardRef<MasjidMapHandle, Props>(function MasjidMapView(
         bounces={false}
         overScrollMode="never"
         androidLayerType="hardware"
-        style={styles.fill}
+        // Themed (not white) backing so there's no white flash before paint.
+        style={[styles.fill, { backgroundColor: bg }]}
+        // HTTP-cache the MapLibre JS/CSS + tiles so later opens load from disk.
+        cacheEnabled
+        cacheMode="LOAD_CACHE_ELSE_NETWORK"
         // No file access needed; map + tiles load over https.
         allowsInlineMediaPlayback
       />
+      {covered && (
+        <Animated.View
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFill, { backgroundColor: bg, opacity: coverFade }]}
+        />
+      )}
     </View>
   );
 });

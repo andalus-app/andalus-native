@@ -22,6 +22,7 @@ export type Mosque = {
   longitude: number;
   opening_hours: Record<string, string> | null;
   parking_available: boolean | null;
+  wheelchair_accessible: boolean | null;
   access_info: string | null;
   phone: string | null;
   website: string | null;
@@ -86,7 +87,7 @@ export async function searchApprovedMosques(
 
   let q = supabase
     .from('mosques')
-    .select('id,name,address,postal_code,city,country,latitude,longitude,opening_hours,parking_available,access_info,phone,website,prayer_times_url,image_url')
+    .select('id,name,address,postal_code,city,country,latitude,longitude,opening_hours,parking_available,wheelchair_accessible,access_info,phone,website,prayer_times_url,image_url')
     .eq('status', 'approved')
     .or(`name.ilike.${like},city.ilike.${like},address.ilike.${like},postal_code.ilike.${like}`)
     .limit(8);
@@ -95,6 +96,25 @@ export async function searchApprovedMosques(
   const { data, error } = await q;
   if (error) throw error;
   return (data ?? []) as MosqueSearchResult[];
+}
+
+/**
+ * Count masjids awaiting moderation (status='pending'). RLS restricts non-admin
+ * callers to approved rows, so this returns 0 for everyone except an
+ * authenticated linked admin — making it safe to call from the home screen as a
+ * self-gating "there's a pending masjid" indicator. Never throws: any error
+ * (incl. abort) resolves to 0 so the home screen stays silent on failure.
+ */
+export async function fetchPendingMosqueCount(signal?: AbortSignal): Promise<number> {
+  try {
+    let q = supabase.from('mosques').select('id', { count: 'exact', head: true }).eq('status', 'pending');
+    if (signal) q = q.abortSignal(signal);
+    const { count, error } = await q;
+    if (error) return 0;
+    return count ?? 0;
+  } catch {
+    return 0;
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -112,6 +132,7 @@ export type MosqueSubmission = {
   longitude: number;
   opening_hours: Record<string, string> | null;
   parking_available: boolean | null;
+  wheelchair_accessible: boolean | null;
   access_info: string | null;
   phone: string | null;
   website: string | null;
@@ -210,6 +231,7 @@ export async function submitMosque(
     p_longitude: input.longitude,
     p_opening_hours: input.opening_hours,
     p_parking_available: input.parking_available,
+    p_wheelchair_accessible: input.wheelchair_accessible,
     p_access_info: input.access_info,
     p_image_url: input.image_url,
     p_image_storage_path: input.image_storage_path,
@@ -244,6 +266,7 @@ export type AdminMosque = {
   longitude: number;
   opening_hours: Record<string, string> | null;
   parking_available: boolean | null;
+  wheelchair_accessible: boolean | null;
   access_info: string | null;
   phone: string | null;
   website: string | null;
@@ -272,6 +295,7 @@ export type AdminMosqueInput = {
   longitude: number;
   opening_hours: Record<string, string> | null;
   parking_available: boolean | null;
+  wheelchair_accessible: boolean | null;
   access_info: string | null;
   phone: string | null;
   website: string | null;
@@ -284,7 +308,7 @@ export type AdminMosqueInput = {
 
 const ADMIN_COLS =
   'id,name,address,postal_code,city,country,latitude,longitude,opening_hours,' +
-  'parking_available,access_info,phone,website,prayer_times_url,image_url,image_storage_path,status,' +
+  'parking_available,wheelchair_accessible,access_info,phone,website,prayer_times_url,image_url,image_storage_path,status,' +
   'submitted_by_user_id,submitted_device_hash,approved_by_admin_id,rejection_reason,' +
   'address_source,address_verified,created_at,updated_at,approved_at';
 
@@ -366,6 +390,48 @@ export async function adminVerifyMosqueAddress(id: string): Promise<void> {
     .update({ address_verified: true, address_source: 'admin' })
     .eq('id', id);
   if (error) throw error;
+}
+
+/**
+ * Permanently delete a masjid row (admin-only via the admin_delete_mosques RLS
+ * policy). Best-effort removes its storage image too so we don't orphan files.
+ * Irreversible — callers must confirm first.
+ */
+export async function adminDeleteMosque(id: string, imageStoragePath?: string | null): Promise<void> {
+  const { error } = await supabase.from('mosques').delete().eq('id', id);
+  if (error) throw error;
+  if (imageStoragePath) {
+    try { await supabase.storage.from('mosque-images').remove([imageStoragePath]); } catch { /* best-effort */ }
+  }
+}
+
+/**
+ * Permanently delete ALL hidden masjids (status 'rejected' or 'blocked').
+ * Gathers their storage paths first for best-effort image cleanup, then deletes
+ * the rows in one statement (RLS restricts this to linked admins). Returns the
+ * number of rows deleted. Irreversible — callers must confirm first.
+ */
+export async function adminDeleteAllHidden(): Promise<number> {
+  const HIDDEN: MosqueStatus[] = ['rejected', 'blocked'];
+  const { data: rows } = await supabase
+    .from('mosques')
+    .select('image_storage_path')
+    .in('status', HIDDEN);
+
+  const { data: deleted, error } = await supabase
+    .from('mosques')
+    .delete()
+    .in('status', HIDDEN)
+    .select('id');
+  if (error) throw error;
+
+  const paths = (rows ?? [])
+    .map((r) => (r as { image_storage_path: string | null }).image_storage_path)
+    .filter((p): p is string => !!p);
+  if (paths.length) {
+    try { await supabase.storage.from('mosque-images').remove(paths); } catch { /* best-effort */ }
+  }
+  return (deleted ?? []).length;
 }
 
 /** Block a submitter by user_id and/or device hash (permanent if blockedUntil null). */

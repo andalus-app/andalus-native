@@ -1,8 +1,10 @@
 import { View, Text, ScrollView, TouchableOpacity, RefreshControl, Linking, Image, useWindowDimensions, Animated, Easing, PanResponder, Modal, StyleSheet, AppState, TextInput } from 'react-native';
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Svg, { Path } from 'react-native-svg';
+import Svg, { Path, SvgXml } from 'react-native-svg';
 import HidayahLogo from '../../components/HidayahLogo';
+import { masjidIconXml } from '../../constants/masjidIcon';
+import { fetchPendingMosqueCount } from '../../services/mosques';
 import DagensKoranversCard from '../../components/DagensKoranversCard';
 import NextPrayerCard from '../../components/NextPrayerCard';
 import DagensHadithCard from '../../components/DagensHadithCard';
@@ -579,6 +581,17 @@ export default function HomeScreen() {
   const tapTimerRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [adminPinVisible,   setAdminPinVisible]   = useState(false);
   const [adminEligibleUser, setAdminEligibleUser] = useState<EligibleAdminUser | null>(null);
+  // Where to navigate after a successful admin PIN: the triple-tap logo goes to
+  // announcements; the "väntande masjid" banner goes straight to moderation.
+  const adminDestRef = useRef<'announcements' | 'mosques'>('announcements');
+
+  // ── Pending-masjid indicator ───────────────────────────────────────────────
+  // RLS returns pending rows only to an authenticated linked admin, so this
+  // count is 0 for everyone else → the banner self-gates to admins.
+  const [pendingMasjidCount, setPendingMasjidCount] = useState(0);
+  const pendingMasjidLoadingRef = useRef(false);
+  const lastPendingMasjidLoadRef = useRef(0);
+  const PENDING_MASJID_COOLDOWN_MS = 30_000;
 
   // ── Announcement state ────────────────────────────────────────────────────
   const [bannerAnnouncements, setBannerAnnouncements] = useState<Announcement[]>([]);
@@ -812,6 +825,7 @@ export default function HomeScreen() {
 
     if (tapCountRef.current >= 3) {
       tapCountRef.current = 0;
+      adminDestRef.current = 'announcements';
       checkAdminEligibility();
       return;
     }
@@ -819,10 +833,33 @@ export default function HomeScreen() {
     tapTimerRef.current = setTimeout(() => { tapCountRef.current = 0; }, 3000);
   }, [checkAdminEligibility]);
 
+  // "Väntande masjid"-bannern → samma dolda admin-PIN-flöde som trippeltrycket,
+  // men landar direkt i modereringen (admin-mosques).
+  const handlePendingMasjidTap = useCallback(() => {
+    adminDestRef.current = 'mosques';
+    checkAdminEligibility();
+  }, [checkAdminEligibility]);
+
   const handleAdminPinSuccess = useCallback(() => {
     setAdminPinVisible(false);
-    router.push('/admin-announcements');
+    router.push(adminDestRef.current === 'mosques' ? '/admin-mosques' : '/admin-announcements');
   }, [router]);
+
+  // Load the pending-masjid count (admin-only via RLS) with a cooldown so rapid
+  // tab-switching doesn't spam Supabase. Never throws (the service swallows
+  // errors → 0).
+  const loadPendingMasjids = useCallback(async () => {
+    if (pendingMasjidLoadingRef.current) return;
+    if (Date.now() - lastPendingMasjidLoadRef.current < PENDING_MASJID_COOLDOWN_MS) return;
+    pendingMasjidLoadingRef.current = true;
+    try {
+      const count = await fetchPendingMosqueCount();
+      lastPendingMasjidLoadRef.current = Date.now();
+      setPendingMasjidCount(count);
+    } finally {
+      pendingMasjidLoadingRef.current = false;
+    }
+  }, []);
 
   const handleAdminPinCancel = useCallback(() => {
     setAdminPinVisible(false);
@@ -890,6 +927,14 @@ export default function HomeScreen() {
 
   // Load on tab focus (initial load + tab-switch refresh)
   useFocusEffect(useCallback(() => { loadAnnouncements(); }, [loadAnnouncements]));
+
+  // Refresh the pending-masjid count whenever home regains focus (e.g. after
+  // moderating). Forces a reload by clearing the cooldown so a just-approved
+  // masjid disappears from the badge immediately.
+  useFocusEffect(useCallback(() => {
+    lastPendingMasjidLoadRef.current = 0;
+    loadPendingMasjids();
+  }, [loadPendingMasjids]));
 
   // Date header: start midnight timer on focus, clear it on blur.
   // Also detects a day change when navigating back to home after midnight.
@@ -1080,6 +1125,35 @@ export default function HomeScreen() {
         <TouchableOpacity onPress={handleLogoTap} activeOpacity={1} hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}>
           <HidayahLogo size={52} />
         </TouchableOpacity>
+
+        {/* Väntande masjid — masjid-ikon med rund sifferbadge, direkt höger om
+            loggan. Endast synlig för admin (RLS → count 0 för övriga) OCH bara
+            när det finns något att hantera; annars dold. Tryck → dolt
+            admin-PIN-flöde → moderering direkt. */}
+        {pendingMasjidCount > 0 && (
+          <TouchableOpacity
+            onPress={handlePendingMasjidTap}
+            style={{ marginLeft: 10, width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}
+            activeOpacity={0.7}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            accessibilityRole="button"
+            accessibilityLabel={pendingMasjidCount === 1 ? '1 väntande masjid att granska' : `${pendingMasjidCount} väntande masjider att granska`}
+          >
+            <SvgXml xml={masjidIconXml(T.textMuted)} width={28} height={28} />
+            <View style={{
+              position: 'absolute', top: -2, right: -2,
+              minWidth: 18, height: 18, borderRadius: 9,
+              backgroundColor: '#FF3B30',
+              alignItems: 'center', justifyContent: 'center',
+              paddingHorizontal: 4,
+              borderWidth: 1.5, borderColor: T.bg,
+            }}>
+              <Text style={{ color: '#fff', fontSize: 10, fontWeight: '800', lineHeight: 12 }}>
+                {pendingMasjidCount > 99 ? '99' : String(pendingMasjidCount)}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        )}
 
         {/* Centered date block — absolute so it centers on full screen width */}
         <Animated.View

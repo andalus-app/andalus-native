@@ -164,12 +164,20 @@ function pickBestMatch(
  *
  *   1. Free-text q="street, postal, city" → exact-postcode filter (highest
  *      precision; an exact postcode hit always wins).
- *   2. Structured /search?street=&postalcode= → exact-postcode filter.
- *   3. Reuse the pass-1 rows, this time filtered by CITY name (handles the
- *      common "right street, missing/odd postcode" case). No extra request.
- *   4. Free-text q="street, city" (postcode dropped) → city filter.
- *   5. City-only q="city" → at least centre on the correct town.
+ *   2. Same pass-1 rows, filtered by CITY name — NO extra request. Handles the
+ *      very common "right street, odd/different postcode" case (e.g.
+ *      "Borgarfjordsgatan 18, 164 40 Stockholm" — Nominatim only has the street
+ *      centroid at 164 53). This MUST run before any second network request so
+ *      a rate-limited fallback can never discard the good pass-1 data.
+ *   3. Structured /search?street=&postalcode= (best-effort) → postcode/city.
+ *   4. Free-text q="street, city" (best-effort) → city filter.
+ *   5. City-only q="city" (best-effort) → at least centre on the correct town.
  *   6. Loose: top-scoring pass-1 row (only when no city was given to filter on).
+ *
+ * Crucially, every fallback NETWORK request after pass 1 is best-effort: a
+ * thrown error (e.g. Nominatim 429 from rapid requests) is swallowed so we fall
+ * through to the next pass instead of aborting the whole geocode and snapping
+ * the picker back to the user's GPS position.
  */
 export async function geocodeAddress(addr: AddressQuery, signal?: AbortSignal): Promise<GeocodeResult | null> {
   const street       = addr.street?.trim() ?? '';
@@ -185,7 +193,17 @@ export async function geocodeAddress(addr: AddressQuery, signal?: AbortSignal): 
     return { lat, lng, label: r.display_name ?? '' };
   };
 
-  // ── Pass 1: free-text q=, exact-postcode filter ─────────────────────────
+  // Best-effort fallback search: never throws (a 429 on a fallback pass must not
+  // abort the whole geocode). An aborted request still rejects, but the caller's
+  // signal handling treats that as a no-op anyway.
+  const safeSearch = async (params: URLSearchParams): Promise<NominatimRow[]> => {
+    try { return await nominatimSearch(params, signal); }
+    catch { return []; }
+  };
+
+  // ── Pass 1: free-text q= (the one request we let throw — nothing to work
+  //    with otherwise). Then resolve entirely IN MEMORY, precise → coarse, with
+  //    no further network calls for the common cases. ──────────────────────────
   const parts: string[] = [];
   if (street)       parts.push(street);
   if (postalDigits) parts.push(postalDigits);
@@ -193,47 +211,47 @@ export async function geocodeAddress(addr: AddressQuery, signal?: AbortSignal): 
   const p1 = new URLSearchParams();
   p1.set('q', parts.join(', '));
   const data1 = await nominatimSearch(p1, signal);
+
   if (postalDigits) {
-    const m = pickBestMatch(data1, postalDigits, city, 'postcode');
+    const m = pickBestMatch(data1, postalDigits, city, 'postcode'); // exact postcode wins
     if (m) return toResult(m);
   }
-
-  // ── Pass 2: structured street + postcode, exact-postcode filter ─────────
-  if (street && postalDigits) {
-    const p2 = new URLSearchParams();
-    p2.set('street',     street);
-    p2.set('postalcode', postalDigits);
-    const data2 = await nominatimSearch(p2, signal);
-    const m = pickBestMatch(data2, postalDigits, city, 'postcode');
-    if (m) return toResult(m);
-  }
-
-  // ── Pass 3: reuse pass-1 rows, filter by city (no extra request) ────────
   if (city) {
-    const m = pickBestMatch(data1, postalDigits, city, 'city');
+    const m = pickBestMatch(data1, postalDigits, city, 'city');     // right city, any postcode
     if (m) return toResult(m);
   }
 
-  // ── Pass 4: free-text street + city (postcode dropped) ──────────────────
+  // ── Pass 3: structured street + postcode (best-effort) ──────────────────────
+  if (street && postalDigits) {
+    const p3 = new URLSearchParams();
+    p3.set('street',     street);
+    p3.set('postalcode', postalDigits);
+    const data3 = await safeSearch(p3);
+    const m = pickBestMatch(data3, postalDigits, city, 'postcode')
+      ?? (city ? pickBestMatch(data3, postalDigits, city, 'city') : null);
+    if (m) return toResult(m);
+  }
+
+  // ── Pass 4: free-text street + city, postcode dropped (best-effort) ─────────
   if (street && city) {
     const p4 = new URLSearchParams();
     p4.set('q', `${street}, ${city}`);
-    const data4 = await nominatimSearch(p4, signal);
+    const data4 = await safeSearch(p4);
     const m = pickBestMatch(data4, postalDigits, city, 'city')
       ?? pickBestMatch(data4, postalDigits, city, 'loose');
     if (m) return toResult(m);
   }
 
-  // ── Pass 5: city-only — centre on the correct town as a floor ───────────
+  // ── Pass 5: city-only — centre on the correct town as a floor (best-effort) ─
   if (city) {
     const p5 = new URLSearchParams();
     p5.set('q', city);
-    const data5 = await nominatimSearch(p5, signal);
+    const data5 = await safeSearch(p5);
     const m = pickBestMatch(data5, postalDigits, city, 'city') ?? data5[0];
     if (m) { const r = toResult(m); if (r) return r; }
   }
 
-  // ── Pass 6: no city to disambiguate on → trust pass-1's best row ────────
+  // ── Pass 6: no city to disambiguate on → trust pass-1's best row ────────────
   if (!city) {
     const m = pickBestMatch(data1, postalDigits, city, 'loose');
     if (m) return toResult(m);

@@ -22,7 +22,7 @@ import { useTheme } from '../context/ThemeContext';
 import BackButton from '../components/BackButton';
 import {
   adminListMosques, adminApproveMosque, adminRejectMosque, adminSetMosqueStatus,
-  adminBlockSubmitter, type AdminMosque,
+  adminBlockSubmitter, adminDeleteMosque, adminDeleteAllHidden, type AdminMosque,
 } from '../services/mosques';
 import MasjidAdminEditModal from '../components/masjid/MasjidAdminEditModal';
 
@@ -128,6 +128,26 @@ export default function AdminMosquesScreen() {
       { text: 'Återställ', onPress: () => runAction(() => adminSetMosqueStatus(m.id, 'approved')) },
     ]);
 
+  // Permanent delete — removes the row (and its image) from Supabase entirely so
+  // it never appears in any list, not even Dolda. Irreversible.
+  const deleteMosque = (m: AdminMosque) =>
+    Alert.alert('Radera masjid', `Radera “${m.name}” permanent? Detta går inte att ångra.`, [
+      { text: 'Avbryt', style: 'cancel' },
+      { text: 'Radera', style: 'destructive', onPress: () => runAction(() => adminDeleteMosque(m.id, m.image_storage_path)) },
+    ]);
+
+  const deleteAllHidden = () => {
+    if (items.length === 0) return;
+    Alert.alert(
+      'Radera alla dolda',
+      `Radera alla ${items.length} dolda masjider permanent från Supabase? Detta går inte att ångra.`,
+      [
+        { text: 'Avbryt', style: 'cancel' },
+        { text: 'Radera alla', style: 'destructive', onPress: () => runAction(async () => { await adminDeleteAllHidden(); }) },
+      ],
+    );
+  };
+
   const openEdit = (m: AdminMosque) => { setEditMode('edit'); setEditMosque(m); setEditVisible(true); };
   const openCreate = () => { setEditMode('create'); setEditMosque(null); setEditVisible(true); };
 
@@ -172,6 +192,7 @@ export default function AdminMosquesScreen() {
           {!!hours && <Text style={[styles.cardLine, { color: T.textMuted }]} numberOfLines={1}>Öppettider: {hours}</Text>}
           <Text style={[styles.cardLine, { color: T.textMuted }]}>
             Parkering: {m.parking_available == null ? '–' : m.parking_available ? 'Ja' : 'Nej'}
+            {'  ·  '}Rullstol: {m.wheelchair_accessible == null ? '–' : m.wheelchair_accessible ? 'Ja' : 'Nej'}
             {m.address_verified ? '  ·  ✓ verifierad' : ''}
           </Text>
           {!!m.access_info && <Text style={[styles.cardLine, { color: T.textMuted }]} numberOfLines={2}>{m.access_info}</Text>}
@@ -185,6 +206,7 @@ export default function AdminMosquesScreen() {
               <ActionBtn icon="checkmark-circle" label="Godkänn" color={T.success} onPress={() => approve(m)} />
               <ActionBtn icon="close-circle" label="Avvisa" color={T.warning} onPress={() => openReject(m)} />
               {canBlock && <ActionBtn icon="ban" label="Blockera" color={T.error} onPress={() => openBlock(m)} />}
+              <ActionBtn icon="trash" label="Radera" color={T.error} onPress={() => deleteMosque(m)} />
             </>
           )}
           {tab === 'approved' && (
@@ -197,6 +219,7 @@ export default function AdminMosquesScreen() {
             <>
               <ActionBtn icon="refresh" label="Återställ" color={T.success} onPress={() => restore(m)} />
               <ActionBtn icon="create" label="Redigera" color={T.accent} onPress={() => openEdit(m)} />
+              <ActionBtn icon="trash" label="Radera" color={T.error} onPress={() => deleteMosque(m)} />
             </>
           )}
         </View>
@@ -258,6 +281,16 @@ export default function AdminMosquesScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refreshCurrent} tintColor={T.accent} />}
           keyboardShouldPersistTaps="handled"
         >
+          {tab === 'hidden' && items.length > 0 && (
+            <TouchableOpacity
+              style={[styles.deleteAllBtn, { borderColor: T.error }]}
+              onPress={deleteAllHidden}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="trash" size={18} color={T.error} />
+              <Text style={[styles.deleteAllText, { color: T.error }]}>Radera alla dolda ({items.length})</Text>
+            </TouchableOpacity>
+          )}
           {filteredItems.length === 0 ? (
             <Text style={[styles.empty, { color: T.textMuted }]}>
               {search.trim()
@@ -367,7 +400,9 @@ const styles = StyleSheet.create({
   cardName: { fontSize: 16, fontWeight: '700', flex: 1 },
   cardLine: { fontSize: 13, marginTop: 3, lineHeight: 18 },
   cardMeta: { fontSize: 11, marginTop: 8 },
-  cardActions: { flexDirection: 'row', gap: 8, marginTop: 12, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth },
+  cardActions: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 16, rowGap: 8, marginTop: 12, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth },
+  deleteAllBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, marginBottom: 14 },
+  deleteAllText: { fontSize: 15, fontWeight: '700' },
   actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 4 },
   actionLabel: { fontSize: 14, fontWeight: '600' },
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', padding: 24 },
