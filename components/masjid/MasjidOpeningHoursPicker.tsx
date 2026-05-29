@@ -16,6 +16,7 @@ import {
   Modal, View, Text, TouchableOpacity, FlatList,
   StyleSheet, type NativeSyntheticEvent, type NativeScrollEvent,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { masjidLabelColor } from './colors';
 
@@ -31,6 +32,10 @@ const DEFAULT_FROM_H = '05';
 const DEFAULT_FROM_M = '00';
 const DEFAULT_TO_H   = '23';
 const DEFAULT_TO_M   = '00';
+
+/** Sentinel value stored when the masjid is open 24/7. Rendered as-is in the
+ *  card ("Mån–Sön: Dygnet runt") and on the form row. */
+export const ALL_DAY_VALUE = 'Dygnet runt';
 
 /**
  * Parse a stored "HH:MM–HH:MM" (or "HH:MM-HH:MM") string back into the four
@@ -135,16 +140,22 @@ export default function MasjidOpeningHoursPicker({
   const [fromM, setFromM] = useState(parsed.fromM);
   const [toH,   setToH]   = useState(parsed.toH);
   const [toM,   setToM]   = useState(parsed.toM);
+  // "Öppet dygnet runt" — when on, the wheels are dimmed and confirm stores the
+  // ALL_DAY_VALUE sentinel instead of a time range.
+  const [allDay, setAllDay] = useState(
+    (initialValue ?? '').trim().toLowerCase() === ALL_DAY_VALUE.toLowerCase(),
+  );
 
   useEffect(() => {
     if (!visible) return;
     const p = parseHours(initialValue);
     setFromH(p.fromH); setFromM(p.fromM); setToH(p.toH); setToM(p.toM);
+    setAllDay((initialValue ?? '').trim().toLowerCase() === ALL_DAY_VALUE.toLowerCase());
   }, [visible, initialValue]);
 
   const confirm = useCallback(() => {
-    onConfirm(`${fromH}:${fromM}–${toH}:${toM}`);
-  }, [fromH, fromM, toH, toM, onConfirm]);
+    onConfirm(allDay ? ALL_DAY_VALUE : `${fromH}:${fromM}–${toH}:${toM}`);
+  }, [allDay, fromH, fromM, toH, toM, onConfirm]);
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
@@ -152,7 +163,24 @@ export default function MasjidOpeningHoursPicker({
         <View style={[styles.dialog, { backgroundColor: T.bg, borderColor: T.border }]}>
           <Text style={[styles.title, { color: T.text }]}>Öppettider</Text>
 
-          <View style={styles.row}>
+          {/* Öppet dygnet runt — toggles off the time range entirely. */}
+          <TouchableOpacity
+            style={[
+              styles.allDayBtn,
+              { borderColor: allDay ? T.accent : T.border, backgroundColor: allDay ? T.accentGlow : 'transparent' },
+            ]}
+            onPress={() => setAllDay(v => !v)}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name={allDay ? 'checkmark-circle' : 'ellipse-outline'}
+              size={20}
+              color={allDay ? T.accent : masjidLabelColor(T)}
+            />
+            <Text style={[styles.allDayText, { color: allDay ? T.accent : T.text }]}>Öppet dygnet runt</Text>
+          </TouchableOpacity>
+
+          <View style={[styles.row, allDay && { opacity: 0.35 }]} pointerEvents={allDay ? 'none' : 'auto'}>
             <View style={styles.col}>
               <Text style={[styles.colLabel, { color: masjidLabelColor(T) }]}>Från</Text>
               <View style={styles.wheelPair}>
@@ -200,6 +228,12 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   title: { fontSize: 17, fontWeight: '700', textAlign: 'center', marginBottom: 14 },
+  allDayBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    marginHorizontal: 16, marginBottom: 16,
+    borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, paddingVertical: 12,
+  },
+  allDayText: { fontSize: 15, fontWeight: '600' },
   row: { flexDirection: 'row', justifyContent: 'space-around', paddingHorizontal: 12, paddingBottom: 18 },
   col: { alignItems: 'center' },
   colLabel: { fontSize: 13, fontWeight: '600', marginBottom: 8 },

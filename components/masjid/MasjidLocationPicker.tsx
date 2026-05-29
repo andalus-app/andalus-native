@@ -14,16 +14,17 @@
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Modal, View, Text, TouchableOpacity, ActivityIndicator, StyleSheet, Alert,
+  Modal, View, Text, TextInput, TouchableOpacity, ActivityIndicator, StyleSheet, Alert,
+  Keyboard,
 } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
-import { geocodeAddress, type AddressQuery } from '../../services/nominatim';
+import { geocodeAddress, geocodePlace, type AddressQuery } from '../../services/nominatim';
 import { buildPickerHtml } from './masjidPickerHtml';
-import { masjidIconColor } from './colors';
+import { masjidIconColor, masjidLabelColor } from './colors';
 
 const DEFAULT_LAT = 59.3293, DEFAULT_LNG = 18.0686; // Stockholm fallback
 
@@ -61,6 +62,10 @@ export default function MasjidLocationPicker({
 
   const [coordLabel, setCoordLabel] = useState(`${startLat.toFixed(5)}, ${startLng.toFixed(5)}`);
   const [locating, setLocating] = useState(false);
+  const [query, setQuery] = useState('');
+  const [searching, setSearching] = useState(false);
+  const searchAbortRef = useRef<AbortController | null>(null);
+  useEffect(() => () => { searchAbortRef.current?.abort(); }, []);
 
   const html = useMemo(() => buildPickerHtml(T.accent, startLat, startLng), [T.accent, startLat, startLng]);
 
@@ -108,6 +113,36 @@ export default function MasjidLocationPicker({
     }
   }, [centerMap]);
 
+  // Free-text place/address search → recenter the crosshair on the hit. Biased
+  // to Sweden (Nominatim countrycodes=se). User-initiated only (one submit →
+  // one request) so it stays within Nominatim's ≤1 req/sec policy.
+  const runSearch = useCallback(async () => {
+    const q = query.trim();
+    if (!q || searching) return;
+    Keyboard.dismiss();
+    searchAbortRef.current?.abort();
+    const ctl = new AbortController();
+    searchAbortRef.current = ctl;
+    setSearching(true);
+    try {
+      const res = await geocodePlace(q, ctl.signal);
+      if (!mountedRef.current || ctl.signal.aborted) return;
+      if (res) {
+        centerRef.current = { lat: res.lat, lng: res.lng };
+        setCoordLabel(`${res.lat.toFixed(5)}, ${res.lng.toFixed(5)}`);
+        centerMap(res.lat, res.lng, false);
+      } else {
+        Alert.alert('Hittade ingen plats', 'Försök med en annan adress eller ett platsnamn.');
+      }
+    } catch {
+      if (mountedRef.current && !ctl.signal.aborted) {
+        Alert.alert('Sökningen misslyckades', 'Kontrollera din anslutning och försök igen.');
+      }
+    } finally {
+      if (mountedRef.current && searchAbortRef.current === ctl) setSearching(false);
+    }
+  }, [query, searching, centerMap]);
+
   // On open: reset bridge state, then choose the starting view in this order:
   //   1) Forward-geocode the structured address via Nominatim if the parent
   //      provided one — auto-finds the exact house on the map so the user
@@ -120,6 +155,9 @@ export default function MasjidLocationPicker({
     if (!visible) return;
     readyRef.current = false;
     pendingRef.current = null;
+    searchAbortRef.current?.abort();
+    setQuery('');
+    setSearching(false);
 
     const a = addressQuery;
     const hasAnyField =
@@ -183,6 +221,31 @@ export default function MasjidLocationPicker({
           </TouchableOpacity>
         </View>
 
+        {/* Sök adress eller plats → centrerar markören på träffen */}
+        <View style={[styles.searchWrap, { backgroundColor: T.bg, borderBottomColor: T.separator }]}>
+          <View style={[styles.searchBar, { backgroundColor: T.card, borderColor: T.border }]}>
+            <Ionicons name="search" size={18} color={masjidLabelColor(T)} />
+            <TextInput
+              style={[styles.searchInput, { color: T.text }]}
+              value={query}
+              onChangeText={setQuery}
+              onSubmitEditing={runSearch}
+              placeholder="Sök adress eller plats"
+              placeholderTextColor={masjidLabelColor(T)}
+              returnKeyType="search"
+              autoCorrect={false}
+              autoCapitalize="none"
+            />
+            {searching ? (
+              <ActivityIndicator size="small" color={masjidIconColor(T)} />
+            ) : query.length > 0 ? (
+              <TouchableOpacity onPress={() => setQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="close-circle" size={18} color={masjidLabelColor(T)} />
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        </View>
+
         {visible && (
           <WebView
             ref={webRef}
@@ -222,6 +285,12 @@ const styles = StyleSheet.create({
   cancel: { fontSize: 16 },
   confirm: { fontSize: 16, fontWeight: '700' },
   title: { fontSize: 17, fontWeight: '700' },
+  searchWrap: { paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
+  searchBar: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 12, paddingVertical: 10,
+  },
+  searchInput: { flex: 1, fontSize: 15, padding: 0 },
   web: { flex: 1 },
   fab: {
     position: 'absolute', right: 16, width: 48, height: 48, borderRadius: 24, borderWidth: 0.5,

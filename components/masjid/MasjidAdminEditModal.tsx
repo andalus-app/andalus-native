@@ -49,6 +49,10 @@ export default function MasjidAdminEditModal({
   const [postal, setPostal] = useState('');
   const [city, setCity] = useState('');
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  // Editable text mirrors of the coordinate for manual lat/lng entry. Strings
+  // (not derived from `coords`) so a half-typed value isn't clobbered per key.
+  const [latText, setLatText] = useState('');
+  const [lngText, setLngText] = useState('');
   const [hours, setHours] = useState('');
   const [phone, setPhone] = useState('');
   const [website, setWebsite] = useState('');
@@ -74,6 +78,25 @@ export default function MasjidAdminEditModal({
   const reverseAbortRef = useRef<AbortController | null>(null);
   useEffect(() => () => { reverseAbortRef.current?.abort(); }, []);
 
+  // Commit a coordinate from GPS / map picker and sync the editable text fields.
+  const applyCoords = useCallback((lat: number, lng: number) => {
+    setCoords({ lat, lng });
+    setLatText(lat.toFixed(6));
+    setLngText(lng.toFixed(6));
+  }, []);
+
+  // Manual lat/lng entry. Accepts comma or dot decimals; updates `coords` only
+  // when BOTH values parse to a valid WGS84 range.
+  const applyManual = useCallback((latStr: string, lngStr: string) => {
+    const lat = parseFloat(latStr.replace(',', '.'));
+    const lng = parseFloat(lngStr.replace(',', '.'));
+    if (isFinite(lat) && isFinite(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+      setCoords({ lat, lng });
+    }
+  }, []);
+  const onLatChange = useCallback((t: string) => { setLatText(t); applyManual(t, lngText); }, [applyManual, lngText]);
+  const onLngChange = useCallback((t: string) => { setLngText(t); applyManual(latText, t); }, [applyManual, latText]);
+
   // (Re)seed the form whenever the modal opens.
   useEffect(() => {
     if (!visible) return;
@@ -87,6 +110,8 @@ export default function MasjidAdminEditModal({
       setPostal(formatSwedishPostalCode(mosque.postal_code ?? ''));
       setCity(mosque.city ?? '');
       setCoords({ lat: mosque.latitude, lng: mosque.longitude });
+      setLatText(mosque.latitude.toFixed(6));
+      setLngText(mosque.longitude.toFixed(6));
       const oh = mosque.opening_hours;
       setHours(oh ? Object.values(oh).join(', ') : '');
       setPhone(mosque.phone ?? '');
@@ -99,7 +124,10 @@ export default function MasjidAdminEditModal({
       setVerified(!!mosque.address_verified);
     } else {
       setName(''); setAddress(''); setPostal(''); setCity('');
-      setCoords(userLoc ?? null); setHours(''); setPhone(''); setWebsite(''); setPrayerTimesUrl('');
+      setCoords(userLoc ?? null);
+      setLatText(userLoc ? userLoc.lat.toFixed(6) : '');
+      setLngText(userLoc ? userLoc.lng.toFixed(6) : '');
+      setHours(''); setPhone(''); setWebsite(''); setPrayerTimesUrl('');
       setParking(null); setAccessInfo('');
       setExistingUrl(null); setExistingPath(null); setVerified(true);
     }
@@ -125,7 +153,7 @@ export default function MasjidAdminEditModal({
    */
   const handleUseMyLocation = useCallback(async () => {
     if (!userLoc) return;
-    setCoords(userLoc);
+    applyCoords(userLoc.lat, userLoc.lng);
 
     // Skip the network round-trip entirely when every field is already filled.
     if (addressRef.current.trim() && postalRef.current.trim() && cityRef.current.trim()) return;
@@ -148,7 +176,7 @@ export default function MasjidAdminEditModal({
     } finally {
       if (mountedRef.current && reverseAbortRef.current === controller) setFillingAddress(false);
     }
-  }, [userLoc]);
+  }, [userLoc, applyCoords]);
 
   const handleSave = useCallback(async () => {
     if (!name.trim()) { Alert.alert('Namn krävs', 'Ange masjidens namn.'); return; }
@@ -201,8 +229,6 @@ export default function MasjidAdminEditModal({
     }
   }, [name, coords, existingUrl, existingPath, picked, removed, address, postal, city, hours, phone, website, prayerTimesUrl, parking, accessInfo, verified, mode, mosque, onSaved, onClose]);
 
-  const coordLabel = coords ? `${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}` : 'Ingen plats vald';
-
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <View style={[styles.root, { backgroundColor: T.bg }]}>
@@ -234,9 +260,25 @@ export default function MasjidAdminEditModal({
             </View>
 
             <Text style={[styles.label, { color: masjidLabelColor(T) }]}>Plats *</Text>
-            <View style={[styles.coordBox, { backgroundColor: T.card, borderColor: T.border }]}>
-              <Ionicons name="location" size={18} color={coords ? masjidIconColor(T) : masjidLabelColor(T)} />
-              <Text style={[styles.coordText, { color: coords ? T.text : masjidLabelColor(T) }]}>{coordLabel}</Text>
+            <View style={styles.rowFields}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.subLabel, { color: masjidLabelColor(T) }]}>Latitud</Text>
+                <TextInput
+                  style={[styles.input, { backgroundColor: T.card, borderColor: T.border, color: T.text }]}
+                  value={latText} onChangeText={onLatChange}
+                  placeholder="59.32930" placeholderTextColor={masjidLabelColor(T)}
+                  keyboardType="numbers-and-punctuation" autoCorrect={false}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.subLabel, { color: masjidLabelColor(T) }]}>Longitud</Text>
+                <TextInput
+                  style={[styles.input, { backgroundColor: T.card, borderColor: T.border, color: T.text }]}
+                  value={lngText} onChangeText={onLngChange}
+                  placeholder="18.06860" placeholderTextColor={masjidLabelColor(T)}
+                  keyboardType="numbers-and-punctuation" autoCorrect={false}
+                />
+              </View>
             </View>
             <View style={styles.posButtons}>
               <TouchableOpacity
@@ -375,7 +417,7 @@ export default function MasjidAdminEditModal({
         // Uses Nominatim's STRUCTURED query for precise house-level matching.
         addressQuery={coords ? null : { street: address, postalCode: postal, city }}
         onCancel={() => setPickerVisible(false)}
-        onPicked={(lat, lng) => { setCoords({ lat, lng }); setPickerVisible(false); }}
+        onPicked={(lat, lng) => { applyCoords(lat, lng); setPickerVisible(false); }}
       />
     </Modal>
   );
@@ -409,10 +451,9 @@ const styles = StyleSheet.create({
   headerSave: { fontSize: 16, fontWeight: '700' },
   headerTitle: { fontSize: 17, fontWeight: '700' },
   label: { fontSize: 13, fontWeight: '600', marginBottom: 6 },
+  subLabel: { fontSize: 12, fontWeight: '500', marginBottom: 6 },
   input: { borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15 },
   rowFields: { flexDirection: 'row', gap: 12 },
-  coordBox: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 14, paddingVertical: 12 },
-  coordText: { fontSize: 15 },
   hoursRow: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     borderRadius: 12, borderWidth: StyleSheet.hairlineWidth,

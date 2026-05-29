@@ -60,6 +60,11 @@ export default function AddMasjidModal({
   const [postal, setPostal] = useState('');
   const [city, setCity] = useState('');
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  // Editable text mirrors of the coordinate so the user can type lat/lng by
+  // hand. Kept as strings (not derived from `coords`) so a half-typed value
+  // like "59." isn't clobbered on every keystroke.
+  const [latText, setLatText] = useState('');
+  const [lngText, setLngText] = useState('');
   const [hours, setHours] = useState('');
   const [phone, setPhone] = useState('');
   const [website, setWebsite] = useState('');
@@ -81,10 +86,30 @@ export default function AddMasjidModal({
   const reverseAbortRef = useRef<AbortController | null>(null);
   useEffect(() => () => { reverseAbortRef.current?.abort(); }, []);
 
+  // Commit a coordinate from GPS / map picker and sync the editable text fields.
+  const applyCoords = useCallback((lat: number, lng: number) => {
+    setCoords({ lat, lng });
+    setLatText(lat.toFixed(6));
+    setLngText(lng.toFixed(6));
+  }, []);
+
+  // Manual lat/lng entry. Accepts comma or dot decimals; updates `coords` only
+  // when BOTH values parse to a valid WGS84 range, otherwise leaves the last
+  // good coordinate in place (the text still reflects what was typed).
+  const applyManual = useCallback((latStr: string, lngStr: string) => {
+    const lat = parseFloat(latStr.replace(',', '.'));
+    const lng = parseFloat(lngStr.replace(',', '.'));
+    if (isFinite(lat) && isFinite(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+      setCoords({ lat, lng });
+    }
+  }, []);
+  const onLatChange = useCallback((t: string) => { setLatText(t); applyManual(t, lngText); }, [applyManual, lngText]);
+  const onLngChange = useCallback((t: string) => { setLngText(t); applyManual(latText, t); }, [applyManual, latText]);
+
   const reset = useCallback(() => {
     reverseAbortRef.current?.abort();
     setName(''); setAddress(''); setPostal(''); setCity('');
-    setCoords(null); setHours(''); setPhone(''); setWebsite(''); setPrayerTimesUrl('');
+    setCoords(null); setLatText(''); setLngText(''); setHours(''); setPhone(''); setWebsite(''); setPrayerTimesUrl('');
     setParking(null); setAccessInfo('');
     setImage(null); setSubmitting(false); setPickerVisible(false);
     setHoursPickerVisible(false);
@@ -100,7 +125,7 @@ export default function AddMasjidModal({
    */
   const handleUseMyLocation = useCallback(async () => {
     if (!userLoc) return;
-    setCoords(userLoc);
+    applyCoords(userLoc.lat, userLoc.lng);
 
     // Skip the network round-trip entirely when every field is already filled.
     if (addressRef.current.trim() && postalRef.current.trim() && cityRef.current.trim()) return;
@@ -124,7 +149,7 @@ export default function AddMasjidModal({
     } finally {
       if (mountedRef.current && reverseAbortRef.current === controller) setFillingAddress(false);
     }
-  }, [userLoc]);
+  }, [userLoc, applyCoords]);
 
   const pickImage = useCallback(async () => {
     let ImagePicker: typeof import('expo-image-picker') | null = null;
@@ -238,8 +263,6 @@ export default function AddMasjidModal({
     }
   }, [name, coords, image, address, postal, city, hours, phone, website, prayerTimesUrl, parking, accessInfo, closeReset]);
 
-  const coordLabel = coords ? `${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}` : 'Ingen plats vald';
-
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={closeReset}>
       <View style={[styles.root, { backgroundColor: T.bg }]}>
@@ -273,9 +296,25 @@ export default function AddMasjidModal({
 
             {/* Position */}
             <Text style={[styles.label, { color: masjidLabelColor(T) }]}>Plats *</Text>
-            <View style={[styles.coordBox, { backgroundColor: T.card, borderColor: T.border }]}>
-              <Ionicons name="location" size={18} color={coords ? masjidIconColor(T) : masjidLabelColor(T)} />
-              <Text style={[styles.coordText, { color: coords ? T.text : masjidLabelColor(T) }]}>{coordLabel}</Text>
+            <View style={styles.rowFields}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.subLabel, { color: masjidLabelColor(T) }]}>Latitud</Text>
+                <TextInput
+                  style={[styles.input, { backgroundColor: T.card, borderColor: T.border, color: T.text }]}
+                  value={latText} onChangeText={onLatChange}
+                  placeholder="59.32930" placeholderTextColor={masjidLabelColor(T)}
+                  keyboardType="numbers-and-punctuation" autoCorrect={false}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.subLabel, { color: masjidLabelColor(T) }]}>Longitud</Text>
+                <TextInput
+                  style={[styles.input, { backgroundColor: T.card, borderColor: T.border, color: T.text }]}
+                  value={lngText} onChangeText={onLngChange}
+                  placeholder="18.06860" placeholderTextColor={masjidLabelColor(T)}
+                  keyboardType="numbers-and-punctuation" autoCorrect={false}
+                />
+              </View>
             </View>
             <View style={styles.posButtons}>
               <TouchableOpacity
@@ -423,7 +462,7 @@ export default function AddMasjidModal({
         // manual pan.
         addressQuery={coords ? null : { street: address, postalCode: postal, city }}
         onCancel={() => setPickerVisible(false)}
-        onPicked={(lat, lng) => { setCoords({ lat, lng }); setPickerVisible(false); }}
+        onPicked={(lat, lng) => { applyCoords(lat, lng); setPickerVisible(false); }}
       />
     </Modal>
   );
@@ -465,10 +504,9 @@ const styles = StyleSheet.create({
   headerBtn: { fontSize: 16 },
   headerTitle: { fontSize: 17, fontWeight: '700' },
   label: { fontSize: 13, fontWeight: '600', marginBottom: 6 },
+  subLabel: { fontSize: 12, fontWeight: '500', marginBottom: 6 },
   input: { borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15 },
   rowFields: { flexDirection: 'row', gap: 12 },
-  coordBox: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 14, paddingVertical: 12 },
-  coordText: { fontSize: 15 },
   hoursRow: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     borderRadius: 12, borderWidth: StyleSheet.hairlineWidth,

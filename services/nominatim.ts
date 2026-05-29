@@ -91,7 +91,37 @@ async function nominatimSearch(params: URLSearchParams, signal?: AbortSignal): P
   return Array.isArray(data) ? data as NominatimRow[] : [];
 }
 
-function pickBestMatch(rows: NominatimRow[], postalDigits: string, city: string): NominatimRow | null {
+function cityOf(a: NonNullable<NominatimRow['address']>): string {
+  return (a.city ?? a.town ?? a.village ?? a.municipality ?? '').toLowerCase();
+}
+function cityMatches(a: NonNullable<NominatimRow['address']>, cityLower: string): boolean {
+  if (!cityLower) return false;
+  const cc = cityOf(a);
+  return !!cc && (cc === cityLower || cc.includes(cityLower) || cityLower.includes(cc));
+}
+
+/**
+ * Pick the best candidate row.
+ *
+ * `mode` controls how hard we filter:
+ *   • 'postcode'  — HARD filter: drop every candidate whose postcode ≠ the
+ *                   typed one. Highest precision; used first so an exact
+ *                   postcode match always wins ("Fornbyvägen 29, 163 70" must
+ *                   never resolve to Sundbyberg's Fornbyvägen at 17441).
+ *   • 'city'      — HARD filter on the city name instead (used when the strict
+ *                   postcode pass found nothing — Nominatim frequently omits or
+ *                   mismatches the postcode field even for the right street, so
+ *                   the city is a safer disambiguator than refusing outright).
+ *   • 'loose'     — no hard filter; pick the top-scoring row. Last resort so a
+ *                   typed address centres *somewhere* sensible instead of
+ *                   silently snapping back to the user's GPS position.
+ */
+function pickBestMatch(
+  rows: NominatimRow[],
+  postalDigits: string,
+  city: string,
+  mode: 'postcode' | 'city' | 'loose',
+): NominatimRow | null {
   if (rows.length === 0) return null;
   const cityLower = city.toLowerCase();
   let best: NominatimRow | null = null;
@@ -99,20 +129,18 @@ function pickBestMatch(rows: NominatimRow[], postalDigits: string, city: string)
 
   for (const r of rows) {
     const a = r.address ?? {};
-    // HARD FILTER when the user provided a postcode: skip every candidate
-    // that doesn't carry the same postcode. This is the crux of the fix —
-    // "Fornbyvägen 29, 163 70" must never resolve to the Sundbyberg
-    // Fornbyvägen at postcode 17441, even when Nominatim returns it first.
-    if (postalDigits) {
-      const cp = (a.postcode ?? '').replace(/\D/g, '');
-      if (!cp || cp !== postalDigits) continue;
+    const cp = (a.postcode ?? '').replace(/\D/g, '');
+
+    if (mode === 'postcode') {
+      if (!postalDigits || !cp || cp !== postalDigits) continue;
+    } else if (mode === 'city') {
+      if (!cityMatches(a, cityLower)) continue;
     }
+
     // Tie-breaking score among the remaining candidates.
     let score = 100; // baseline so we always pick something when the filter passes
-    if (cityLower) {
-      const cc = (a.city ?? a.town ?? a.village ?? a.municipality ?? '').toLowerCase();
-      if (cc && (cc === cityLower || cc.includes(cityLower) || cityLower.includes(cc))) score += 30;
-    }
+    if (postalDigits && cp === postalDigits) score += 40;
+    if (cityMatches(a, cityLower)) score += 30;
     if (a.house_number) score += 15;
     if (score > bestScore) {
       bestScore = score;
@@ -128,24 +156,20 @@ function pickBestMatch(rows: NominatimRow[], postalDigits: string, city: string)
  * Nominatim's `/search` is full of footguns for Swedish inputs — the same
  * street name often exists in multiple municipalities, and a free-text q=
  * lookup happily returns "Fornbyvägen, Sundbyberg (postcode 17441)" when the
- * user typed postcode 16370. Three-pass strategy below:
+ * user typed postcode 16370. Equally, Nominatim frequently OMITS the postcode
+ * field on the correct street, so an exact-postcode filter alone throws away
+ * good matches and the picker would snap back to the user's GPS position
+ * (e.g. typing a Växjö address but the map stays in Spånga). So we degrade
+ * gracefully, precise → coarse, and only ever give up when nothing was typed:
  *
- *   1. Free-text q= "street, postal, city" (limit 10, addressdetails on)
- *      → strict filter: keep only candidates whose `address.postcode` matches
- *        the user-typed postcode (digits-only).
- *      → if any pass the filter, pick the highest-scoring (house_number +
- *        city-name match break ties).
- *
- *   2. Structured `/search?street=&postalcode=` fallback. Hits Nominatim's
- *      address index keyed by postal area — sometimes catches streets that
- *      free-text q= ranked off the first page.
- *
- *   3. If a postcode WAS provided but neither pass found a postcode match,
- *      return null. The picker then falls back to GPS — far better UX than
- *      silently placing the crosshair on a different city's street.
- *
- * When no postcode is provided (rare path, e.g. address-only entry) we just
- * trust Nominatim's free-text ranking.
+ *   1. Free-text q="street, postal, city" → exact-postcode filter (highest
+ *      precision; an exact postcode hit always wins).
+ *   2. Structured /search?street=&postalcode= → exact-postcode filter.
+ *   3. Reuse the pass-1 rows, this time filtered by CITY name (handles the
+ *      common "right street, missing/odd postcode" case). No extra request.
+ *   4. Free-text q="street, city" (postcode dropped) → city filter.
+ *   5. City-only q="city" → at least centre on the correct town.
+ *   6. Loose: top-scoring pass-1 row (only when no city was given to filter on).
  */
 export async function geocodeAddress(addr: AddressQuery, signal?: AbortSignal): Promise<GeocodeResult | null> {
   const street       = addr.street?.trim() ?? '';
@@ -161,7 +185,7 @@ export async function geocodeAddress(addr: AddressQuery, signal?: AbortSignal): 
     return { lat, lng, label: r.display_name ?? '' };
   };
 
-  // ── Pass 1: free-text q= ────────────────────────────────────────────────
+  // ── Pass 1: free-text q=, exact-postcode filter ─────────────────────────
   const parts: string[] = [];
   if (street)       parts.push(street);
   if (postalDigits) parts.push(postalDigits);
@@ -169,23 +193,52 @@ export async function geocodeAddress(addr: AddressQuery, signal?: AbortSignal): 
   const p1 = new URLSearchParams();
   p1.set('q', parts.join(', '));
   const data1 = await nominatimSearch(p1, signal);
-  const match1 = pickBestMatch(data1, postalDigits, city);
-  if (match1) return toResult(match1);
+  if (postalDigits) {
+    const m = pickBestMatch(data1, postalDigits, city, 'postcode');
+    if (m) return toResult(m);
+  }
 
-  // ── Pass 2: structured search with street + postcode ────────────────────
+  // ── Pass 2: structured street + postcode, exact-postcode filter ─────────
   if (street && postalDigits) {
     const p2 = new URLSearchParams();
     p2.set('street',     street);
     p2.set('postalcode', postalDigits);
     const data2 = await nominatimSearch(p2, signal);
-    const match2 = pickBestMatch(data2, postalDigits, city);
-    if (match2) return toResult(match2);
+    const m = pickBestMatch(data2, postalDigits, city, 'postcode');
+    if (m) return toResult(m);
   }
 
-  // ── Pass 3: no postcode supplied → trust Nominatim's first result ───────
-  if (!postalDigits && data1.length > 0) return toResult(data1[0]);
+  // ── Pass 3: reuse pass-1 rows, filter by city (no extra request) ────────
+  if (city) {
+    const m = pickBestMatch(data1, postalDigits, city, 'city');
+    if (m) return toResult(m);
+  }
 
-  // Postcode was supplied but no candidate matched it. Refuse to guess.
+  // ── Pass 4: free-text street + city (postcode dropped) ──────────────────
+  if (street && city) {
+    const p4 = new URLSearchParams();
+    p4.set('q', `${street}, ${city}`);
+    const data4 = await nominatimSearch(p4, signal);
+    const m = pickBestMatch(data4, postalDigits, city, 'city')
+      ?? pickBestMatch(data4, postalDigits, city, 'loose');
+    if (m) return toResult(m);
+  }
+
+  // ── Pass 5: city-only — centre on the correct town as a floor ───────────
+  if (city) {
+    const p5 = new URLSearchParams();
+    p5.set('q', city);
+    const data5 = await nominatimSearch(p5, signal);
+    const m = pickBestMatch(data5, postalDigits, city, 'city') ?? data5[0];
+    if (m) { const r = toResult(m); if (r) return r; }
+  }
+
+  // ── Pass 6: no city to disambiguate on → trust pass-1's best row ────────
+  if (!city) {
+    const m = pickBestMatch(data1, postalDigits, city, 'loose');
+    if (m) return toResult(m);
+  }
+
   return null;
 }
 
