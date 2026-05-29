@@ -96,7 +96,7 @@ export function buildMasjidMapHtml(accent: string, isDark: boolean): string {
 
   var map = new maplibregl.Map({
     container: 'map',
-    style: ${JSON.stringify(TILE_STYLE)},
+    style: 'https://tiles.openfreemap.org/styles/liberty',
     center: [18.0686, 59.3293],
     zoom: 11,
     attributionControl: true,

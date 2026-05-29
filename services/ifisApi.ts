@@ -8,6 +8,19 @@ const IFIS_BASE = 'https://api.xn--bnetider-n4a.nu/v1';
 export const IFIS_METHOD_KEY = 'ifis' as const;
 export const IFIS_METHOD_DISPLAY_NAME = 'Islamiska Förbundet i Sverige';
 
+// Sentinel method/school stamped on every IFIS entry written to the App Group
+// (multi-city cache, effective schedule, visited places, schedule state) AND
+// mirrored into the native settings filter. The native scheduler treats
+// method/school purely as opaque equality keys, so this sentinel namespaces
+// IFIS-source cache entries away from AlAdhan-source entries: the native
+// scheduler can never select an AlAdhan entry while IFIS is active (and vice
+// versa). 1000 is outside AlAdhan's real method range — using the real AlAdhan
+// MWL value (3) here would collide with users on AlAdhan MWL and let a stale
+// AlAdhan entry out-rank the IFIS entry, firing notifications at AlAdhan times
+// while the app/widget show IFIS times.
+export const IFIS_NATIVE_METHOD = 1000;
+export const IFIS_NATIVE_SCHOOL = 0;
+
 // Slug → proper display name for every Swedish city where normalisation
 // (å/ä→a, ö→o, lowercase) would produce the wrong capitalisation.
 // Cities without å/ä/ö (e.g. "stockholm", "lund") are handled by the
@@ -571,11 +584,14 @@ export async function refreshIfisVisitedPlaceCache(
   city:   string,                      // IFIS city slug, e.g. 'goteborg'
   lat:    number,
   lng:    number,
-  method: number,                      // user's calculationMethod — must match native settings filter
-  school: number,                      // user's school — must match native settings filter
   todayT: Record<string, string>,
   tomT:   Record<string, string> | null,
 ): Promise<void> {
+  // IFIS entries are always stamped with the IFIS sentinel so they match the
+  // native settings filter (which is also mirrored to the sentinel when IFIS is
+  // active) and never collide with AlAdhan-source visited entries.
+  const method = IFIS_NATIVE_METHOD;
+  const school = IFIS_NATIVE_SCHOOL;
   const todayDate   = new Date();
   todayDate.setHours(0, 0, 0, 0);
   const todayStr    = localIsoDate(todayDate);

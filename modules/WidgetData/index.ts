@@ -191,6 +191,15 @@ export interface NotificationScheduleState {
    *  state (native only covers today+tomorrow). When present, scheduleStateUnchanged
    *  can short-circuit the per-day comparison loop. */
   weekTimesHash?:           string;
+  /** Stable fingerprint of the per-prayer notification modes that were active
+   *  when this schedule was written (mode + reciter per prayer). Required because
+   *  prayer times alone are not enough to detect that a pending notification's
+   *  `sound` is stale: a user can switch Asr from `silent`/`standard` to
+   *  `adhan_short` without changing any time, and the existing pending notification
+   *  then still plays the old sound. When `scheduleStateUnchanged` sees a different
+   *  (or missing) hash than what is stored here, it forces a cancel + reschedule
+   *  so every pending notification picks up the current sound value. */
+  perPrayerModesHash?:      string;
   dhikrEnabled:             boolean;
   prePrayerOffset:          number;   // 0 = off; matches hidayah_prayer_reminder_offset
   updatedAt:                number;   // Unix seconds

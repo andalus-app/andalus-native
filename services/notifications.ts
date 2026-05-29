@@ -3,9 +3,9 @@ import { Platform } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { getNotificationScheduleState } from '../modules/WidgetData';
 import { getIfisTimesForDate } from './ifisApi';
-import { loadPrayerNotificationModes } from '../storage/prayerNotificationPreferences';
+import { getCachedPrayerNotificationModes, loadPrayerNotificationModes } from '../storage/prayerNotificationPreferences';
 import { modeUsesSystemSound } from './prayerNotificationModes';
-import { adhanSoundFileForMode, type PrayerKey } from '../types/prayerNotificationTypes';
+import { adhanSoundFileForMode, PRAYER_KEYS, type PrayerKey, type PrayerNotificationModes } from '../types/prayerNotificationTypes';
 
 // Lazy-load expo-notifications so a missing native module (e.g. in Expo Go or
 // before a native rebuild) never crashes the app — all functions degrade to no-ops.
@@ -146,6 +146,26 @@ export function computeWeekTimesHash(
   return parts.join(';');
 }
 
+/**
+ * Stable fingerprint of the per-prayer notification modes. Mirrors the
+ * `andalus_settings_native.perPrayerModes` payload sent to the native scheduler.
+ *
+ * Used by `scheduleStateUnchanged` so a `silent`/`standard` → `adhan_short`
+ * toggle forces a cancel + reschedule even when prayer times, method and school
+ * are unchanged. Without this, the early-return guard in
+ * `schedulePrayerNotifications` would skip rescheduling and the pending iOS
+ * notification would keep playing its old `sound` value.
+ *
+ * Order-independent (keys iterate in the fixed `PRAYER_KEYS` order). Reciter
+ * defaults to '' for non-adhan modes so a `silent` row never hashes the same
+ * as an `adhan_short` row that happens to lack a reciter.
+ */
+export function computePerPrayerModesHash(modes: PrayerNotificationModes): string {
+  return PRAYER_KEYS
+    .map(k => `${k}:${modes[k].mode}:${modes[k].reciter ?? ''}`)
+    .join('|');
+}
+
 function scheduleStateUnchanged(
   dailyTimes: Record<string, Record<string, string>>,
   cityName:   string,
@@ -176,6 +196,16 @@ function scheduleStateUnchanged(
   // Calculation method or school changed
   if (context?.method !== undefined && context.method !== existing.method) return false;
   if (context?.school !== undefined && context.school !== existing.school) return false;
+
+  // Per-prayer sound mode (silent / vibration / standard / adhan_short) changed.
+  // Prayer times alone cannot detect this — Asr at 17:00 with `silent` vs Asr
+  // at 17:00 with `adhan_short` are time-identical but must be rescheduled with
+  // a different `sound` value, otherwise the existing pending iOS notification
+  // keeps its old sound and plays nothing (or the old reciter) when the prayer
+  // time fires. Missing hash (legacy state written before this field existed) →
+  // force one reschedule so the new hash is stored.
+  const currentPerPrayerModesHash = computePerPrayerModesHash(getCachedPrayerNotificationModes());
+  if (existing.perPrayerModesHash !== currentPerPrayerModesHash) return false;
 
   // Multi-day comparison via hash. When the stored state already carries a
   // weekTimesHash (written by a previous JS call), a single equality check

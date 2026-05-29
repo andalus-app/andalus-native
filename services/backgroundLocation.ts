@@ -3,13 +3,15 @@ import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { fetchPrayerTimes, fetchTomorrowPrayerTimes, calcMidnight } from './prayerApi';
-import { schedulePrayerNotifications, refreshPrePrayerReminderNotifications, getNotificationDisplayName, computeWeekTimesHash, PRAYER_LOOKAHEAD_DAYS } from './notifications';
+import { schedulePrayerNotifications, refreshPrePrayerReminderNotifications, getNotificationDisplayName, computeWeekTimesHash, computePerPrayerModesHash, PRAYER_LOOKAHEAD_DAYS } from './notifications';
+import { getCachedPrayerNotificationModes } from '../storage/prayerNotificationPreferences';
 import { getPrayerTimesForRange } from './monthlyCache';
 import { getIfisTimesForRange } from './ifisApi';
 import { nativeReverseGeocode } from './geocoding';
 import {
   getIfisTodayAndTomorrow, matchIfisCity, getIfisCityDisplayName,
   normalizeIfisCity, getIfisCitiesForMatching,
+  IFIS_NATIVE_METHOD, IFIS_NATIVE_SCHOOL,
 } from './ifisApi';
 import {
   updateWidgetData,
@@ -232,8 +234,8 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }: TaskMan
     if (Platform.OS === 'ios') {
       const settingsRaw2   = await AsyncStorage.getItem('andalus_settings').catch(() => null);
       const settings2      = settingsRaw2 ? JSON.parse(settingsRaw2) : {};
-      const method2        = isIfis ? 3 : (settings2.calculationMethod ?? 3);
-      const school2        = isIfis ? 0 : (settings2.school ?? 0);
+      const method2        = isIfis ? IFIS_NATIVE_METHOD : (settings2.calculationMethod ?? 3);
+      const school2        = isIfis ? IFIS_NATIVE_SCHOOL : (settings2.school ?? 0);
       const alAdhanCity    = getEffectivePrayerCity(city);
       const cityKey        = isIfis
         ? `ifis_${(effectiveCity).toLowerCase()}`
@@ -350,6 +352,12 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }: TaskMan
     // the state we just wrote) and silently bypass the actual scheduling.
     if (scheduleState) {
       if (weekTimesHash) scheduleState.weekTimesHash = weekTimesHash;
+      // Record the per-prayer modes that this background reschedule was written
+      // against. Without this, a later foreground scheduleStateUnchanged() would
+      // compare against an undefined perPrayerModesHash and force one extra
+      // reschedule even though the background path already applied the correct
+      // sound values.
+      scheduleState.perPrayerModesHash = computePerPrayerModesHash(getCachedPrayerNotificationModes());
       await setNotificationScheduleState(scheduleState).catch(() => {});
     }
   } catch {}

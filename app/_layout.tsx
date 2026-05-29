@@ -1,9 +1,9 @@
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useRouter, type ErrorBoundaryProps } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
 import * as NativeSplash from 'expo-splash-screen';
 import { useCallback, useEffect, useState } from 'react';
-import { Animated, View, StyleSheet, AppState, DeviceEventEmitter } from 'react-native';
+import { Animated, View, Text, StyleSheet, AppState, DeviceEventEmitter } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { setAudioModeAsync } from 'expo-audio';
 import { stopAdhan } from '../services/adhanAudioService';
@@ -25,10 +25,39 @@ import { YoutubePlayerProvider } from '../context/YoutubePlayerContext';
 import YoutubeBackgroundPlayer from '../components/YoutubeBackgroundPlayer';
 import OnboardingFlow, { ONBOARDING_COMPLETED_KEY } from '../components/OnboardingFlow';
 import { Asset } from 'expo-asset';
+import { normalizeError, describeError } from '../services/normalizeError';
 
 // Keep the native iOS launch screen visible until we explicitly call hideAsync()
 // inside CustomSplashScreen (triggered by isReady=true).
 NativeSplash.preventAutoHideAsync();
+
+// ── Global JS error handler ─────────────────────────────────────────────────
+// Installed at module load, before any provider mounts. A TestFlight startup
+// crash surfaced as the opaque string "[object Object]": a non-Error value was
+// thrown/rejected during route loading and stringified with the default
+// Object.prototype.toString. Routing every fatal through normalizeError()
+// guarantees the REAL message reaches the iOS crash log / Console.app instead
+// of "[object Object]". We preserve and chain the previous handler so default
+// RN behaviour (redbox in dev, RCTFatal in release) is unchanged.
+type RNErrorUtils = {
+  getGlobalHandler?: () => ((error: unknown, isFatal?: boolean) => void) | undefined;
+  setGlobalHandler?: (handler: (error: unknown, isFatal?: boolean) => void) => void;
+};
+try {
+  const eu = (globalThis as typeof globalThis & { ErrorUtils?: RNErrorUtils }).ErrorUtils;
+  const prev = eu?.getGlobalHandler?.();
+  eu?.setGlobalHandler?.((error: unknown, isFatal?: boolean) => {
+    const normalized = normalizeError(error);
+    // Single readable line — filter on "Hidayah" in Xcode / Console.app.
+    console.error(
+      `[Hidayah] ${isFatal ? 'FATAL ' : ''}runtime error: ${normalized.message}`,
+      normalized.stack,
+    );
+    prev?.(normalized, isFatal);
+  });
+} catch {
+  // Diagnostic wiring must never itself break startup.
+}
 
 // Pre-warm the app icon asset at launch so QuranAudioPlayer's artworkUriRef is
 // populated before the user ever opens the Quran screen. This is a fire-and-forget
@@ -348,6 +377,12 @@ export default function RootLayout() {
           });
         }
       }
+    }).catch((e) => {
+      // Previously uncaught: a rejection here (or a throw inside the async body)
+      // became an unhandled promise rejection with no readable message. Surface
+      // the real cause; startup still proceeds (storageReady simply stays false
+      // and the splash remains, rather than crashing opaquely).
+      console.error(`[Hidayah] initStorage startup failed: ${describeError(e)}`);
     });
   }, []);
 
@@ -398,3 +433,34 @@ export default function RootLayout() {
     </GestureHandlerRootView>
   );
 }
+
+// ── Root error boundary ─────────────────────────────────────────────────────
+// expo-router renders this when loading or rendering ANY child route throws —
+// the exact "loadRoute" failure path that previously crashed the app to the
+// home screen showing only "[object Object]". describeError() unmasks the real
+// cause so it appears on-device (and in the crash log) instead.
+//
+// DELIBERATE exception to the theme rule: this screen must render even when the
+// crash IS the theme/provider init, so it uses NO providers/useTheme and
+// hardcodes neutral colours. UI text stays Swedish.
+export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+  const message = describeError(error);
+  useEffect(() => {
+    const n = normalizeError(error);
+    console.error(`[Hidayah] route load/render error: ${n.message}`, n.stack);
+  }, [error, message]);
+  return (
+    <View style={errStyles.root}>
+      <Text style={errStyles.title}>Något gick fel</Text>
+      <Text style={errStyles.body} selectable>{message}</Text>
+      <Text style={errStyles.retry} onPress={retry}>Tryck för att försöka igen</Text>
+    </View>
+  );
+}
+
+const errStyles = StyleSheet.create({
+  root:  { flex: 1, backgroundColor: '#0E0E0E', alignItems: 'center', justifyContent: 'center', padding: 24 },
+  title: { color: '#FFFFFF', fontSize: 20, fontWeight: '700', marginBottom: 12 },
+  body:  { color: '#FF8A8A', fontSize: 13, textAlign: 'center', marginBottom: 24 },
+  retry: { color: '#7FB3FF', fontSize: 15, fontWeight: '600' },
+});

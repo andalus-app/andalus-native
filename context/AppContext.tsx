@@ -10,11 +10,13 @@ import {
   getIfisTodayAndTomorrow, warmIfisCache, matchIfisCity, fetchIfisCities,
   getIfisCityDisplayNames, getIfisCityDisplayName, normalizeIfisCity,
   refreshIfisVisitedPlaceCache, getIfisCitiesForMatching, getIfisTimesForRange,
+  IFIS_NATIVE_METHOD, IFIS_NATIVE_SCHOOL,
 } from '../services/ifisApi';
-import { schedulePrayerNotifications, cancelPrayerNotifications, scheduleDhikrReminder, cancelDhikrReminder, scheduleFridayDuaReminder, cancelFridayDuaReminder, refreshPrePrayerReminderNotifications, getNotificationDisplayName, computeWeekTimesHash, PRAYER_LOOKAHEAD_DAYS } from '../services/notifications';
+import { schedulePrayerNotifications, cancelPrayerNotifications, scheduleDhikrReminder, cancelDhikrReminder, scheduleFridayDuaReminder, cancelFridayDuaReminder, refreshPrePrayerReminderNotifications, getNotificationDisplayName, computeWeekTimesHash, computePerPrayerModesHash, PRAYER_LOOKAHEAD_DAYS } from '../services/notifications';
 import {
   loadPrayerNotificationModes,
   subscribePrayerNotificationModes,
+  getCachedPrayerNotificationModes,
 } from '../storage/prayerNotificationPreferences';
 import { PRAYER_KEYS } from '../types/prayerNotificationTypes';
 import {
@@ -582,8 +584,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           lng:          loc.longitude,
           date:         localIsoDate(todayDate),
           tomorrowDate: localIsoDate(tomorrowDate),
-          method:       isIfis ? 3 : method,
-          school:       isIfis ? 0 : school,
+          method:       isIfis ? IFIS_NATIVE_METHOD : method,
+          school:       isIfis ? IFIS_NATIVE_SCHOOL : school,
           todayT,
           tomT: tomT ?? null,
           updatedAt: Date.now() / 1000,
@@ -599,8 +601,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           tomorrowDate:            localIsoDate(tomorrowDate),
           todayTimes:              todayT,
           tomorrowTimes:           tomT ?? null,
-          method:                  isIfis ? 3 : method,
-          school:                  isIfis ? 0 : school,
+          method:                  isIfis ? IFIS_NATIVE_METHOD : method,
+          school:                  isIfis ? IFIS_NATIVE_SCHOOL : school,
           updatedAt:               Date.now() / 1000,
           source:                  'js_precise_location',
         } as EffectivePrayerSchedule).catch(() => {});
@@ -615,8 +617,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             effectiveIfisCity,
             loc.latitude,
             loc.longitude,
-            method,
-            school,
             todayT,
             tomT ?? null,
           ).catch(() => {});
@@ -653,10 +653,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             lat:                      loc.latitude,
             lng:                      loc.longitude,
             date:                     localIsoDate(todayDate),
-            method:                   isIfis ? 3 : method,
-            school:                   isIfis ? 0 : school,
+            method:                   isIfis ? IFIS_NATIVE_METHOD : method,
+            school:                   isIfis ? IFIS_NATIVE_SCHOOL : school,
             todayT,
             tomT:                     tomT ?? undefined,
+            // Record the per-prayer modes that this schedule was written against
+            // so a later silent → adhan toggle (or vice versa) is detected by
+            // scheduleStateUnchanged on the next reschedule attempt.
+            perPrayerModesHash:       computePerPrayerModesHash(getCachedPrayerNotificationModes()),
             dhikrEnabled:             state.settings.dhikrReminder,
             prePrayerOffset:          isNaN(offset) ? 0 : offset,
             updatedAt:                Date.now() / 1000,
@@ -770,14 +774,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
         return setNativeSettings({
           notifications:           state.settings.notifications,
-          // When IFIS is active mirror method=3 / school=0 so NativeNotificationScheduler's
-          // method-validation (precise.method == settings.calculationMethod) matches what JS
-          // writes to the effective schedule and visited-places cache. Without this, users who
-          // were on a non-MWL AlAdhan method would get a method mismatch in background and the
-          // native scheduler would fall through to an AlAdhan fallback, writing wrong times to
-          // the widget and scheduling notifications with wrong times.
-          calculationMethod:       isIfis ? 3 : state.settings.calculationMethod,
-          school:                  isIfis ? 0 : state.settings.school,
+          // When IFIS is active mirror the IFIS sentinel method/school so
+          // NativeNotificationScheduler's method-validation (precise.method ==
+          // settings.calculationMethod) matches what JS writes to the effective
+          // schedule and visited-places cache. The sentinel namespaces IFIS-source
+          // cache entries away from AlAdhan-source entries so the native scheduler
+          // can never select a stale AlAdhan entry (e.g. an MWL/method=3 visited
+          // place left over from before the source switch) while IFIS is active —
+          // which would otherwise fire notifications at AlAdhan times while the
+          // app and widget show IFIS times.
+          calculationMethod:       isIfis ? IFIS_NATIVE_METHOD : state.settings.calculationMethod,
+          school:                  isIfis ? IFIS_NATIVE_SCHOOL : state.settings.school,
           dhikrReminder:           state.settings.dhikrReminder,
           prePrayerReminderOffset: isNaN(offset) ? 0 : offset,
           perPrayerModes,
@@ -819,8 +826,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
         await setNativeSettings({
           notifications:           state.settings.notifications,
-          calculationMethod:       isIfis ? 3 : state.settings.calculationMethod,
-          school:                  isIfis ? 0 : state.settings.school,
+          calculationMethod:       isIfis ? IFIS_NATIVE_METHOD : state.settings.calculationMethod,
+          school:                  isIfis ? IFIS_NATIVE_SCHOOL : state.settings.school,
           dhikrReminder:           state.settings.dhikrReminder,
           prePrayerReminderOffset: isNaN(offset) ? 0 : offset,
           perPrayerModes,
@@ -923,13 +930,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
         // Stitch the multi-day hash into the schedule state so future calls
         // (and the native scheduler) can short-circuit when nothing changed.
-        // Best-effort: missing state or failed read is non-fatal.
+        // Also stitch in the per-prayer modes hash so a silent → adhan toggle
+        // is detected on the next schedule attempt even when prayer times are
+        // unchanged. Best-effort: missing state or failed read is non-fatal.
         const existingState = await getNotificationScheduleState().catch(() => null);
         if (existingState) {
           await setNotificationScheduleState({
             ...existingState,
-            weekTimesHash: computeWeekTimesHash(dailyTimes),
-            updatedAt:     Date.now() / 1000,
+            weekTimesHash:      computeWeekTimesHash(dailyTimes),
+            perPrayerModesHash: computePerPrayerModesHash(getCachedPrayerNotificationModes()),
+            updatedAt:          Date.now() / 1000,
           }).catch(() => {});
         }
       })().catch(() => {});
@@ -1013,6 +1023,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             if (!dailyTimes[d]) dailyTimes[d] = t;
           }
           await schedulePrayerNotifications(dailyTimes, notifCity, { method, school });
+          // Stitch the fresh per-prayer modes hash + week hash into schedule
+          // state so the next call to scheduleStateUnchanged() (app foreground,
+          // background location, etc.) can detect this mode change and not
+          // short-circuit a future reschedule against a stale hash.
+          const existingState = await getNotificationScheduleState().catch(() => null);
+          if (existingState) {
+            await setNotificationScheduleState({
+              ...existingState,
+              weekTimesHash:      computeWeekTimesHash(dailyTimes),
+              perPrayerModesHash: computePerPrayerModesHash(getCachedPrayerNotificationModes()),
+              updatedAt:          Date.now() / 1000,
+            }).catch(() => {});
+          }
         } catch {}
       })();
     });

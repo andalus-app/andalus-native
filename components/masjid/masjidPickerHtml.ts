@@ -56,7 +56,7 @@ export function buildPickerHtml(accent: string, lat: number, lng: number): strin
   var post = function (m) { if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(JSON.stringify(m)); };
   var map = new maplibregl.Map({
     container: 'map',
-    style: ${JSON.stringify(PICKER_TILE_STYLE)},
+    style: 'https://tiles.openfreemap.org/styles/liberty',
     center: [${lng}, ${lat}],
     zoom: 15,
     attributionControl: true,
