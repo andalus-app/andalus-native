@@ -270,15 +270,19 @@ const MasjidMapView = forwardRef<MasjidMapHandle, Props>(function MasjidMapView(
           pointerEvents="none"
           style={[StyleSheet.absoluteFill, { backgroundColor: bg, opacity: coverFade }]}
         >
-          {/* Faint placeholder blocks echoing the real layout (search bar + pin). */}
+          {/* Faint placeholder blocks echoing the real layout (search bar + sheet).
+              These sit BEHIND the real search bar / list sheet, so on screen only
+              the themed base + shimmer show through. */}
           <View style={[styles.skelSearch, { backgroundColor: blockBg }]} />
-          <View style={styles.skelCenter}>
-            <View style={[styles.skelPin, { backgroundColor: blockBg }]} />
-            {showSlowHint && (
-              <Text style={[styles.skelHint, { color: muted }]}>Kartan laddas…</Text>
-            )}
-          </View>
           <View style={[styles.skelSheet, { backgroundColor: blockBg }]} />
+          {/* Centred pin + label only appear once the load is genuinely slow — a
+              fast load never flashes a grey dot in the middle of the map. */}
+          {showSlowHint && (
+            <View style={styles.skelCenter}>
+              <View style={[styles.skelPin, { backgroundColor: blockBg }]} />
+              <Text style={[styles.skelHint, { color: muted }]}>Kartan laddas…</Text>
+            </View>
+          )}
           {/* Single sweeping shimmer band — native-driven, low opacity. */}
           <Animated.View
             style={[

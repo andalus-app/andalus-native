@@ -60,6 +60,19 @@ const ADD_TIP_DURATION_MS = 5 * 1000;
 const PANEL_ROW_H  = 58;
 const PANEL_BASE_H = 115;
 
+// Great-circle distance (metres) between two lat/lng points. Used to show a
+// searched masjid's REAL distance from the user on its card — the nearby RPC
+// re-runs from the searched point, so its own distance there is always 0.
+function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371000;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
+}
+
 export default function MasjidScreen() {
   const { theme: T, isDark } = useTheme();
   const insets = useSafeAreaInsets();
@@ -411,9 +424,16 @@ export default function MasjidScreen() {
   const handleSelectSearchMosque = useCallback(async (m: MosqueSearchResult) => {
     mapRef.current?.clearSearchMarker();
     mapRef.current?.flyTo(m.latitude, m.longitude, 15, cardPadRef.current, headerPad);
-    const rows = await loadInitial(m.latitude, m.longitude);
+    await loadInitial(m.latitude, m.longitude);
     if (!mountedRef.current) return;
-    const sel = rows.find((r) => r.id === m.id) ?? { ...m, distance_meters: 0 };
+    // Card distance must be from the USER's real position — NOT from the searched
+    // masjid (which is 0 m from itself). If GPS is unknown, leave it non-finite so
+    // formatDistance() renders nothing instead of a misleading "0 m".
+    const here = userLocRef.current;
+    const distance_meters = here
+      ? haversineMeters(here.lat, here.lng, m.latitude, m.longitude)
+      : Number.POSITIVE_INFINITY;
+    const sel: Mosque = { ...m, distance_meters };
     prevSheetModeRef.current = 'default';
     setSheetMode('shrunk');
     setSelected(sel);

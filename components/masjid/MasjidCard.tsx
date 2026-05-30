@@ -61,10 +61,12 @@ export default function MasjidCard({
 
         <View style={styles.chipsWrap}>
           <View style={styles.chips}>
-            <View style={[styles.chip, { backgroundColor: T.cardElevated }]}>
-              <Ionicons name="navigate" size={13} color={masjidIconColor(T)} />
-              <Text style={[styles.chipText, { color: masjidSubColor(T) }]}>{formatDistance(mosque.distance_meters)}</Text>
-            </View>
+            {!!formatDistance(mosque.distance_meters) && (
+              <View style={[styles.chip, { backgroundColor: T.cardElevated }]}>
+                <Ionicons name="navigate" size={13} color={masjidIconColor(T)} />
+                <Text style={[styles.chipText, { color: masjidSubColor(T) }]}>{formatDistance(mosque.distance_meters)}</Text>
+              </View>
+            )}
             {mosque.parking_available != null && (
               <View style={[styles.chip, { backgroundColor: T.cardElevated }]}>
                 <Ionicons name="car" size={13} color={masjidLabelColor(T)} />

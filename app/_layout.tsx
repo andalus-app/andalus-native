@@ -250,6 +250,9 @@ function AppContent({ onFontsReady }: { onFontsReady: () => void }) {
         <Stack.Screen name="masjid" options={{ fullScreenGestureEnabled: false }} />
         {/* Admin · Masjid moderation — reached from the existing admin area (same session) */}
         <Stack.Screen name="admin-mosques" options={{ fullScreenGestureEnabled: false }} />
+        {/* Inställningar: edge-only swipe back — full-screen swipe felt too easy to
+            trigger mid-screen while scrolling the long settings list */}
+        <Stack.Screen name="settings" options={{ fullScreenGestureEnabled: false }} />
       </Stack>
 
       {/* YouTube background audio player — always mounted outside the tab/stack
