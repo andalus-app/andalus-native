@@ -65,3 +65,6 @@ ios/Pods/
 
 # Nominatim reverse-geocode cache (Phase 2A mosque address backfill)
 scripts/.cache/
+
+# Claude Code local state (settings + agent memory) — per-machine, not versioned
+.claude/
