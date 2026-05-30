@@ -40,6 +40,7 @@ import AddMasjidModal from '../components/masjid/AddMasjidModal';
 import MasjidAddTipBubble from '../components/masjid/MasjidAddTipBubble';
 import DirectionsSheet, { type DirectionsTarget } from '../components/masjid/DirectionsSheet';
 import { masjidIconColor } from '../components/masjid/colors';
+import MasjidOfflineBanner from '../components/masjid/MasjidOfflineBanner';
 
 // "Lägg till en ny masjid" hint — shown once per week max, for 5 seconds.
 // Owned at the screen level (NOT inside the bubble component) so the timer is
@@ -78,12 +79,21 @@ export default function MasjidScreen() {
   const [searchResetSignal, setSearchResetSignal] = useState(0);
   const [addVisible, setAddVisible] = useState(false);
   const [showAddTip, setShowAddTip] = useState(false);
+  // Connectivity for the local offline banner — reported by the map WebView.
+  const [online, setOnline] = useState<boolean>(true);
 
   const mountedRef = useRef(true);
   const abortRef = useRef<AbortController | null>(null);
   const geocodeAbortRef = useRef<AbortController | null>(null);
   const loadedOnceRef = useRef(false);
   const addTipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Tracks whether we were offline, so the connectivity effect only re-fetches
+  // on a real offline→online transition (not on the first online render).
+  const wasOfflineRef = useRef(false);
+  // Mirror userLoc into a ref so the reconnect-retry effect reads the latest
+  // position without re-subscribing on every GPS update (CLAUDE.md refs rule).
+  const userLocRef = useRef(userLoc);
+  userLocRef.current = userLoc;
 
   // Card slide-up animation. `visibleSelected` mirrors `selected` but lingers
   // through the closing spring so the card stays mounted while it animates back
@@ -191,12 +201,15 @@ export default function MasjidScreen() {
     setSheetMode('default'); // fresh origin → reset to the default 3-nearest view
     try {
       const signal = freshSignal();
+      if (__DEV__) console.log('[Masjid] mosque data fetch started', lat, lng);
       const rows = await fetchNearbyApprovedMosques(lat, lng, MASJID_FETCH_LIMIT, 0, signal);
       if (!mountedRef.current) return [];
+      if (__DEV__) console.log('[Masjid] mosque data fetch completed —', rows.length, 'rows');
       setMosques(rows);
       return rows;
     } catch {
       // AbortError or a real failure — keep current state, just stop the spinner.
+      if (__DEV__) console.log('[Masjid] mosque data fetch failed/aborted');
       return [];
     } finally {
       if (mountedRef.current) setLoading(false);
@@ -206,12 +219,15 @@ export default function MasjidScreen() {
   // Read GPS once, then load mosques from the user's position.
   const fetchGpsAndLoad = useCallback(async () => {
     try {
+      if (__DEV__) console.log('[Masjid] location fetch started');
       const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
       if (!mountedRef.current) return;
       const lat = loc.coords.latitude, lng = loc.coords.longitude;
+      if (__DEV__) console.log('[Masjid] location fetch completed', lat, lng);
       setUserLoc({ lat, lng });
       await loadInitial(lat, lng);
     } catch {
+      if (__DEV__) console.log('[Masjid] location fetch failed');
       if (mountedRef.current) setLoading(false);
     }
   }, [loadInitial]);
@@ -223,6 +239,27 @@ export default function MasjidScreen() {
       fetchGpsAndLoad();
     }
   }, [status, fetchGpsAndLoad]);
+
+  // Auto-retry when connectivity returns. The WebView reports online/offline via
+  // onConnectivity → `online`. On a real offline→online transition we re-call the
+  // mosque API so the list/map recover on their own — previously the data stayed
+  // frozen on the pre-offline state until the user tapped "Min position". We reuse
+  // the last known position (no camera jump); if we never loaded, we read GPS.
+  // freshSignal() inside loadInitial aborts any in-flight request, so connectivity
+  // flapping can't stack overlapping fetches.
+  useEffect(() => {
+    if (!online) {
+      wasOfflineRef.current = true;
+      return;
+    }
+    if (!wasOfflineRef.current) return; // first online render or never went offline
+    wasOfflineRef.current = false;
+    if (!mountedRef.current || status !== 'granted') return;
+    if (__DEV__) console.log('[Masjid] connectivity restored — auto-retrying mosque fetch');
+    const loc = userLocRef.current;
+    if (loc) loadInitial(loc.lat, loc.lng);
+    else fetchGpsAndLoad();
+  }, [online, status, loadInitial, fetchGpsAndLoad]);
 
   // Unmount: abort in-flight request, block late state updates, stop any
   // in-flight card animation. (No timers/watchers exist to clear.)
@@ -444,6 +481,7 @@ export default function MasjidScreen() {
         mosques={points}
         nearestId={nearestId}
         onMarkerTap={handleMarkerTap}
+        onConnectivity={setOnline}
       />
 
       {/* Overlay header — title black for contrast over the light map */}
@@ -608,6 +646,9 @@ export default function MasjidScreen() {
       <DirectionsSheet visible={!!directions} target={directions} onClose={() => setDirections(null)} />
 
       <AddMasjidModal visible={addVisible} onClose={() => setAddVisible(false)} userLoc={userLoc} />
+
+      {/* Offline banner — local to this screen; slides in when internet drops */}
+      <MasjidOfflineBanner online={online} />
     </View>
   );
 }

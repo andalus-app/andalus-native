@@ -18,13 +18,16 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  Animated, Easing, LayoutAnimation, Platform, StyleSheet, Text, TouchableOpacity, UIManager, View,
+} from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { SvgXml } from 'react-native-svg';
 
 import {
   ADHAN_RECITER_LABELS,
   PRAYER_DISPLAY_NAMES,
+  PRAYER_NOTIFICATION_MODE_LABELS,
   PRAYER_NOTIFICATION_MODE_SUBTITLES,
   PRAYER_NOTIFICATION_MODE_TOAST,
   getAdhanReciterList,
@@ -51,6 +54,18 @@ import {
 import { playAdhan, stopAdhan, subscribeAdhanPlayback, getActiveAdhanTag } from '../services/adhanAudioService';
 import { showToast } from '../services/toastService';
 import type { Theme } from '../theme/colors';
+
+// LayoutAnimation needs an explicit opt-in on Android (no-op on iOS).
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+// Disclosure chevron — points down when collapsed, rotates 180° to point up when
+// expanded. `__C__` is swapped for the muted theme colour at render time.
+const CHEVRON_ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="none" stroke="__C__" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6"/></svg>';
+
+// Order shown in the bottom legend strip: Adhan, Standard, Tyst, Vibration.
+const LEGEND_MODES: PrayerNotificationMode[] = ['adhan_short', 'standard', 'silent', 'vibration'];
 
 // ── Mode icon (animated cross-fade on cycle) ─────────────────────────────────
 
@@ -339,28 +354,90 @@ export default function PrayerNotificationModeSection({ T }: { T: Theme }) {
     try { playAdhan(reciter, tagFor(prayer)); } catch {}
   }, [previewingPrayer]);
 
+  // Collapsed by default — the five per-prayer rows + legend live behind a
+  // disclosure chevron so the Aviseringar section stays compact. LayoutAnimation
+  // handles the variable-height expand/collapse; the chevron rotates via Animated.
+  const [expanded, setExpanded] = useState(false);
+  const chevron = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(chevron, {
+      toValue: expanded ? 1 : 0,
+      duration: 220,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [expanded, chevron]);
+
+  const toggleExpanded = useCallback(() => {
+    Haptics.selectionAsync().catch(() => {});
+    LayoutAnimation.configureNext(
+      LayoutAnimation.create(260, LayoutAnimation.Types.easeInEaseOut, LayoutAnimation.Properties.opacity),
+    );
+    setExpanded(prev => !prev);
+  }, []);
+
+  const chevronRotate = chevron.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '180deg'] });
+
   return (
     <View>
-      <View style={styles.helperWrap}>
-        <Text style={[styles.helperText, { color: T.textMuted }]} numberOfLines={2}>
-          Tryck på ikonen för att växla läge för varje bön. Standard är aktivt för alla bönerna.
-        </Text>
-      </View>
-      {PRAYER_KEYS.map(prayer => (
-        <PrayerRow
-          key={prayer}
-          prayer={prayer}
-          config={modes[prayer]}
-          T={T}
-          previewingPrayer={previewingPrayer}
-          onCycle={handleCycle}
-          onReciter={handleReciter}
-          onPreview={handlePreview}
-        />
-      ))}
-      <Text style={[styles.footnote, { color: T.textMuted }]} numberOfLines={2}>
-        Adhan spelas upp av iOS — fungerar även när telefonen är låst.
-      </Text>
+      {/* Disclosure header — tap the row / chevron to reveal the per-prayer rows */}
+      <TouchableOpacity
+        activeOpacity={0.7}
+        onPress={toggleExpanded}
+        accessibilityRole="button"
+        accessibilityLabel={expanded ? 'Dölj lägen per bön' : 'Visa lägen per bön'}
+        style={[styles.header, { backgroundColor: T.card, borderColor: T.border }]}
+      >
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.headerTitle, { color: T.text }]}>Anpassa per bön</Text>
+          <Text style={[styles.headerSub, { color: T.textMuted }]} numberOfLines={1}>
+            Ljud, vibration eller adhan för varje bön
+          </Text>
+        </View>
+        <Animated.View style={{ transform: [{ rotate: chevronRotate }] }}>
+          <SvgXml xml={CHEVRON_ICON.replace(/__C__/g, T.textMuted)} width={20} height={20} />
+        </Animated.View>
+      </TouchableOpacity>
+
+      {expanded && (
+        <View style={styles.expandedWrap}>
+          <View style={styles.helperWrap}>
+            <Text style={[styles.helperText, { color: T.textMuted }]} numberOfLines={2}>
+              Tryck på ikonen för att växla läge för varje bön. Standard är aktivt för alla bönerna.
+            </Text>
+          </View>
+
+          {PRAYER_KEYS.map(prayer => (
+            <PrayerRow
+              key={prayer}
+              prayer={prayer}
+              config={modes[prayer]}
+              T={T}
+              previewingPrayer={previewingPrayer}
+              onCycle={handleCycle}
+              onReciter={handleReciter}
+              onPreview={handlePreview}
+            />
+          ))}
+
+          {/* Icon legend — explains every mode symbol horizontally */}
+          <View style={[styles.legend, { backgroundColor: T.card, borderColor: T.border }]}>
+            {LEGEND_MODES.map(m => (
+              <View key={m} style={styles.legendItem}>
+                <SvgXml xml={prayerNotificationModeIconXml(m, T.text)} width={22} height={22} />
+                <Text style={[styles.legendLabel, { color: T.textMuted }]} numberOfLines={1}>
+                  {PRAYER_NOTIFICATION_MODE_LABELS[m]}
+                </Text>
+              </View>
+            ))}
+          </View>
+
+          <Text style={[styles.footnote, { color: T.textMuted }]} numberOfLines={2}>
+            Adhan spelas upp av iOS — fungerar även när telefonen är låst.
+          </Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -368,6 +445,45 @@ export default function PrayerNotificationModeSection({ T }: { T: Theme }) {
 // ── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 14,
+    borderWidth: 0.5,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+  },
+  headerTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  headerSub: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  expandedWrap: {
+    marginTop: 8,
+  },
+  legend: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    borderRadius: 14,
+    borderWidth: 0.5,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  legendItem: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 6,
+  },
+  legendLabel: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
   helperWrap: {
     paddingHorizontal: 4,
     marginBottom: 10,

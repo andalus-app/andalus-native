@@ -61,7 +61,10 @@ export function buildMasjidMapHtml(accent: string, isDark: boolean): string {
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
 <link href="https://unpkg.com/maplibre-gl@${MAPLIBRE_VERSION}/dist/maplibre-gl.css" rel="stylesheet" />
-<script src="https://unpkg.com/maplibre-gl@${MAPLIBRE_VERSION}/dist/maplibre-gl.js"></script>
+<script
+  src="https://unpkg.com/maplibre-gl@${MAPLIBRE_VERSION}/dist/maplibre-gl.js"
+  onerror="window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify({type:'maperror',stage:'script'}));"
+></script>
 <style>
   html, body, #map { margin:0; padding:0; height:100%; width:100%; background:${bg}; }
   .maplibregl-ctrl-attrib { font-size:9px; }
@@ -99,6 +102,22 @@ export function buildMasjidMapHtml(accent: string, isDark: boolean): string {
   var post = function (m) {
     if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(JSON.stringify(m));
   };
+  var stage = function (s) { post({ type: 'stage', stage: s }); };
+
+  // Connectivity reporter — runs in the inline document (independent of the
+  // unpkg MapLibre script), so it keeps reporting even when offline. Drives the
+  // local "Ingen internetuppkoppling" banner via { type:'net', online }.
+  var reportNet = function () { post({ type: 'net', online: navigator.onLine }); };
+  window.addEventListener('online', reportNet);
+  window.addEventListener('offline', reportNet);
+  reportNet();
+
+  // If the MapLibre script never loaded (CDN slow/blocked), report it so RN can
+  // show the error/retry state instead of waiting on a 'load' that can't fire.
+  if (typeof maplibregl === 'undefined') {
+    post({ type: 'maperror', stage: 'script' });
+    return;
+  }
 
   var map = new maplibregl.Map({
     container: 'map',
@@ -107,6 +126,7 @@ export function buildMasjidMapHtml(accent: string, isDark: boolean): string {
     zoom: 11,
     attributionControl: true,
   });
+  stage('styleLoadingStarted');
   // No built-in NavigationControl — the +/- controls are owned by React
   // Native (see app/masjid.tsx) and dispatch zoomIn/zoomOut messages here.
 
@@ -234,7 +254,22 @@ export function buildMasjidMapHtml(accent: string, isDark: boolean): string {
     },
   };
 
-  map.on('load', function () { post({ type: 'ready' }); });
+  // ── Lifecycle → RN ────────────────────────────────────────────────────────
+  // 'ready' is the single signal RN waits on to reveal the map. Style + error
+  // events are forwarded so RN can log progress and fall into the error/retry
+  // state when the remote style/glyph/sprite chain fails.
+  var ready = false;
+  var styleReported = false;
+  map.on('styledata', function () {
+    if (!styleReported) { styleReported = true; stage('styleLoaded'); }
+  });
+  map.on('load', function () { ready = true; post({ type: 'ready' }); });
+  map.on('error', function (e) {
+    // After the map is up, a single failed tile must NOT blank the screen —
+    // only pre-ready failures (style/glyphs/sprite/source bootstrap) are fatal.
+    var message = (e && e.error && e.error.message) ? e.error.message : 'map error';
+    if (!ready) post({ type: 'maperror', stage: 'source', message: message });
+  });
 })();
 true;
 </script>

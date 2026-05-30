@@ -356,6 +356,41 @@ in — swap the `MASJID_ICON_SVG` constant, keep `__C__` for the themed colour).
 * Basemap = **OpenStreetMap raster tiles** (no API key). The `TILE_STYLE` constant in `masjidMapHtml.ts` is the single
   place to swap in MapTiler/self-hosted tiles for production (OSM's policy discourages heavy in-app traffic).
 * Supabase is the **only** data source. Reads go through the `nearby_mosques` RPC (`services/mosques.ts`).
+* **Basemap reality:** the live basemap is the **openfreemap Liberty vector style**
+  (`style: 'https://tiles.openfreemap.org/styles/liberty'` in `masjidMapHtml.ts`), NOT the
+  `TILE_STYLE` OSM-raster constant — that constant is currently **unused** (kept as the
+  documented swap point). MapLibre JS/CSS load from **unpkg** at runtime.
+
+### Map loading lifecycle (loading / error / retry) — IMPORTANT
+**Why it exists:** the map only becomes usable after a remote asset chain succeeds —
+MapLibre JS/CSS (unpkg) → openfreemap style JSON → its glyphs/sprites/vector tiles. If any
+hop is slow or unreachable, MapLibre's `load` event never fires. Previously the themed cover
+in `MasjidMapView.tsx` never faded → users saw a **blank frozen rectangle** with no feedback,
+no timeout, no retry. That was the intermittent "map doesn't load / loads slowly" bug (it is
+**network/style/tile-asset** related, NOT data/layout/location — data + GPS are decoupled and
+queued until ready, so they never block the paint).
+
+* **State machine** in `MasjidMapView.tsx`: `mapState: 'loading' | 'ready' | 'error'`.
+  Single source of truth for what overlay shows. `readyRef` still gates the message bridge.
+* **HTML lifecycle events** (`masjidMapHtml.ts`, map→RN): `{type:'ready'}` (on `map.on('load')`,
+  unchanged contract), `{type:'maperror', stage:'script'|'source', message}` (script `onerror`,
+  `typeof maplibregl==='undefined'` guard, and `map.on('error')` **only while not yet ready** —
+  a single failed tile after load must NOT blank a usable map), and `{type:'stage', stage}` dev
+  breadcrumbs (`styleLoadingStarted`, `styleLoaded`).
+* **Skeleton** (while `loading`): themed `masjidMapBg(isDark)` base + faint placeholder blocks
+  (search bar / centred pin / sheet) + ONE native-driven `Animated.loop` shimmer band. Works in
+  light + dark. `pointerEvents="none"` and unmounts on ready → never blocks map interaction.
+* **Slow hint:** after `SLOW_HINT_MS` (5 s) still loading → subtle **"Kartan laddas…"** text.
+* **Hard timeout:** after `LOAD_TIMEOUT_MS` (12 s) with no `ready` → `mapState='error'`.
+  Both timers are **ref-tracked and cleared** on ready/error/retry/unmount (CLAUDE.md timer rule).
+* **Error state:** themed overlay **"Kartan kunde inte laddas"** + **"Försök igen"** button.
+* **Retry = full WebView remount** via a `reloadKey` used as the `<WebView key>`. It resets
+  `readyRef=false`, clears the message queue, resets the cover, re-arms timers, then bumps the
+  key. The fresh WebView starts empty and markers/user are re-pushed via the `init` message on
+  the next `ready` → **no duplicate markers/listeners**. Do NOT "retry" by re-injecting JS into
+  the same WebView — remount is what guarantees a clean map.
+* **Dev logging** (`__DEV__` only): `MasjidMapView` logs mount/stage/ready/error/timeout/retry;
+  `app/masjid.tsx` logs location + mosque-data fetch started/completed/failed.
 
 ### NO Google APIs (hard rule)
 No Google Maps/Places/Geocoding/Nearby Search/data fetch anywhere. Google Maps is only **opened externally** via a

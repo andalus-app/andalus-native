@@ -23,3 +23,13 @@ export function masjidLabelColor(T: Theme): string {
 export function masjidSubColor(T: Theme): string {
   return T.isDark ? 'rgba(255,255,255,0.55)' : T.textMuted;
 }
+
+/**
+ * Offline-banner palette — premium "light red bg / dark red text", tuned per
+ * theme so it stays legible in both light and dark mode.
+ */
+export function masjidOfflineColors(isDark: boolean) {
+  return isDark
+    ? { bg: '#3A1F1F', text: '#FF8A8A' } // deep red tint / legible red on dark
+    : { bg: '#FDE7E7', text: '#B3261E' }; // light red / dark red
+}
