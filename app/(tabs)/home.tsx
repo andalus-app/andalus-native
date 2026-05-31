@@ -1118,6 +1118,33 @@ export default function HomeScreen() {
     router.push(url as any);
   }, [router]);
 
+  // Live-sändningskortet hoppar upp direkt under hälsningen NÄR den är live.
+  // I alla andra lägen (inkl. kommande sändning) behåller det sin ordinarie plats
+  // längst ner. Definieras en gång och renderas på exakt ETT ställe (top XOR botten)
+  // så kortet aldrig dubbleras — samma onLayout-/flash-/scroll-logik oavsett position.
+  const youtubeAtTop = isLive;
+  const youtubeCardBlock = (
+    <View onLayout={e => {
+      youtubeCardYRef.current = e.nativeEvent.layout.y;
+      if (pendingScrollToYoutubeRef.current && e.nativeEvent.layout.y > 0) {
+        pendingScrollToYoutubeRef.current = false;
+        setTimeout(() => {
+          scrollRef.current?.scrollTo({ y: e.nativeEvent.layout.y - 16, animated: true });
+          // Flash the card after the scroll animation finishes (~400 ms).
+          setTimeout(() => setFlashYoutubeCard(true), 400);
+        }, 200);
+      }
+    }}>
+      <YoutubeCard
+        stream={stream}
+        isLive={isLive}
+        isUpcoming={isUpcoming}
+        flash={flashYoutubeCard}
+        onFlashEnd={() => setFlashYoutubeCard(false)}
+      />
+    </View>
+  );
+
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
       <View style={{ paddingTop: 56, paddingHorizontal: 20, paddingBottom: 10, flexDirection: 'row', alignItems: 'center' }}>
@@ -1289,6 +1316,9 @@ export default function HomeScreen() {
           )}
         </View>
 
+        {/* ── Live-sändning — hoppar hit direkt under hälsningen NÄR den är live ── */}
+        {youtubeAtTop && youtubeCardBlock}
+
         {/* ── Supabase announcement banners — visas direkt under hälsningen ── */}
         {bannerAnnouncements.length > 0 && (
           <View style={{ marginTop: 10, marginBottom: 6 }}>
@@ -1431,25 +1461,8 @@ export default function HomeScreen() {
           );
         })()}
 
-        <View onLayout={e => {
-          youtubeCardYRef.current = e.nativeEvent.layout.y;
-          if (pendingScrollToYoutubeRef.current && e.nativeEvent.layout.y > 0) {
-            pendingScrollToYoutubeRef.current = false;
-            setTimeout(() => {
-              scrollRef.current?.scrollTo({ y: e.nativeEvent.layout.y - 16, animated: true });
-              // Flash the card after the scroll animation finishes (~400 ms).
-              setTimeout(() => setFlashYoutubeCard(true), 400);
-            }, 200);
-          }
-        }}>
-          <YoutubeCard
-            stream={stream}
-            isLive={isLive}
-            isUpcoming={isUpcoming}
-            flash={flashYoutubeCard}
-            onFlashEnd={() => setFlashYoutubeCard(false)}
-          />
-        </View>
+        {/* Live-kortet ligger här i alla lägen UTOM live (då hoppar det överst). */}
+        {!youtubeAtTop && youtubeCardBlock}
 
         {/* Admin — individual pending booking cards, one per booking */}
         {isAdmin && pendingBookings.map(pb => (
