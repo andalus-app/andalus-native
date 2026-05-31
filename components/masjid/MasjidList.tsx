@@ -236,12 +236,12 @@ export default function MasjidList({
           <View style={[styles.handleBar, { backgroundColor: T.textTertiary }]} />
         </View>
 
-        <Text style={[styles.header, { color: T.text }]}>Närmaste masjid</Text>
+        <Text style={[styles.header, { color: T.text }]}>Närmaste moské</Text>
 
         {loading ? (
           <View style={styles.center}><ActivityIndicator color={T.accent} /></View>
         ) : count === 0 ? (
-          <Text style={[styles.empty, { color: T.textMuted }]}>Inga masjid hittades i närheten.</Text>
+          <Text style={[styles.empty, { color: T.textMuted }]}>Inga moskéer hittades i närheten.</Text>
         ) : (
           <>
             <ScrollView

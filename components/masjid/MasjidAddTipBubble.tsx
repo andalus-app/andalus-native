@@ -64,7 +64,7 @@ export default function MasjidAddTipBubble({ visible, onDismiss }: Props) {
         ]}
       >
         <Text style={[styles.text, { color: T.text }]} numberOfLines={1}>
-          Lägg till en ny masjid
+          Lägg till en ny moské
         </Text>
       </Pressable>
       {/* Right-pointing caret — sits flush against the bubble's right edge and

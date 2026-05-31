@@ -33,8 +33,14 @@ export type Mosque = {
 
 /** How many masjid are shown in the default (compact) list — the "3 närmaste". */
 export const MASJID_COLLAPSED_COUNT = 3;
-/** How many approved masjid to fetch in one go (markers + expandable list). */
+/** How many approved masjid to fetch in one go for the nearby (distance-sorted) list. */
 export const MASJID_FETCH_LIMIT = 50;
+/**
+ * Upper bound for the full-country marker layer. Sweden's approved set is a few
+ * hundred rows, so one request loads them all; the cap is just a safety ceiling
+ * (well under PostgREST's max-rows) in case the table grows.
+ */
+export const MASJID_MARKER_LIMIT = 2000;
 
 /**
  * Fetch approved mosques sorted by distance from (lat, lng).
@@ -66,6 +72,31 @@ export async function fetchNearbyApprovedMosques(
     throw error;
   }
   return (data ?? []) as Mosque[];
+}
+
+/**
+ * Fetch EVERY approved masjid (no origin, no distance) for the full-country
+ * marker layer, so all pins are visible when the map is zoomed out — not just
+ * the nearby batch. RLS already restricts SELECT to approved rows. Sweden's set
+ * is small (a few hundred), so this is a single lightweight one-shot fetch; the
+ * bottom "närmaste" list still uses `nearby_mosques` for distance sorting and is
+ * never driven by this call. `distance_meters` is filled with a sentinel (the
+ * card recomputes the real distance from the user's GPS on tap). Pass the
+ * screen's AbortSignal so it cancels cleanly on unmount.
+ */
+export async function fetchAllApprovedMosques(signal?: AbortSignal): Promise<Mosque[]> {
+  let q = supabase
+    .from('mosques')
+    .select('id,name,address,postal_code,city,country,latitude,longitude,opening_hours,parking_available,wheelchair_accessible,access_info,phone,website,prayer_times_url,image_url')
+    .eq('status', 'approved')
+    .limit(MASJID_MARKER_LIMIT);
+  if (signal) q = q.abortSignal(signal);
+
+  const { data, error } = await q;
+  if (error) throw error;
+  return ((data ?? []) as MosqueSearchResult[]).map(
+    (m) => ({ ...m, distance_meters: Number.POSITIVE_INFINITY }),
+  );
 }
 
 /** A matched approved masjid from text search (no distance — not from the RPC). */

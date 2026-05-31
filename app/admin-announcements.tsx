@@ -380,8 +380,8 @@ export default function AdminAnnouncementsScreen() {
               </Svg>
             </View>
             <View>
-              <Text style={{ fontSize: 15, fontWeight: '600', color: T.text }}>Masjid-moderering</Text>
-              <Text style={{ fontSize: 12, color: T.textMuted, marginTop: 1 }}>Godkänn, redigera & hantera masjid</Text>
+              <Text style={{ fontSize: 15, fontWeight: '600', color: T.text }}>Moské-moderering</Text>
+              <Text style={{ fontSize: 12, color: T.textMuted, marginTop: 1 }}>Godkänn, redigera & hantera moskéer</Text>
             </View>
           </View>
           <Svg width={18} height={18} viewBox="0 0 24 24">

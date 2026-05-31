@@ -14,8 +14,10 @@ import {
   Keyboard, StyleSheet,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { SvgXml } from 'react-native-svg';
 import { useTheme } from '../../context/ThemeContext';
 import { searchApprovedMosques, type MosqueSearchResult } from '../../services/mosques';
+import { masjidIconXml } from '../../constants/masjidIcon';
 import { masjidIconColor, masjidLabelColor, masjidSubColor } from './colors';
 
 export default function MasjidSearchBar({
@@ -98,7 +100,7 @@ export default function MasjidSearchBar({
         <Ionicons name="search" size={18} color={masjidIconColor(T)} />
         <TextInput
           style={[styles.input, { color: T.text }]}
-          placeholder="Sök masjid, stad eller adress"
+          placeholder="Sök moské, stad eller adress"
           placeholderTextColor={masjidLabelColor(T)}
           value={text}
           onChangeText={setText}
@@ -127,7 +129,7 @@ export default function MasjidSearchBar({
                   onPress={() => handlePickMosque(m)}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="business-outline" size={18} color={masjidIconColor(T)} />
+                  <SvgXml xml={masjidIconXml(masjidIconColor(T))} width={18} height={18} />
                   <View style={styles.rowMain}>
                     <Text style={[styles.rowName, { color: T.text }]} numberOfLines={1}>{m.name}</Text>
                     {!!sub && <Text style={[styles.rowSub, { color: masjidSubColor(T) }]} numberOfLines={1}>{sub}</Text>}
@@ -141,7 +143,7 @@ export default function MasjidSearchBar({
               <Ionicons name="location-outline" size={18} color={masjidLabelColor(T)} />
               <View style={styles.rowMain}>
                 <Text style={[styles.rowName, { color: T.text }]} numberOfLines={1}>Sök plats: “{text.trim()}”</Text>
-                <Text style={[styles.rowSub, { color: masjidSubColor(T) }]}>Visa närmaste masjid där</Text>
+                <Text style={[styles.rowSub, { color: masjidSubColor(T) }]}>Visa närmaste moské där</Text>
               </View>
             </TouchableOpacity>
           </ScrollView>

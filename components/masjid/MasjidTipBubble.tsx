@@ -75,7 +75,7 @@ export default function MasjidTipBubble({ visible, top, onDismiss }: Props) {
         ]}
       >
         <Text style={[styles.text, { color: T.text }]} numberOfLines={1}>
-          Hitta närmaste masjid
+          Hitta närmaste moské
         </Text>
       </Pressable>
     </Animated.View>

@@ -46,7 +46,7 @@ export default function DirectionsSheet({
 
   const openSystem = useCallback(() => {
     if (!target) return;
-    const label = encodeURIComponent(target.name || 'Masjid');
+    const label = encodeURIComponent(target.name || 'Moské');
     Linking.openURL(`geo:${target.lat},${target.lng}?q=${target.lat},${target.lng}(${label})`);
     onClose();
   }, [target, onClose]);

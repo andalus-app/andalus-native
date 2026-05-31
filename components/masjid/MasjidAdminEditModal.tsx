@@ -7,7 +7,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Modal, View, Text, TextInput, TouchableOpacity, ScrollView, Alert,
-  ActivityIndicator, StyleSheet, KeyboardAvoidingView, Platform, Switch,
+  ActivityIndicator, StyleSheet, KeyboardAvoidingView, Platform, Switch, AppState,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -43,6 +43,18 @@ export default function MasjidAdminEditModal({
   const insets = useSafeAreaInsets();
   const mountedRef = useRef(true);
   useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
+  // Bumped on every return-to-foreground so the modal body remounts and repaints
+  // — fixes the iOS blank/black pageSheet body after switching to another app
+  // (e.g. Google Maps) and back. Form data lives in state (not the remounted
+  // subtree), so nothing typed is lost.
+  const [contentKey, setContentKey] = useState(0);
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active' && mountedRef.current) setContentKey((k) => k + 1);
+    });
+    return () => sub.remove();
+  }, []);
 
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
@@ -193,7 +205,7 @@ export default function MasjidAdminEditModal({
   }, [applyCoords, fillAddressFromCoords]);
 
   const handleSave = useCallback(async () => {
-    if (!name.trim()) { Alert.alert('Namn krävs', 'Ange masjidens namn.'); return; }
+    if (!name.trim()) { Alert.alert('Namn krävs', 'Ange moskéns namn.'); return; }
     if (!coords) { Alert.alert('Plats krävs', 'Välj en plats på kartan.'); return; }
 
     setSaving(true);
@@ -251,15 +263,16 @@ export default function MasjidAdminEditModal({
           <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Text style={[styles.headerBtn, { color: masjidLabelColor(T) }]}>Avbryt</Text>
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: T.text }]}>{mode === 'create' ? 'Ny masjid' : 'Redigera masjid'}</Text>
+          <Text style={[styles.headerTitle, { color: T.text }]}>{mode === 'create' ? 'Ny moské' : 'Redigera moské'}</Text>
           <TouchableOpacity onPress={handleSave} disabled={saving} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             {saving ? <ActivityIndicator color={T.accent} /> : <Text style={[styles.headerSave, { color: T.accent }]}>Spara</Text>}
           </TouchableOpacity>
         </View>
 
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        {/* key={contentKey} → fresh repaint on foreground; see contentKey above. */}
+        <KeyboardAvoidingView key={contentKey} style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 120 }} keyboardShouldPersistTaps="handled">
-            <Field label="Namn *" value={name} onChangeText={setName} placeholder="Masjidens namn" T={T} />
+            <Field label="Namn *" value={name} onChangeText={setName} placeholder="Moskéns namn" T={T} />
             <Field label="Adress" value={address} onChangeText={setAddress} placeholder="Gata och nummer" T={T} />
             <View style={styles.rowFields}>
               <View style={{ flex: 1 }}>

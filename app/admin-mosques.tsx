@@ -111,7 +111,7 @@ export default function AdminMosquesScreen() {
   }, [tab, load]);
 
   const approve = (m: AdminMosque) =>
-    Alert.alert('Godkänn masjid', `Publicera “${m.name}”?`, [
+    Alert.alert('Godkänn moské', `Publicera “${m.name}”?`, [
       { text: 'Avbryt', style: 'cancel' },
       { text: 'Godkänn', onPress: () => runAction(() => adminApproveMosque(m.id)) },
     ]);
@@ -131,7 +131,7 @@ export default function AdminMosquesScreen() {
   // Permanent delete — removes the row (and its image) from Supabase entirely so
   // it never appears in any list, not even Dolda. Irreversible.
   const deleteMosque = (m: AdminMosque) =>
-    Alert.alert('Radera masjid', `Radera “${m.name}” permanent? Detta går inte att ångra.`, [
+    Alert.alert('Radera moské', `Radera “${m.name}” permanent? Detta går inte att ångra.`, [
       { text: 'Avbryt', style: 'cancel' },
       { text: 'Radera', style: 'destructive', onPress: () => runAction(() => adminDeleteMosque(m.id, m.image_storage_path)) },
     ]);
@@ -140,7 +140,7 @@ export default function AdminMosquesScreen() {
     if (items.length === 0) return;
     Alert.alert(
       'Radera alla dolda',
-      `Radera alla ${items.length} dolda masjider permanent från Supabase? Detta går inte att ångra.`,
+      `Radera alla ${items.length} dolda moskéer permanent från Supabase? Detta går inte att ångra.`,
       [
         { text: 'Avbryt', style: 'cancel' },
         { text: 'Radera alla', style: 'destructive', onPress: () => runAction(async () => { await adminDeleteAllHidden(); }) },
@@ -232,7 +232,7 @@ export default function AdminMosquesScreen() {
       <View style={[styles.header, { paddingTop: insets.top + 8, borderColor: T.border }]}>
         <BackButton onPress={() => router.back()} />
         <View style={{ flex: 1, alignItems: 'center' }}>
-          <Text style={{ fontSize: 17, fontWeight: '700', color: T.text }}>Admin · Masjid</Text>
+          <Text style={{ fontSize: 17, fontWeight: '700', color: T.text }}>Admin · Moské</Text>
           <Text style={{ fontSize: 11, color: T.textMuted, marginTop: 1 }}>Moderering & hantering</Text>
         </View>
         <TouchableOpacity onPress={openCreate} style={[styles.addBtn, { backgroundColor: T.accent }]}>
@@ -259,7 +259,7 @@ export default function AdminMosquesScreen() {
           style={[styles.searchInput, { color: T.text }]}
           value={search}
           onChangeText={setSearch}
-          placeholder="Sök masjid (namn, adress, stad)"
+          placeholder="Sök moské (namn, adress, stad)"
           placeholderTextColor={T.textMuted}
           autoCorrect={false}
           autoCapitalize="none"
@@ -296,8 +296,8 @@ export default function AdminMosquesScreen() {
               {search.trim()
                 ? `Inga träffar för “${search.trim()}”.`
                 : tab === 'pending' ? 'Inga väntande förslag.'
-                : tab === 'approved' ? 'Inga publicerade masjid.'
-                : 'Inga dolda masjid.'}
+                : tab === 'approved' ? 'Inga publicerade moskéer.'
+                : 'Inga dolda moskéer.'}
             </Text>
           ) : filteredItems.map(renderCard)}
         </ScrollView>
@@ -343,7 +343,7 @@ export default function AdminMosquesScreen() {
             <Text style={[styles.dialogSub, { color: T.textMuted }]}>
               Blockerar {blockTarget?.submitted_by_user_id ? 'användar-ID' : ''}
               {blockTarget?.submitted_by_user_id && blockTarget?.submitted_device_hash ? ' + ' : ''}
-              {blockTarget?.submitted_device_hash ? 'enhet (hash)' : ''} och döljer denna masjid.
+              {blockTarget?.submitted_device_hash ? 'enhet (hash)' : ''} och döljer denna moské.
             </Text>
             <View style={styles.durRow}>
               {([['Permanent', null], ['7 dagar', 7], ['30 dagar', 30]] as const).map(([lbl, d]) => {

@@ -13,8 +13,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Modal, View, Text, TextInput, TouchableOpacity, ScrollView, Alert,
-  ActivityIndicator, StyleSheet, KeyboardAvoidingView, Platform,
+  ActivityIndicator, StyleSheet, KeyboardAvoidingView, Platform, AppState,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Ionicons } from '@expo/vector-icons';
@@ -30,12 +31,20 @@ import { formatSwedishPostalCode } from './format';
 import { reverseGeocode } from '../../services/nominatim';
 import { masjidIconColor, masjidLabelColor } from './colors';
 
+// Local draft so a half-filled submission survives leaving the app (e.g. hopping
+// to Google Maps to look up an address) — and any rare modal blank/restart. Saved
+// debounced while typing, restored on open, cleared only after a successful
+// submit (so escaping a glitchy screen via "Avbryt" never throws the work away).
+// The picked image is intentionally excluded (large base64 + the temp file URI
+// may be invalid on the next launch).
+const DRAFT_KEY = 'andalus_add_masjid_draft_v1';
+
 function errorMessage(code?: SubmitErrorCode): string {
   switch (code) {
     case 'rate_limit_hour': return 'Du har skickat för många förslag den senaste timmen. Försök igen om en stund.';
     case 'rate_limit_day':  return 'Du har nått dagsgränsen för förslag. Försök igen imorgon.';
     case 'submitter_blocked': return 'Du kan inte skicka förslag just nu.';
-    case 'mosque_name_required': return 'Ange masjidens namn.';
+    case 'mosque_name_required': return 'Ange moskéns namn.';
     case 'mosque_coords_required': return 'Välj en plats på kartan.';
     default: return 'Något gick fel. Kontrollera din anslutning och försök igen.';
   }
@@ -54,6 +63,19 @@ export default function AddMasjidModal({
   const insets = useSafeAreaInsets();
   const mountedRef = useRef(true);
   useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
+  // Bumped on every return-to-foreground so the modal content remounts and
+  // repaints. iOS can leave a backgrounded pageSheet modal blank/black after you
+  // switch to another app (e.g. Google Maps) and come back — that was the black
+  // screen. The form data lives in this component's state (not the remounted
+  // subtree), so the repaint keeps everything that was typed.
+  const [contentKey, setContentKey] = useState(0);
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active' && mountedRef.current) setContentKey((k) => k + 1);
+    });
+    return () => sub.remove();
+  }, []);
 
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
@@ -86,6 +108,61 @@ export default function AddMasjidModal({
   const cityRef    = useRef(city);    cityRef.current    = city;
   const reverseAbortRef = useRef<AbortController | null>(null);
   useEffect(() => () => { reverseAbortRef.current?.abort(); }, []);
+
+  // ── Local draft (utkast) ──────────────────────────────────────────────────
+  // hydratedRef gates the save effect so restoring a draft (or the first open
+  // with none) can't immediately overwrite it with the empty initial state.
+  const hydratedRef = useRef(false);
+  const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Restore a saved draft when the form opens.
+  useEffect(() => {
+    if (!visible) { hydratedRef.current = false; return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(DRAFT_KEY);
+        if (cancelled || !mountedRef.current) return;
+        if (raw) {
+          const d = JSON.parse(raw);
+          setName(d.name ?? '');
+          setAddress(d.address ?? '');
+          setPostal(d.postal ?? '');
+          setCity(d.city ?? '');
+          setCoords(d.coords ?? null);
+          setLatText(d.latText ?? '');
+          setLngText(d.lngText ?? '');
+          setHours(d.hours ?? '');
+          setPhone(d.phone ?? '');
+          setWebsite(d.website ?? '');
+          setPrayerTimesUrl(d.prayerTimesUrl ?? '');
+          setParking(d.parking ?? null);
+          setWheelchair(d.wheelchair ?? null);
+          setAccessInfo(d.accessInfo ?? '');
+        }
+      } catch { /* ignore a malformed draft */ }
+      finally { if (!cancelled) hydratedRef.current = true; }
+    })();
+    return () => { cancelled = true; };
+  }, [visible]);
+
+  // Debounced draft save while the form is open (after hydration). Image excluded.
+  useEffect(() => {
+    if (!visible || !hydratedRef.current) return;
+    if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    draftTimerRef.current = setTimeout(() => {
+      AsyncStorage.setItem(DRAFT_KEY, JSON.stringify({
+        name, address, postal, city, coords, latText, lngText,
+        hours, phone, website, prayerTimesUrl, parking, wheelchair, accessInfo,
+      })).catch(() => {});
+    }, 400);
+    return () => { if (draftTimerRef.current) { clearTimeout(draftTimerRef.current); draftTimerRef.current = null; } };
+  }, [visible, name, address, postal, city, coords, latText, lngText, hours, phone, website, prayerTimesUrl, parking, wheelchair, accessInfo]);
+
+  const clearDraft = useCallback(() => {
+    if (draftTimerRef.current) { clearTimeout(draftTimerRef.current); draftTimerRef.current = null; }
+    AsyncStorage.removeItem(DRAFT_KEY).catch(() => {});
+  }, []);
 
   // Commit a coordinate from GPS / map picker and sync the editable text fields.
   const applyCoords = useCallback((lat: number, lng: number) => {
@@ -211,7 +288,7 @@ export default function AddMasjidModal({
   }, []);
 
   const handleSubmit = useCallback(async () => {
-    if (!name.trim()) { Alert.alert('Namn krävs', 'Ange masjidens namn.'); return; }
+    if (!name.trim()) { Alert.alert('Namn krävs', 'Ange moskéns namn.'); return; }
     if (!coords) { Alert.alert('Plats krävs', "Välj plats med “Använd min plats” eller “Välj på kartan”."); return; }
 
     setSubmitting(true);
@@ -263,6 +340,7 @@ export default function AddMasjidModal({
       if (!mountedRef.current) return;
       setSubmitting(false);
       if (res.id) {
+        clearDraft(); // submitted successfully → the draft is no longer needed
         Alert.alert('Tack!', 'Ditt förslag har skickats och granskas innan det publiceras.', [
           { text: 'OK', onPress: closeReset },
         ]);
@@ -275,7 +353,7 @@ export default function AddMasjidModal({
         Alert.alert('Något gick fel', 'Kontrollera din anslutning och försök igen.');
       }
     }
-  }, [name, coords, image, address, postal, city, hours, phone, website, prayerTimesUrl, parking, wheelchair, accessInfo, closeReset]);
+  }, [name, coords, image, address, postal, city, hours, phone, website, prayerTimesUrl, parking, wheelchair, accessInfo, closeReset, clearDraft]);
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={closeReset}>
@@ -284,13 +362,16 @@ export default function AddMasjidModal({
           <TouchableOpacity onPress={closeReset} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Text style={[styles.headerBtn, { color: masjidLabelColor(T) }]}>Avbryt</Text>
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: T.text }]}>Lägg till masjid</Text>
+          <Text style={[styles.headerTitle, { color: T.text }]}>Lägg till moské</Text>
           <View style={{ width: 54 }} />
         </View>
 
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        {/* key={contentKey} forces a fresh repaint of the form body whenever the
+            app returns to the foreground — fixes the iOS black/blank pageSheet
+            body after switching to another app (e.g. Google Maps) and back. */}
+        <KeyboardAvoidingView key={contentKey} style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 120 }} keyboardShouldPersistTaps="handled">
-            <Field label="Namn *" value={name} onChangeText={setName} placeholder="Masjidens namn" T={T} />
+            <Field label="Namn *" value={name} onChangeText={setName} placeholder="Moskéns namn" T={T} />
             <Field label="Adress" value={address} onChangeText={setAddress} placeholder="Gata och nummer" T={T} />
             <View style={styles.rowFields}>
               <View style={{ flex: 1 }}>

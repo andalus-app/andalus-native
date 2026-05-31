@@ -964,18 +964,40 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       ).catch(() => {});
     }
     // Last third of the night reminder — optional, OFF by default. Independent
-    // of the main prayer toggle (like dhikr/friday). Uses tonight's Maghrib +
-    // tomorrow's Fajr to compute when the final third of the night begins.
+    // of the main prayer toggle (like dhikr/friday). Schedules a rolling
+    // PRAYER_LOOKAHEAD_DAYS-night window so it keeps firing even if the app is
+    // not reopened for a week. Times come from the same monthly/yearly cache
+    // that powers the calendar (no network); today + tomorrow are overridden
+    // with the just-fetched canonical state for accuracy. Each night needs the
+    // following day's Fajr, so we pull one extra calendar day.
     if (!state.settings.lastThirdReminder) {
       cancelLastThirdReminder().catch(() => {});
     } else if (state.prayerTimes.Maghrib && state.tomorrowTimes?.Fajr) {
-      const ltNow      = new Date();
-      const ltTodayStr = localIsoDate(ltNow);
-      const ltTomStr   = localIsoDate(new Date(ltNow.getFullYear(), ltNow.getMonth(), ltNow.getDate() + 1));
-      scheduleLastThirdReminder({
-        [ltTodayStr]: state.prayerTimes,
-        [ltTomStr]:   state.tomorrowTimes,
-      }).catch(() => {});
+      const ltTodayTimes = state.prayerTimes;
+      const ltTomTimes   = state.tomorrowTimes;
+      const ltLoc        = state.location;
+      const ltMethod     = state.settings.calculationMethod;
+      const ltSchool     = state.settings.school;
+      const ltIfisCity   = state.settings.ifisCity ?? 'stockholm';
+      (async () => {
+        const ltNow      = new Date();
+        const ltTodayStr = localIsoDate(ltNow);
+        const ltTomStr   = localIsoDate(new Date(ltNow.getFullYear(), ltNow.getMonth(), ltNow.getDate() + 1));
+        const ltDict: Record<string, Record<string, string>> = {};
+        const ltExtra = isIfis
+          ? await getIfisTimesForRange(ltIfisCity, PRAYER_LOOKAHEAD_DAYS + 1).catch(() => ({} as Record<string, Record<string, string>>))
+          : await getPrayerTimesForRange(
+              getEffectivePrayerCity(ltLoc.city),
+              ltMethod, ltSchool,
+              ltLoc.latitude, ltLoc.longitude,
+              PRAYER_LOOKAHEAD_DAYS + 1,
+            ).catch(() => ({} as Record<string, Record<string, string>>));
+        for (const [d, t] of Object.entries(ltExtra)) ltDict[d] = t;
+        // Just-fetched today/tomorrow take precedence over the cache rows.
+        ltDict[ltTodayStr] = ltTodayTimes;
+        ltDict[ltTomStr]   = ltTomTimes;
+        await scheduleLastThirdReminder(ltDict);
+      })().catch(() => {});
     }
     // Pre-prayer reminders: refresh rolling 5-day schedule whenever prayer times reload
     refreshPrePrayerReminderNotifications().catch(() => {});

@@ -15,7 +15,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Modal, View, Text, TextInput, TouchableOpacity, ActivityIndicator, StyleSheet, Alert,
-  Keyboard,
+  Keyboard, AppState,
 } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import * as Location from 'expo-location';
@@ -191,6 +191,24 @@ export default function MasjidLocationPicker({
     return () => { mountedRef.current = false; };
   }, []);
 
+  // Remount the WebView when the app returns to the foreground. iOS can leave a
+  // backgrounded WebView blank/black after switching to another app (e.g. Google
+  // Maps) and back — that produced the picker's black map. On remount we reset
+  // the bridge to "not ready" and queue the current centre so the fresh map
+  // re-centres (with the user dot) on its next 'ready'. Only while visible.
+  const [webviewKey, setWebviewKey] = useState(0);
+  useEffect(() => {
+    if (!visible) return;
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active' && mountedRef.current) {
+        readyRef.current = false;
+        pendingRef.current = { lat: centerRef.current.lat, lng: centerRef.current.lng, withUserDot: true };
+        setWebviewKey((k) => k + 1);
+      }
+    });
+    return () => sub.remove();
+  }, [visible]);
+
   const onMessage = useCallback((e: WebViewMessageEvent) => {
     let msg: any;
     try { msg = JSON.parse(e.nativeEvent.data); } catch { return; }
@@ -248,6 +266,7 @@ export default function MasjidLocationPicker({
 
         {visible && (
           <WebView
+            key={webviewKey}
             ref={webRef}
             originWhitelist={['*']}
             source={{ html }}

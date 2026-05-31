@@ -30,7 +30,7 @@ export default function MasjidPermissionGate({
       <Text style={[styles.title, { color: T.text }]}>Platsåtkomst krävs</Text>
 
       <Text style={[styles.body, { color: T.textMuted }]}>
-        För att kunna visa närmaste masjid behöver Hidayah åtkomst till din plats.
+        För att kunna visa närmaste moské behöver Hidayah åtkomst till din plats.
       </Text>
 
       <TouchableOpacity

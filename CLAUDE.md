@@ -355,7 +355,9 @@ in — swap the `MASJID_ICON_SVG` constant, keep `__C__` for the themed colour).
   RN wrapper. Bridge: RN→map via `injectJavaScript(window.__masjid.handle(...))`, map→RN via `postMessage`.
 * Basemap = **OpenStreetMap raster tiles** (no API key). The `TILE_STYLE` constant in `masjidMapHtml.ts` is the single
   place to swap in MapTiler/self-hosted tiles for production (OSM's policy discourages heavy in-app traffic).
-* Supabase is the **only** data source. Reads go through the `nearby_mosques` RPC (`services/mosques.ts`).
+* Supabase is the **only** data source. The bottom (distance-sorted) list reads via the `nearby_mosques`
+  RPC; the **map markers** read EVERY approved masjid country-wide via `fetchAllApprovedMosques`
+  (`services/mosques.ts`) so all pins are visible when zoomed out — see "Map markers" below.
 * **Basemap reality:** the live basemap is the **openfreemap Liberty vector style**
   (`style: 'https://tiles.openfreemap.org/styles/liberty'` in `masjidMapHtml.ts`), NOT the
   `TILE_STYLE` OSM-raster constant — that constant is currently **unused** (kept as the
@@ -392,6 +394,26 @@ queued until ready, so they never block the paint).
 * **Dev logging** (`__DEV__` only): `MasjidMapView` logs mount/stage/ready/error/timeout/retry;
   `app/masjid.tsx` logs location + mosque-data fetch started/completed/failed.
 
+### Map markers — clustered, full-country GPU layer (IMPORTANT)
+**Why:** markers must show EVERY approved masjid in Sweden when zoomed out (700–800+ and growing),
+without hurting list/map performance. A per-pin DOM marker approach janks at that scale, so pins are
+rendered as a **clustered GeoJSON layer** in MapLibre (`masjidMapHtml.ts`), GPU-backed.
+
+* Two independent datasets in `app/masjid.tsx`:
+  - `mosques` — nearby, distance-sorted, ≤`MASJID_FETCH_LIMIT` (50), from `nearby_mosques`. Drives ONLY
+    the bottom list + the nearest-pulse id. Re-fetched on search / "Min position".
+  - `allMosques` — EVERY approved masjid, one-shot `fetchAllApprovedMosques` (cap `MASJID_MARKER_LIMIT`,
+    a safety ceiling, NOT a 276/800 limit). Drives ONLY the map markers. Fetched once; never re-fetched on
+    search/pan/list change, so it can't affect performance. Has its own AbortController (`markersAbortRef`).
+* `points` is memoised on `allMosques` alone (falls back to nearby points only until the full set loads),
+  so a nearby-list change does NOT change its reference → the marker layer is not rebuilt.
+* In `masjidMapHtml.ts`: source `mosques` with `cluster:true` (`clusterRadius:50`, `clusterMaxZoom:12`),
+  layers `clusters` (circle + count) and `unclustered` (symbol, `mosque-pin` SDF image added once via
+  `withPin`/`ensureLayers`). Cluster tap → `getClusterExpansionZoom` (Promise on 3.6.2) → easeTo. Pin tap →
+  `markerTap`. `focus()` looks coords up in `pointById` (built in `setMarkers`), not a DOM marker map.
+* The **nearest** masjid is the ONE exception: kept as a single pulsing DOM marker (its CSS pulse ring),
+  and EXCLUDED from the clustered source so it's never swallowed into a cluster bubble.
+
 ### NO Google APIs (hard rule)
 No Google Maps/Places/Geocoding/Nearby Search/data fetch anywhere. Google Maps is only **opened externally** via a
 lat/lng URL for directions (`components/masjid/DirectionsSheet.tsx`). Geocoding (Phase 2) uses **Nominatim/OSM**.
@@ -412,7 +434,8 @@ No map and no GPS mount until permission is granted. The gate (`MasjidPermission
   (3 nearest, map visible) and **expanded** (all loaded, nearly full screen, scrollable). The grab handle follows
   the finger during the drag (PanResponder `setValue`) and **springs** to the nearest snap on release (by velocity,
   else by distance) — no instant state switch. **"Visa fler" / "Visa färre"** and selecting a masjid also spring
-  to a snap. One RPC fetch (up to `MASJID_FETCH_LIMIT`) loads everything; expand/collapse is client-side. The
+  to a snap. One `nearby_mosques` fetch (up to `MASJID_FETCH_LIMIT`) loads the whole list set; expand/collapse is
+    client-side. (Map markers are a SEPARATE full-country clustered layer — see "Map markers" above.) The
   Animated listener is removed and the animation stopped on unmount; the map/WebView is a sibling, so sheet
   animation never relayouts it.
 * Tapping a row or marker focuses the map and opens `MasjidCard` (name, address, distance, opening hours, parking

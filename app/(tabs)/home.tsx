@@ -1137,7 +1137,7 @@ export default function HomeScreen() {
             activeOpacity={0.7}
             hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
             accessibilityRole="button"
-            accessibilityLabel={pendingMasjidCount === 1 ? '1 väntande masjid att granska' : `${pendingMasjidCount} väntande masjider att granska`}
+            accessibilityLabel={pendingMasjidCount === 1 ? '1 väntande moské att granska' : `${pendingMasjidCount} väntande moskéer att granska`}
           >
             <SvgXml xml={masjidIconXml(T.textMuted)} width={28} height={28} />
             <View style={{

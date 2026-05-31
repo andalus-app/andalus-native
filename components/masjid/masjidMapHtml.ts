@@ -130,50 +130,178 @@ export function buildMasjidMapHtml(accent: string, isDark: boolean): string {
   // No built-in NavigationControl — the +/- controls are owned by React
   // Native (see app/masjid.tsx) and dispatch zoomIn/zoomOut messages here.
 
-  var markers = {};        // id -> maplibregl.Marker (mosques)
+  // Mosque pins are a GPU-backed, CLUSTERED GeoJSON layer — NOT one DOM element
+  // per pin. This stays smooth with the whole country's mosques (hundreds → low
+  // thousands) visible at once, which a per-pin DOM approach can't. The only
+  // exception is the *nearest* mosque: kept as a single DOM marker so it can
+  // show the CSS pulse ring (1 element → no perf cost) and is never swallowed
+  // into a cluster bubble.
+  var SRC = 'mosques';
+  var nearestMarker = null;   // single pulsing DOM marker for the nearest mosque
   var userMarker = null;
   var searchMarker = null;
+  var pointById = {};         // id -> [lng,lat] for focus() lookups (ALL mosques)
+  var layersReady = false;
+  var tapsBound = false;
 
-  // Teardrop pin in a 26x34 box; the point is at (13, 33) ≈ bottom-centre, so
-  // anchor:'bottom' puts the tip exactly on the coordinate. No CSS rotate.
-  // Fill = the app accent green (matches the "Vägbeskrivning" CTA so the map
-  // pins read as part of the same visual family).
-  var PIN_SVG =
-    '<svg width="26" height="34" viewBox="0 0 26 34" xmlns="http://www.w3.org/2000/svg">' +
+  // Teardrop pin at 2x (viewBox 26x34) so the GPU icon image stays crisp on
+  // retina. Same shape/colours as before. Fill = the app accent green.
+  var PIN_ICON_SVG =
+    '<svg width="52" height="68" viewBox="0 0 26 34" xmlns="http://www.w3.org/2000/svg">' +
       '<path d="M13 33 C13 33 24 21 24 12.5 C24 6.15 19.08 1 13 1 C6.92 1 2 6.15 2 12.5 C2 21 13 33 13 33 Z" ' +
         'fill="${accent}" stroke="#ffffff" stroke-width="2"/>' +
       '<circle cx="13" cy="12.5" r="4.5" fill="#ffffff"/>' +
     '</svg>';
 
-  function makeMosqueEl(isNearest) {
+  // The nearest mosque keeps its DOM pin + pulse ring (1 element, GPU-friendly).
+  function makeNearestEl() {
     var el = document.createElement('div');
-    el.className = 'mpin' + (isNearest ? ' nearest' : ' subtle');
-    el.innerHTML = PIN_SVG;
-    if (isNearest) {
-      var ring = document.createElement('div');
-      ring.className = 'pulse';
-      el.appendChild(ring);   // absolute, pointer-events:none — never affects the box
-    }
+    el.className = 'mpin nearest';
+    el.innerHTML =
+      '<svg width="26" height="34" viewBox="0 0 26 34" xmlns="http://www.w3.org/2000/svg">' +
+        '<path d="M13 33 C13 33 24 21 24 12.5 C24 6.15 19.08 1 13 1 C6.92 1 2 6.15 2 12.5 C2 21 13 33 13 33 Z" ' +
+          'fill="${accent}" stroke="#ffffff" stroke-width="2"/>' +
+        '<circle cx="13" cy="12.5" r="4.5" fill="#ffffff"/>' +
+      '</svg>';
+    var ring = document.createElement('div');
+    ring.className = 'pulse';
+    el.appendChild(ring);
     return el;
   }
 
-  function clearMosqueMarkers() {
-    Object.keys(markers).forEach(function (id) { markers[id].remove(); });
-    markers = {};
+  // Load the pin image once, then run cb. Concurrent callers are queued so the
+  // image is created/added a single time.
+  var pinLoading = false, pinCbs = [];
+  function withPin(cb) {
+    if (map.hasImage && map.hasImage('mosque-pin')) { cb(); return; }
+    pinCbs.push(cb);
+    if (pinLoading) return;
+    pinLoading = true;
+    var img = new Image();
+    img.onload = function () {
+      try { if (!map.hasImage('mosque-pin')) map.addImage('mosque-pin', img, { pixelRatio: 2 }); } catch (e) {}
+      pinLoading = false;
+      var cbs = pinCbs; pinCbs = [];
+      cbs.forEach(function (f) { try { f(); } catch (e) {} });
+    };
+    img.onerror = function () { pinLoading = false; pinCbs = []; };
+    img.src = 'data:image/svg+xml;base64,' + btoa(PIN_ICON_SVG);
+  }
+
+  // Bind cluster/pin tap handlers once.
+  function bindLayerTaps() {
+    if (tapsBound) return;
+    tapsBound = true;
+    // Tap a cluster → zoom to its expansion zoom so the bubble splits apart.
+    map.on('click', 'clusters', function (e) {
+      var f = map.queryRenderedFeatures(e.point, { layers: ['clusters'] })[0];
+      if (!f) return;
+      var coords = f.geometry.coordinates;
+      var src = map.getSource(SRC);
+      var ret = src.getClusterExpansionZoom(f.properties.cluster_id);
+      if (ret && typeof ret.then === 'function') {
+        // MapLibre 4.x (this app uses 4.7.1): Promise-based.
+        ret.then(function (zoom) { map.easeTo({ center: coords, zoom: zoom, duration: 500 }); }).catch(function () {});
+      } else {
+        // Older callback form (defensive — not used on 4.x).
+        src.getClusterExpansionZoom(f.properties.cluster_id, function (err, zoom) {
+          if (!err) map.easeTo({ center: coords, zoom: zoom, duration: 500 });
+        });
+      }
+    });
+    // Tap an individual pin → open its card in RN.
+    map.on('click', 'unclustered', function (e) {
+      var f = e.features && e.features[0];
+      if (f) post({ type: 'markerTap', id: f.properties.id });
+    });
+    map.on('mouseenter', 'clusters', function () { map.getCanvas().style.cursor = 'pointer'; });
+    map.on('mouseleave', 'clusters', function () { map.getCanvas().style.cursor = ''; });
+  }
+
+  // Create the clustered source + its 3 layers once (cluster bubble, count,
+  // unclustered pin). Idempotent via layersReady. The pin image must be added
+  // before the symbol layer references it, so this runs inside withPin().
+  function ensureLayers(cb) {
+    if (layersReady) { cb(); return; }
+    withPin(function () {
+      if (!map.getSource(SRC)) {
+        map.addSource(SRC, {
+          type: 'geojson',
+          data: { type: 'FeatureCollection', features: [] },
+          cluster: true,
+          clusterRadius: 50,
+          clusterMaxZoom: 12,
+        });
+      }
+      if (!map.getLayer('clusters')) {
+        map.addLayer({
+          id: 'clusters', type: 'circle', source: SRC, filter: ['has', 'point_count'],
+          paint: {
+            'circle-color': '${accent}',
+            'circle-opacity': 0.92,
+            'circle-stroke-width': 2,
+            'circle-stroke-color': '#ffffff',
+            // Bubble grows in steps with how many mosques it represents.
+            'circle-radius': ['step', ['get', 'point_count'], 16, 25, 20, 100, 26],
+          },
+        });
+      }
+      if (!map.getLayer('cluster-count')) {
+        map.addLayer({
+          id: 'cluster-count', type: 'symbol', source: SRC, filter: ['has', 'point_count'],
+          layout: {
+            'text-field': ['get', 'point_count_abbreviated'],
+            'text-font': ['Noto Sans Bold'],
+            'text-size': 13,
+            'text-allow-overlap': true,
+          },
+          paint: { 'text-color': '#ffffff' },
+        });
+      }
+      if (!map.getLayer('unclustered')) {
+        map.addLayer({
+          id: 'unclustered', type: 'symbol', source: SRC, filter: ['!', ['has', 'point_count']],
+          layout: {
+            'icon-image': 'mosque-pin',
+            'icon-size': 1,
+            'icon-anchor': 'bottom',
+            'icon-allow-overlap': true,
+          },
+        });
+      }
+      bindLayerTaps();
+      layersReady = true;
+      cb();
+    });
   }
 
   function setMarkers(mosques, nearestId) {
-    clearMosqueMarkers();
-    (mosques || []).forEach(function (m) {
-      var el = makeMosqueEl(m.id === nearestId);
+    mosques = mosques || [];
+    pointById = {};
+    var features = [];
+    for (var i = 0; i < mosques.length; i++) {
+      var m = mosques[i];
+      pointById[m.id] = [m.lng, m.lat];
+      // The nearest is drawn as its own pulsing DOM marker — keep it OUT of the
+      // clustered source so it's never hidden inside a cluster bubble.
+      if (m.id === nearestId) continue;
+      features.push({ type: 'Feature', properties: { id: m.id }, geometry: { type: 'Point', coordinates: [m.lng, m.lat] } });
+    }
+    ensureLayers(function () {
+      var src = map.getSource(SRC);
+      if (src) src.setData({ type: 'FeatureCollection', features: features });
+    });
+    // (Re)place the nearest pulsing DOM marker.
+    if (nearestMarker) { nearestMarker.remove(); nearestMarker = null; }
+    if (nearestId && pointById[nearestId]) {
+      var el = makeNearestEl();
       el.addEventListener('click', function (e) {
         e.stopPropagation();
-        post({ type: 'markerTap', id: m.id });
+        post({ type: 'markerTap', id: nearestId });
       });
-      var mk = new maplibregl.Marker({ element: el, anchor: 'bottom' })
-        .setLngLat([m.lng, m.lat]).addTo(map);
-      markers[m.id] = mk;
-    });
+      nearestMarker = new maplibregl.Marker({ element: el, anchor: 'bottom' })
+        .setLngLat(pointById[nearestId]).addTo(map);
+    }
   }
 
   function setUser(lat, lng) {
@@ -222,13 +350,14 @@ export function buildMasjidMapHtml(accent: string, isDark: boolean): string {
           case 'focus':
             // Centre EXACTLY on the selected masjid [lng, lat]. No fitBounds, no
             // horizontal padding. padBottom = bottom-card height so MapLibre centres
-            // the marker in the VISIBLE map area above the card (not the raw viewport);
-            // padTop = header height so it never hugs the top edge.
-            var mk = markers[msg.id];
-            if (mk) {
-              var ll = mk.getLngLat();
+            // the point in the VISIBLE map area above the card (not the raw viewport);
+            // padTop = header height so it never hugs the top edge. Coords come from
+            // pointById (built in setMarkers for ALL mosques) — works for a clustered
+            // pin too, since easeTo to zoom 15 reveals it out of its cluster.
+            var fc = pointById[msg.id];
+            if (fc) {
               map.easeTo({
-                center: [ll.lng, ll.lat],
+                center: fc,
                 zoom: Math.max(map.getZoom(), 15),
                 padding: { top: msg.padTop || 0, right: 0, bottom: msg.padBottom || 0, left: 0 },
                 duration: 500,

@@ -28,6 +28,7 @@ import { listIconXml } from '../constants/listIcon';
 import { useMasjidLocation } from '../hooks/useMasjidLocation';
 import {
   fetchNearbyApprovedMosques,
+  fetchAllApprovedMosques,
   type Mosque, type MosqueSearchResult, MASJID_FETCH_LIMIT, MASJID_COLLAPSED_COUNT,
 } from '../services/mosques';
 import { geocodePlace } from '../services/nominatim';
@@ -82,7 +83,13 @@ export default function MasjidScreen() {
   const mapRef = useRef<MasjidMapHandle>(null);
 
   const [userLoc, setUserLoc] = useState<{ lat: number; lng: number } | null>(null);
+  // Nearby, distance-sorted set — drives ONLY the bottom list (and the nearest
+  // pulse). Capped at MASJID_FETCH_LIMIT and re-fetched on search/min-position.
   const [mosques, setMosques] = useState<Mosque[]>([]);
+  // Full-country set — drives ONLY the map markers, so every masjid is visible
+  // when zoomed out. Fetched once; never re-fetched on search/pan/list changes,
+  // so it can't affect list or map performance. Empty until the one-shot loads.
+  const [allMosques, setAllMosques] = useState<Mosque[]>([]);
   const [loading, setLoading] = useState(true);
   // Bottom-sheet snap mode: 'default' (3 nearest, map visible) | 'expanded' (all, nearly full screen).
   const [sheetMode, setSheetMode] = useState<SheetMode>('default');
@@ -97,6 +104,7 @@ export default function MasjidScreen() {
 
   const mountedRef = useRef(true);
   const abortRef = useRef<AbortController | null>(null);
+  const markersAbortRef = useRef<AbortController | null>(null);
   const geocodeAbortRef = useRef<AbortController | null>(null);
   const loadedOnceRef = useRef(false);
   const addTipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -193,11 +201,21 @@ export default function MasjidScreen() {
   const defaultSheetPad = insets.bottom + 300; // approx default-sheet height for min-position camera
 
   const nearestId = mosques[0]?.id ?? null;
-  // Map shows ALL loaded markers; the bottom sheet shows a subset by mode.
-  const points = useMemo(
+  // Map markers = the full-country set so every masjid shows when zoomed out.
+  // Memoised on allMosques alone, so once it has loaded a nearby-list change
+  // (search / min-position / expand) does NOT change this reference and the
+  // marker layer is never rebuilt — keeping list & map interactions cheap.
+  const allPoints = useMemo(
+    () => allMosques.map((m) => ({ id: m.id, lat: m.latitude, lng: m.longitude })),
+    [allMosques],
+  );
+  // Fallback used only for the brief window before the full set arrives: show the
+  // nearby markers so the map isn't empty on first paint.
+  const nearbyPoints = useMemo(
     () => mosques.map((m) => ({ id: m.id, lat: m.latitude, lng: m.longitude })),
     [mosques],
   );
+  const points = allPoints.length ? allPoints : nearbyPoints;
 
   // Replace any in-flight request with a fresh AbortController.
   const freshSignal = useCallback(() => {
@@ -229,6 +247,24 @@ export default function MasjidScreen() {
     }
   }, [freshSignal]);
 
+  // One-shot: load EVERY approved masjid for the map's marker layer so all pins
+  // are visible when zoomed out. Independent of GPS and of the nearby list — it
+  // runs once, has its own AbortController, and never touches `loading` (so the
+  // list spinner is unaffected). On failure we silently keep whatever markers we
+  // have; the nearby fallback still shows the nearest pins.
+  const loadAllMarkers = useCallback(async () => {
+    markersAbortRef.current?.abort();
+    const ctrl = new AbortController();
+    markersAbortRef.current = ctrl;
+    try {
+      const rows = await fetchAllApprovedMosques(ctrl.signal);
+      if (!mountedRef.current) return;
+      setAllMosques(rows);
+    } catch {
+      // Abort or failure — leave existing markers in place.
+    }
+  }, []);
+
   // Read GPS once, then load mosques from the user's position.
   const fetchGpsAndLoad = useCallback(async () => {
     try {
@@ -249,9 +285,10 @@ export default function MasjidScreen() {
   useEffect(() => {
     if (status === 'granted' && !loadedOnceRef.current) {
       loadedOnceRef.current = true;
-      fetchGpsAndLoad();
+      loadAllMarkers();   // all pins for the zoomed-out view (one-shot)
+      fetchGpsAndLoad();  // nearby distance-sorted list + initial camera
     }
-  }, [status, fetchGpsAndLoad]);
+  }, [status, fetchGpsAndLoad, loadAllMarkers]);
 
   // Auto-retry when connectivity returns. The WebView reports online/offline via
   // onConnectivity → `online`. On a real offline→online transition we re-call the
@@ -272,7 +309,10 @@ export default function MasjidScreen() {
     const loc = userLocRef.current;
     if (loc) loadInitial(loc.lat, loc.lng);
     else fetchGpsAndLoad();
-  }, [online, status, loadInitial, fetchGpsAndLoad]);
+    // Re-pull the full marker set too, but only if it never loaded — a successful
+    // one-shot stays cached so reconnecting doesn't rebuild every pin.
+    if (allMosques.length === 0) loadAllMarkers();
+  }, [online, status, loadInitial, fetchGpsAndLoad, loadAllMarkers, allMosques.length]);
 
   // Unmount: abort in-flight request, block late state updates, stop any
   // in-flight card animation. (No timers/watchers exist to clear.)
@@ -281,6 +321,7 @@ export default function MasjidScreen() {
     return () => {
       mountedRef.current = false;
       abortRef.current?.abort();
+      markersAbortRef.current?.abort();
       geocodeAbortRef.current?.abort();
       cardTranslateY.stopAnimation();
       scrimOpacity.stopAnimation();
@@ -379,8 +420,18 @@ export default function MasjidScreen() {
       if (prev !== 'shrunk') prevSheetModeRef.current = prev;
       return 'shrunk';
     });
-    setSelected(m);
-    requestAnimationFrame(() => { if (mountedRef.current) focusOn(m); });
+    // Card distance must ALWAYS mean "from the user's real GPS" — so every open
+    // path (list, marker) agrees. After a place/masjid search the nearby list is
+    // re-fetched from the searched origin, so a row's stored `distance_meters` is
+    // relative to THAT point (and the searched masjid's own value is 0 m). Recompute
+    // from the user's position here, mirroring handleSelectSearchMosque. If GPS is
+    // unknown, leave it non-finite so formatDistance() renders nothing, not "0 m".
+    const here = userLocRef.current;
+    const sel: Mosque = here
+      ? { ...m, distance_meters: haversineMeters(here.lat, here.lng, m.latitude, m.longitude) }
+      : { ...m, distance_meters: Number.POSITIVE_INFINITY };
+    setSelected(sel);
+    requestAnimationFrame(() => { if (mountedRef.current) focusOn(sel); });
   }, [focusOn]);
 
   // Close the card: card slides down + list springs back to whatever mode it
@@ -394,9 +445,12 @@ export default function MasjidScreen() {
   const handleSelect = useCallback((m: Mosque) => selectMasjid(m), [selectMasjid]);
 
   const handleMarkerTap = useCallback((id: string) => {
-    const m = mosques.find((x) => x.id === id);
+    // A tapped pin may be any masjid in the country, not just one in the nearby
+    // list — look it up in the full marker set first, fall back to the nearby
+    // list. selectMasjid recomputes the real distance from the user's GPS.
+    const m = allMosques.find((x) => x.id === id) ?? mosques.find((x) => x.id === id);
     if (m) selectMasjid(m);
-  }, [mosques, selectMasjid]);
+  }, [allMosques, mosques, selectMasjid]);
 
   // Address/place search → geocode (Nominatim) → recenter + searched marker +
   // rerun nearby_mosques from the searched point (nearest then pulses).
@@ -474,7 +528,7 @@ export default function MasjidScreen() {
   const renderHeader = (onMap: boolean) => (
     <View style={[styles.header, { paddingTop: insets.top + 6 }]}>
       <BackButton onPress={() => router.back()} />
-      <Text style={[styles.title, { color: onMap ? '#000000' : T.text }]}>Närmaste masjid</Text>
+      <Text style={[styles.title, { color: onMap ? '#000000' : T.text }]}>Närmaste moské</Text>
       <View style={{ width: 36 }} />
     </View>
   );
