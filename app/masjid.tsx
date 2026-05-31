@@ -201,6 +201,11 @@ export default function MasjidScreen() {
   const defaultSheetPad = insets.bottom + 300; // approx default-sheet height for min-position camera
 
   const nearestId = mosques[0]?.id ?? null;
+  // The map's larger, pulsing marker = the open/selected masjid, or the nearest
+  // when no card is open. Tapping a pin or list row selects it (selectMasjid), so
+  // the highlight + pulse + size follow whichever masjid the user taps; closing
+  // the card (selected → null) reverts the highlight to the nearest.
+  const highlightId = selected?.id ?? nearestId;
   // Map markers = the full-country set so every masjid shows when zoomed out.
   // Memoised on allMosques alone, so once it has loaded a nearby-list change
   // (search / min-position / expand) does NOT change this reference and the
@@ -553,7 +558,7 @@ export default function MasjidScreen() {
         isDark={isDark}
         user={userLoc}
         mosques={points}
-        nearestId={nearestId}
+        highlightId={highlightId}
         onMarkerTap={handleMarkerTap}
         onConnectivity={setOnline}
       />

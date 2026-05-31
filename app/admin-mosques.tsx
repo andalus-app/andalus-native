@@ -252,6 +252,15 @@ export default function AdminMosquesScreen() {
         })}
       </View>
 
+      {/* Count for the active tab */}
+      <Text style={[styles.countLine, { color: T.textMuted }]}>
+        {tab === 'pending'
+          ? `${items.length} väntande`
+          : tab === 'approved'
+          ? `${items.length} publicerade moskéer`
+          : `${items.length} dolda`}
+      </Text>
+
       {/* Search */}
       <View style={[styles.searchWrap, { backgroundColor: T.card, borderColor: T.border }]}>
         <Ionicons name="search" size={16} color={T.textMuted} />
@@ -390,6 +399,7 @@ const styles = StyleSheet.create({
   segments: { flexDirection: 'row', margin: 16, marginBottom: 8, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, padding: 4, gap: 4 },
   segment: { flex: 1, alignItems: 'center', paddingVertical: 9, borderRadius: 9 },
   segmentText: { fontSize: 14, fontWeight: '600' },
+  countLine: { fontSize: 13, fontWeight: '600', marginHorizontal: 16, marginBottom: 8 },
   searchWrap: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginBottom: 8, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth },
   searchInput: { flex: 1, fontSize: 15, paddingVertical: Platform.OS === 'ios' ? 4 : 0 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },

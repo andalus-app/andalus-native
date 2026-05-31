@@ -15,8 +15,8 @@
  *   map → RN  : window.ReactNativeWebView.postMessage(JSON.stringify(msg))
  *
  * Message types (RN → map):
- *   { type:'init',  user, mosques, nearestId }
- *   { type:'setMarkers', mosques, nearestId }
+ *   { type:'init',  user, mosques, highlightId }
+ *   { type:'setMarkers', mosques, highlightId }
  *   { type:'setUser', lat, lng }
  *   { type:'flyTo', lat, lng, zoom }
  *   { type:'focus', id }
@@ -25,6 +25,8 @@
  * Message types (map → RN):
  *   { type:'ready' } | { type:'markerTap', id }
  */
+
+import { MOSQUE_PIN_PNG } from '../../constants/mosquePinImage';
 
 const MAPLIBRE_VERSION = '4.7.1';
 
@@ -68,17 +70,19 @@ export function buildMasjidMapHtml(accent: string, isDark: boolean): string {
 <style>
   html, body, #map { margin:0; padding:0; height:100%; width:100%; background:${bg}; }
   .maplibregl-ctrl-attrib { font-size:9px; }
-  /* Mosque pin — fixed-size box; the SVG tip sits at the box's bottom-centre
-     and MapLibre owns positioning via anchor:'bottom'. NO transform on the
-     marker element itself, so the anchor never shifts when zooming. */
-  .mpin { width:26px; height:34px; cursor:pointer; }
-  .mpin svg { display:block; position:relative; z-index:1; }
-  .mpin.subtle svg { opacity:0.9; }
+  /* Mosque pin (highlighted/nearest) — fixed-size box; the PNG tip sits at the
+     box's bottom-centre and MapLibre owns positioning via anchor:'bottom'. NO
+     transform on the marker element itself, so the anchor never shifts when
+     zooming. The box is ~10% larger than the clustered symbol-layer pins
+     (see PIN_DISPLAY) to make the selected masjid stand out. */
+  .mpin { width:37px; height:37px; cursor:pointer; }
+  .mpin img { display:block; width:100%; height:100%; position:relative; z-index:1; }
   /* Pulse ring: absolutely positioned child, pointer-events:none, OUT OF FLOW
      so it never changes the marker's bounding box / anchor. Only the ring
-     scales — the marker element itself is never transformed. */
+     scales — the marker element itself is never transformed. Centred behind
+     the pin head. */
   .mpin .pulse {
-    position:absolute; left:13px; top:13px; width:16px; height:16px;
+    position:absolute; left:50%; top:42%; width:16px; height:16px;
     margin:-8px 0 0 -8px; border-radius:50%; background:${accent};
     pointer-events:none; z-index:0; animation:masjidPulse 2s ease-out infinite;
   }
@@ -133,36 +137,34 @@ export function buildMasjidMapHtml(accent: string, isDark: boolean): string {
   // Mosque pins are a GPU-backed, CLUSTERED GeoJSON layer — NOT one DOM element
   // per pin. This stays smooth with the whole country's mosques (hundreds → low
   // thousands) visible at once, which a per-pin DOM approach can't. The only
-  // exception is the *nearest* mosque: kept as a single DOM marker so it can
-  // show the CSS pulse ring (1 element → no perf cost) and is never swallowed
+  // exception is the *highlighted* mosque (the nearest on first load, then
+  // whichever the user taps): kept as a single DOM marker so it can show the CSS
+  // pulse ring + larger size (1 element → no perf cost) and is never swallowed
   // into a cluster bubble.
   var SRC = 'mosques';
-  var nearestMarker = null;   // single pulsing DOM marker for the nearest mosque
+  var highlightMarker = null; // single pulsing DOM marker for the highlighted mosque
   var userMarker = null;
   var searchMarker = null;
   var pointById = {};         // id -> [lng,lat] for focus() lookups (ALL mosques)
   var layersReady = false;
   var tapsBound = false;
 
-  // Teardrop pin at 2x (viewBox 26x34) so the GPU icon image stays crisp on
-  // retina. Same shape/colours as before. Fill = the app accent green.
-  var PIN_ICON_SVG =
-    '<svg width="52" height="68" viewBox="0 0 26 34" xmlns="http://www.w3.org/2000/svg">' +
-      '<path d="M13 33 C13 33 24 21 24 12.5 C24 6.15 19.08 1 13 1 C6.92 1 2 6.15 2 12.5 C2 21 13 33 13 33 Z" ' +
-        'fill="${accent}" stroke="#ffffff" stroke-width="2"/>' +
-      '<circle cx="13" cy="12.5" r="4.5" fill="#ffffff"/>' +
-    '</svg>';
+  // Single PNG used for EVERY mosque marker (light + dark mode) — both the
+  // clustered symbol-layer pins and the highlighted (nearest) DOM marker.
+  var PIN_IMG = '${MOSQUE_PIN_PNG}';
+  // Base on-screen size (CSS px) of a clustered pin. The PNG is 534x534; it is
+  // registered at this CSS size (pixelRatio = natural / display) so icon-size
+  // can stay 1 while the texture keeps full resolution → crisp on retina.
+  var PIN_NATURAL = 534, PIN_DISPLAY = 34;
 
-  // The nearest mosque keeps its DOM pin + pulse ring (1 element, GPU-friendly).
-  function makeNearestEl() {
+  // The highlighted mosque keeps its DOM pin + pulse ring (1 element, GPU-friendly).
+  // Rendered ~10% larger than the clustered pins (CSS .mpin = 37px) to stand out.
+  function makeHighlightEl() {
     var el = document.createElement('div');
-    el.className = 'mpin nearest';
-    el.innerHTML =
-      '<svg width="26" height="34" viewBox="0 0 26 34" xmlns="http://www.w3.org/2000/svg">' +
-        '<path d="M13 33 C13 33 24 21 24 12.5 C24 6.15 19.08 1 13 1 C6.92 1 2 6.15 2 12.5 C2 21 13 33 13 33 Z" ' +
-          'fill="${accent}" stroke="#ffffff" stroke-width="2"/>' +
-        '<circle cx="13" cy="12.5" r="4.5" fill="#ffffff"/>' +
-      '</svg>';
+    el.className = 'mpin highlight';
+    var img = document.createElement('img');
+    img.src = PIN_IMG;
+    el.appendChild(img);
     var ring = document.createElement('div');
     ring.className = 'pulse';
     el.appendChild(ring);
@@ -170,7 +172,8 @@ export function buildMasjidMapHtml(accent: string, isDark: boolean): string {
   }
 
   // Load the pin image once, then run cb. Concurrent callers are queued so the
-  // image is created/added a single time.
+  // image is created/added a single time. Registered with pixelRatio so the
+  // 534px PNG renders at PIN_DISPLAY CSS px with icon-size:1.
   var pinLoading = false, pinCbs = [];
   function withPin(cb) {
     if (map.hasImage && map.hasImage('mosque-pin')) { cb(); return; }
@@ -179,13 +182,13 @@ export function buildMasjidMapHtml(accent: string, isDark: boolean): string {
     pinLoading = true;
     var img = new Image();
     img.onload = function () {
-      try { if (!map.hasImage('mosque-pin')) map.addImage('mosque-pin', img, { pixelRatio: 2 }); } catch (e) {}
+      try { if (!map.hasImage('mosque-pin')) map.addImage('mosque-pin', img, { pixelRatio: PIN_NATURAL / PIN_DISPLAY }); } catch (e) {}
       pinLoading = false;
       var cbs = pinCbs; pinCbs = [];
       cbs.forEach(function (f) { try { f(); } catch (e) {} });
     };
     img.onerror = function () { pinLoading = false; pinCbs = []; };
-    img.src = 'data:image/svg+xml;base64,' + btoa(PIN_ICON_SVG);
+    img.src = PIN_IMG;
   }
 
   // Bind cluster/pin tap handlers once.
@@ -275,32 +278,32 @@ export function buildMasjidMapHtml(accent: string, isDark: boolean): string {
     });
   }
 
-  function setMarkers(mosques, nearestId) {
+  function setMarkers(mosques, highlightId) {
     mosques = mosques || [];
     pointById = {};
     var features = [];
     for (var i = 0; i < mosques.length; i++) {
       var m = mosques[i];
       pointById[m.id] = [m.lng, m.lat];
-      // The nearest is drawn as its own pulsing DOM marker — keep it OUT of the
-      // clustered source so it's never hidden inside a cluster bubble.
-      if (m.id === nearestId) continue;
+      // The highlighted mosque is drawn as its own pulsing DOM marker — keep it
+      // OUT of the clustered source so it's never hidden inside a cluster bubble.
+      if (m.id === highlightId) continue;
       features.push({ type: 'Feature', properties: { id: m.id }, geometry: { type: 'Point', coordinates: [m.lng, m.lat] } });
     }
     ensureLayers(function () {
       var src = map.getSource(SRC);
       if (src) src.setData({ type: 'FeatureCollection', features: features });
     });
-    // (Re)place the nearest pulsing DOM marker.
-    if (nearestMarker) { nearestMarker.remove(); nearestMarker = null; }
-    if (nearestId && pointById[nearestId]) {
-      var el = makeNearestEl();
+    // (Re)place the highlighted pulsing DOM marker (follows the tapped mosque).
+    if (highlightMarker) { highlightMarker.remove(); highlightMarker = null; }
+    if (highlightId && pointById[highlightId]) {
+      var el = makeHighlightEl();
       el.addEventListener('click', function (e) {
         e.stopPropagation();
-        post({ type: 'markerTap', id: nearestId });
+        post({ type: 'markerTap', id: highlightId });
       });
-      nearestMarker = new maplibregl.Marker({ element: el, anchor: 'bottom' })
-        .setLngLat(pointById[nearestId]).addTo(map);
+      highlightMarker = new maplibregl.Marker({ element: el, anchor: 'bottom' })
+        .setLngLat(pointById[highlightId]).addTo(map);
     }
   }
 
@@ -311,8 +314,8 @@ export function buildMasjidMapHtml(accent: string, isDark: boolean): string {
     userMarker = new maplibregl.Marker({ element: el }).setLngLat([lng, lat]).addTo(map);
   }
 
-  function fitTo(user, mosques, nearestId) {
-    var nearest = (mosques || []).filter(function (m) { return m.id === nearestId; })[0];
+  function fitTo(user, mosques, highlightId) {
+    var nearest = (mosques || []).filter(function (m) { return m.id === highlightId; })[0];
     if (user && nearest) {
       var b = new maplibregl.LngLatBounds([user.lng, user.lat], [user.lng, user.lat]);
       b.extend([nearest.lng, nearest.lat]);
@@ -328,11 +331,11 @@ export function buildMasjidMapHtml(accent: string, isDark: boolean): string {
         switch (msg.type) {
           case 'init':
             if (msg.user) setUser(msg.user.lat, msg.user.lng);
-            setMarkers(msg.mosques, msg.nearestId);
-            fitTo(msg.user, msg.mosques, msg.nearestId);
+            setMarkers(msg.mosques, msg.highlightId);
+            fitTo(msg.user, msg.mosques, msg.highlightId);
             break;
           case 'setMarkers':
-            setMarkers(msg.mosques, msg.nearestId);
+            setMarkers(msg.mosques, msg.highlightId);
             break;
           case 'setUser':
             setUser(msg.lat, msg.lng);

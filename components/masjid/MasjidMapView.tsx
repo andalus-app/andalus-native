@@ -1,7 +1,7 @@
 /**
  * MasjidMapView — MapLibre GL JS hosted in a react-native-webview.
  *
- * Declarative props (user, mosques, nearestId) are pushed into the map; one-off
+ * Declarative props (user, mosques, highlightId) are pushed into the map; one-off
  * camera commands are exposed via an imperative ref (focus / flyTo / search
  * marker). Messages sent before the map reports 'ready' are queued and flushed
  * on ready, so the parent never has to wait.
@@ -50,7 +50,9 @@ type Props = {
   isDark: boolean;
   user: LatLng | null;
   mosques: MapPoint[];
-  nearestId: string | null;
+  // The mosque drawn as the larger, pulsing DOM marker (and excluded from
+  // clustering): the nearest on first load, then whichever the user taps.
+  highlightId: string | null;
   onMarkerTap: (id: string) => void;
   onReady?: () => void;
   // Fired whenever the WebView reports a connectivity change (navigator.onLine /
@@ -70,7 +72,7 @@ const log = (...args: unknown[]) => {
 };
 
 const MasjidMapView = forwardRef<MasjidMapHandle, Props>(function MasjidMapView(
-  { accent, isDark, user, mosques, nearestId, onMarkerTap, onReady, onConnectivity }, ref,
+  { accent, isDark, user, mosques, highlightId, onMarkerTap, onReady, onConnectivity }, ref,
 ) {
   const webRef = useRef<WebView>(null);
   const readyRef = useRef(false);
@@ -105,7 +107,7 @@ const MasjidMapView = forwardRef<MasjidMapHandle, Props>(function MasjidMapView(
   // Latest props mirrored into refs so the 'ready' handler sends current state.
   const userRef = useRef(user);          userRef.current = user;
   const mosquesRef = useRef(mosques);    mosquesRef.current = mosques;
-  const nearestRef = useRef(nearestId);  nearestRef.current = nearestId;
+  const highlightRef = useRef(highlightId); highlightRef.current = highlightId;
 
   // Built once per theme — rebuilding would reload the WebView.
   const html = useMemo(() => buildMasjidMapHtml(accent, isDark), [accent, isDark]);
@@ -119,8 +121,8 @@ const MasjidMapView = forwardRef<MasjidMapHandle, Props>(function MasjidMapView(
 
   // Re-sync markers / user whenever the declarative props change (post-ready).
   useEffect(() => {
-    if (readyRef.current) post({ type: 'setMarkers', mosques, nearestId });
-  }, [mosques, nearestId, post]);
+    if (readyRef.current) post({ type: 'setMarkers', mosques, highlightId });
+  }, [mosques, highlightId, post]);
 
   useEffect(() => {
     if (readyRef.current && user) post({ type: 'setUser', lat: user.lat, lng: user.lng });
@@ -188,7 +190,7 @@ const MasjidMapView = forwardRef<MasjidMapHandle, Props>(function MasjidMapView(
         type: 'init',
         user: userRef.current,
         mosques: mosquesRef.current,
-        nearestId: nearestRef.current,
+        highlightId: highlightRef.current,
       });
       const queued = queueRef.current;
       queueRef.current = [];
